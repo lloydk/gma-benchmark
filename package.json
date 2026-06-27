@@ -1,0 +1,15 @@
+{
+  "name": "gma-benchmark",
+  "version": "1.0.0",
+  "description": "Benchmark of OKLCh→Display-P3 gamut-mapping methods (clip, oklch-cubic cached, edge-seeker cached) with hand-rolled conversions and no color library.",
+  "type": "module",
+  "scripts": {
+    "bench": "node --expose-gc bench.js",
+    "bench:bun": "bun bench.js"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@mitata/counters": "^0.0.8",
+    "mitata": "^1.0.34"
+  }
+}

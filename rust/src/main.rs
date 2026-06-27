@@ -1,0 +1,631 @@
+// Scalar (one-color-at-a-time) Rust port of the gma-benchmark methods.
+//
+// Apples-to-apples with the JS benchmark: same algorithms, same conversion
+// math, same 35,640-color grid, one color per call. Built to anchor the
+// native-vs-JS comparison.
+
+use std::hint::black_box;
+use std::time::Instant;
+
+mod lut;
+use lut::LUT;
+
+const PI: f64 = std::f64::consts::PI;
+
+// ── OKLab → LMS' (a,b columns; the L column is all 1s) ──
+const KA0: f64 = 0.3963377773761749;
+const KB0: f64 = 0.2158037573099136;
+const KA1: f64 = -0.1055613458156586;
+const KB1: f64 = -0.0638541728258133;
+const KA2: f64 = -0.0894841775298119;
+const KB2: f64 = -1.2914855480194092;
+
+// ── LMS (cubed) → linear Display-P3 ──
+const RL: f64 = 3.127768971361874;
+const RM: f64 = -2.2571357625916395;
+const RS: f64 = 0.12936679122976516;
+const GL: f64 = -1.0910090184377979;
+const GM: f64 = 2.413331710306922;
+const GS: f64 = -0.32232269186912466;
+const BL: f64 = -0.02601080193857028;
+const BM: f64 = -0.508041331704167;
+const BS: f64 = 1.5340521336427373;
+
+// ── sRGB / Display-P3 transfer function, clamped to [0,1] ──
+#[inline(always)]
+fn clamped_gamma(x: f64) -> f64 {
+    let x = if x < 0.0 {
+        0.0
+    } else if x > 1.0 {
+        1.0
+    } else {
+        x
+    };
+    if x <= 0.0031308 {
+        x * 12.92
+    } else {
+        1.055 * x.powf(1.0 / 2.4) - 0.055
+    }
+}
+
+#[inline(always)]
+fn oklab_to_clipped_p3(l: f64, a: f64, b: f64, out: &mut [f64; 3]) {
+    let l_ = (l + KA0 * a + KB0 * b).powi(3);
+    let m_ = (l + KA1 * a + KB1 * b).powi(3);
+    let s_ = (l + KA2 * a + KB2 * b).powi(3);
+    out[0] = clamped_gamma(RL * l_ + RM * m_ + RS * s_);
+    out[1] = clamped_gamma(GL * l_ + GM * m_ + GS * s_);
+    out[2] = clamped_gamma(BL * l_ + BM * m_ + BS * s_);
+}
+
+#[inline(always)]
+fn oklch_to_clipped_p3(l: f64, c: f64, h: f64, out: &mut [f64; 3]) {
+    let hr = h * PI / 180.0;
+    oklab_to_clipped_p3(l, c * hr.cos(), c * hr.sin(), out);
+}
+
+#[inline(always)]
+fn oklch_to_p3_if_in_gamut(l: f64, c: f64, h: f64, out: &mut [f64; 3]) -> bool {
+    let hr = h * PI / 180.0;
+    let a = c * hr.cos();
+    let b = c * hr.sin();
+    let l_ = (l + KA0 * a + KB0 * b).powi(3);
+    let m_ = (l + KA1 * a + KB1 * b).powi(3);
+    let s_ = (l + KA2 * a + KB2 * b).powi(3);
+    let r = RL * l_ + RM * m_ + RS * s_;
+    let g = GL * l_ + GM * m_ + GS * s_;
+    let bl = BL * l_ + BM * m_ + BS * s_;
+    if r < 0.0 || r > 1.0 || g < 0.0 || g > 1.0 || bl < 0.0 || bl > 1.0 {
+        return false;
+    }
+    out[0] = clamped_gamma(r);
+    out[1] = clamped_gamma(g);
+    out[2] = clamped_gamma(bl);
+    true
+}
+
+// ── Method 1: clip ──
+#[inline(always)]
+fn clip(oklch: &[f64; 3], out: &mut [f64; 3]) {
+    oklch_to_clipped_p3(oklch[0], oklch[1], oklch[2], out);
+}
+
+// ── Method 2: oklch-cubic (cached) ──────────────────────────────────────────
+// Solve, per linear-P3 channel, the cubic in t = C/L where the channel exits
+// [0,1]; the smallest root is the max in-gamut chroma. Per-hue structure cached.
+
+#[derive(Clone, Copy)]
+struct HueData {
+    a: [f64; 3],
+    b: [f64; 3],
+    d: [f64; 3],
+    t_lower: f64,
+    turn: [f64; 3],
+}
+
+// Smallest real root of a*x^3 + b*x^2 + c*x + d in (lo, hi), else +inf.
+#[inline(always)]
+fn first_root(a: f64, mut b: f64, mut c: f64, mut d: f64, lo: f64, hi: f64) -> f64 {
+    let mut r0 = f64::INFINITY;
+    let mut r1 = f64::INFINITY;
+    let mut r2 = f64::INFINITY;
+    if a.abs() < 1e-12 {
+        if b.abs() < 1e-12 {
+            if c.abs() >= 1e-12 {
+                r0 = -d / c;
+            }
+        } else {
+            let disc = c * c - 4.0 * b * d;
+            if disc >= 0.0 {
+                let s = disc.sqrt();
+                r0 = (-c + s) / (2.0 * b);
+                r1 = (-c - s) / (2.0 * b);
+            }
+        }
+    } else {
+        b /= a;
+        c /= a;
+        d /= a;
+        let p = c - b * b / 3.0;
+        let q = 2.0 * b * b * b / 27.0 - b * c / 3.0 + d;
+        let off = -b / 3.0;
+        let disc = q * q / 4.0 + p * p * p / 27.0;
+        if disc > 1e-14 {
+            let s = disc.sqrt();
+            r0 = (-q / 2.0 + s).cbrt() + (-q / 2.0 - s).cbrt() + off;
+        } else if disc > -1e-14 {
+            let u = (-q / 2.0).cbrt();
+            r0 = 2.0 * u + off;
+            r1 = -u + off;
+        } else {
+            let m = 2.0 * (-p / 3.0).sqrt();
+            let phi = (3.0 * q / (p * m)).clamp(-1.0, 1.0).acos();
+            r0 = m * (phi / 3.0).cos() + off;
+            r1 = m * ((phi - 2.0 * PI) / 3.0).cos() + off;
+            r2 = m * ((phi - 4.0 * PI) / 3.0).cos() + off;
+        }
+    }
+    let mut best = f64::INFINITY;
+    if r0 > lo && r0 < hi {
+        best = r0;
+    }
+    if r1 > lo && r1 < hi && r1 < best {
+        best = r1;
+    }
+    if r2 > lo && r2 < hi && r2 < best {
+        best = r2;
+    }
+    best
+}
+
+#[inline(always)]
+fn first_turn(d: f64, b: f64, a: f64) -> f64 {
+    first_root(0.0, d, 2.0 * b, a, 1e-12, f64::INFINITY)
+}
+
+fn get_hue_data(h: f64) -> HueData {
+    let rad = h * PI / 180.0;
+    let (cos, sin) = (rad.cos(), rad.sin());
+    let q0 = KA0 * cos + KB0 * sin;
+    let q1 = KA1 * cos + KB1 * sin;
+    let q2 = KA2 * cos + KB2 * sin;
+    let a = [
+        RL * q0 + RM * q1 + RS * q2,
+        GL * q0 + GM * q1 + GS * q2,
+        BL * q0 + BM * q1 + BS * q2,
+    ];
+    let (q0b, q1b, q2b) = (q0 * q0, q1 * q1, q2 * q2);
+    let b = [
+        RL * q0b + RM * q1b + RS * q2b,
+        GL * q0b + GM * q1b + GS * q2b,
+        BL * q0b + BM * q1b + BS * q2b,
+    ];
+    let (q0c, q1c, q2c) = (q0b * q0, q1b * q1, q2b * q2);
+    let d = [
+        RL * q0c + RM * q1c + RS * q2c,
+        GL * q0c + GM * q1c + GS * q2c,
+        BL * q0c + BM * q1c + BS * q2c,
+    ];
+    let mut t_lower = f64::INFINITY;
+    let mut turn = [0.0; 3];
+    for i in 0..3 {
+        t_lower = t_lower.min(first_root(
+            d[i],
+            3.0 * b[i],
+            3.0 * a[i],
+            1.0,
+            1e-9,
+            f64::INFINITY,
+        ));
+        turn[i] = first_turn(d[i], b[i], a[i]);
+    }
+    HueData {
+        a,
+        b,
+        d,
+        t_lower,
+        turn,
+    }
+}
+
+struct OklchCubic {
+    cache: Vec<Option<HueData>>, // 3601 buckets of 0.1°
+}
+
+impl OklchCubic {
+    fn new() -> Self {
+        OklchCubic {
+            cache: vec![None; 3601],
+        }
+    }
+
+    #[inline(always)]
+    fn hue_data(&mut self, h: f64) -> HueData {
+        let mut hh = h % 360.0;
+        if hh < 0.0 {
+            hh += 360.0;
+        }
+        let key = (hh * 10.0).round() as usize;
+        if let Some(d) = self.cache[key] {
+            return d;
+        }
+        let d = get_hue_data(key as f64 / 10.0);
+        self.cache[key] = Some(d);
+        d
+    }
+
+    #[inline(always)]
+    fn map(&mut self, oklch: &[f64; 3], out: &mut [f64; 3]) {
+        self.map_impl(oklch, out, false);
+    }
+
+    #[inline(always)]
+    fn map_with_in_gamut_check(&mut self, oklch: &[f64; 3], out: &mut [f64; 3]) {
+        self.map_impl(oklch, out, true);
+    }
+
+    #[inline(always)]
+    fn map_impl(&mut self, oklch: &[f64; 3], out: &mut [f64; 3], check_in_gamut: bool) {
+        let (l, c, h) = (oklch[0], oklch[1], oklch[2]);
+        if l <= 0.0 || l >= 1.0 || c <= 0.0 {
+            let ll = if l <= 0.0 {
+                0.0
+            } else if l >= 1.0 {
+                1.0
+            } else {
+                l
+            };
+            oklch_to_clipped_p3(ll, 0.0, h, out);
+            return;
+        }
+        if check_in_gamut && oklch_to_p3_if_in_gamut(l, c, h, out) {
+            return;
+        }
+        let hd = self.hue_data(h);
+        let (a, b, d, t_lower, turn) = (hd.a, hd.b, hd.d, hd.t_lower, hd.turn);
+        let t0 = c / l;
+        let mut max_t = t0.min(t_lower);
+        let target = 1.0 / (l * l * l);
+        let dd = 1.0 - target;
+        for i in 0..3 {
+            if turn[i] > max_t {
+                if a[i] <= 0.0 {
+                    continue;
+                }
+                let p_max = ((d[i] * max_t + 3.0 * b[i]) * max_t + 3.0 * a[i]) * max_t + 1.0;
+                if p_max < target {
+                    continue;
+                }
+            }
+            max_t = max_t.min(first_root(d[i], 3.0 * b[i], 3.0 * a[i], dd, 1e-9, max_t));
+        }
+
+        let l3 = l * l * l;
+        out[0] =
+            clamped_gamma(l3 * (((d[0] * max_t + 3.0 * b[0]) * max_t + 3.0 * a[0]) * max_t + 1.0));
+        out[1] =
+            clamped_gamma(l3 * (((d[1] * max_t + 3.0 * b[1]) * max_t + 3.0 * a[1]) * max_t + 1.0));
+        out[2] =
+            clamped_gamma(l3 * (((d[2] * max_t + 3.0 * b[2]) * max_t + 3.0 * a[2]) * max_t + 1.0));
+    }
+}
+
+// ── Method 3: edge-seeker ───────────────────────────────────────────────────
+// Reduce chroma to a precomputed LUT of the gamut edge. The lookup evaluates the
+// LUT at the exact normalized hue.
+
+#[inline(always)]
+fn lerp(a: f64, b: f64, t: f64) -> f64 {
+    if t <= 0.0 {
+        return a;
+    }
+    if t >= 1.0 {
+        return b;
+    }
+    a * (1.0 - t) + b * t
+}
+
+// LUT row = [l, c, h, curvature].
+fn find_closest(hue: f64) -> (usize, usize) {
+    let mut start: i64 = 0;
+    let mut end: i64 = LUT.len() as i64 - 1;
+    let mut mid = (start + end) / 2;
+    while start <= end {
+        let mh = LUT[mid as usize][2];
+        if mh == hue {
+            return (mid as usize, mid as usize);
+        } else if mh < hue {
+            start = mid + 1;
+        } else {
+            end = mid - 1;
+        }
+        mid = (start + end) / 2;
+    }
+    let last = LUT.len() as i64 - 1;
+    (
+        mid.clamp(0, last) as usize,
+        (mid + 1).clamp(0, last) as usize,
+    )
+}
+
+fn lerp_lut(start: &[f64; 4], end: &[f64; 4], hue: f64) -> [f64; 4] {
+    if hue == start[2] {
+        return *start;
+    }
+    if hue == end[2] {
+        return *end;
+    }
+    let t = (hue - start[2]) / (end[2] - start[2]);
+    [
+        lerp(start[0], end[0], t),
+        lerp(start[1], end[1], t),
+        hue,
+        lerp(start[3], end[3], t),
+    ]
+}
+
+fn get_lut_item(h: f64) -> [f64; 4] {
+    let (lo, hi) = find_closest(h);
+    lerp_lut(&LUT[lo], &LUT[hi], h)
+}
+
+#[inline(always)]
+fn normalized_hue(h: f64) -> f64 {
+    if h < 0.0 {
+        (h % 360.0) + 360.0
+    } else {
+        h % 360.0
+    }
+}
+
+#[inline(always)]
+fn intersection_with_arc(x: f64, curvature: f64) -> f64 {
+    if curvature == 0.0 {
+        return x;
+    }
+    let radius = (1.0 / curvature).abs();
+    let half_diagonal = 0.5f64.sqrt(); // sqrt(0.5^2 + 0.5^2)
+    let distance_to_center = (radius * radius - half_diagonal * half_diagonal).sqrt();
+    let offset = distance_to_center / 2.0f64.sqrt();
+    let center_x = (if curvature > 0.0 { offset } else { -offset }) + 0.5;
+    let center_y = (if curvature > 0.0 { -offset } else { offset }) + 0.5;
+    let under_root = radius * radius - (x - center_x) * (x - center_x);
+    if under_root < 0.0 {
+        return 0.0;
+    }
+    let sqrt_val = under_root.sqrt();
+    let res1 = center_y + sqrt_val;
+    if res1 >= 0.0 && res1 <= 1.0 {
+        res1
+    } else {
+        center_y - sqrt_val
+    }
+}
+
+#[inline(always)]
+fn max_chroma_from_item(l: f64, item: [f64; 4]) -> f64 {
+    let (il, ic, icv) = (item[0], item[1], item[3]);
+    if l <= il {
+        return (l / il) * ic;
+    }
+    let x = (1.0 - l) / (1.0 - il);
+    ic * intersection_with_arc(x, icv)
+}
+
+#[inline(always)]
+fn map_edge_seeker(oklch: &[f64; 3], max_chroma: f64, out: &mut [f64; 3]) {
+    let (l, c, h) = (oklch[0], oklch[1], oklch[2]);
+    if l <= 0.0 {
+        *out = [0.0, 0.0, 0.0];
+        return;
+    }
+    if l >= 1.0 {
+        *out = [1.0, 1.0, 1.0];
+        return;
+    }
+    oklch_to_clipped_p3(l, if c > max_chroma { max_chroma } else { c }, h, out);
+}
+
+struct EdgeSeeker;
+
+impl EdgeSeeker {
+    fn new() -> Self {
+        EdgeSeeker
+    }
+
+    #[inline(always)]
+    fn max_chroma(&mut self, l: f64, h: f64) -> f64 {
+        if l <= 0.0 || l >= 1.0 {
+            return 0.0;
+        }
+        max_chroma_from_item(l, get_lut_item(normalized_hue(h)))
+    }
+
+    #[inline(always)]
+    fn map(&mut self, oklch: &[f64; 3], out: &mut [f64; 3]) {
+        self.map_impl(oklch, out, false);
+    }
+
+    #[inline(always)]
+    fn map_with_in_gamut_check(&mut self, oklch: &[f64; 3], out: &mut [f64; 3]) {
+        self.map_impl(oklch, out, true);
+    }
+
+    #[inline(always)]
+    fn map_impl(&mut self, oklch: &[f64; 3], out: &mut [f64; 3], check_in_gamut: bool) {
+        if check_in_gamut && oklch_to_p3_if_in_gamut(oklch[0], oklch[1], oklch[2], out) {
+            return;
+        }
+        let mc = self.max_chroma(oklch[0], oklch[2]);
+        map_edge_seeker(oklch, mc, out);
+    }
+}
+
+// ── Benchmark harness ───────────────────────────────────────────────────────
+
+fn build_grid() -> Vec<[f64; 3]> {
+    let chroma = 0.4;
+    let den: f64 = 100.0;
+    let hi = ((1.0 - 0.01) * den).round() as i64;
+    let lo = (0.01 * den).round() as i64;
+    let mut samples = Vec::new();
+    let mut li = hi;
+    while li >= lo {
+        let l = li as f64 / den;
+        for h in 0..360 {
+            samples.push([l, chroma, h as f64]);
+        }
+        li -= 1;
+    }
+    samples
+}
+
+fn time_pass(warmup: usize, repeats: usize, n: usize, mut pass: impl FnMut() -> f64) -> f64 {
+    let mut s = 0.0;
+    for _ in 0..warmup {
+        s += pass();
+    }
+    let mut times = Vec::with_capacity(repeats);
+    for _ in 0..repeats {
+        let t0 = Instant::now();
+        s += pass();
+        times.push(t0.elapsed().as_nanos() as f64 / n as f64);
+    }
+    black_box(s);
+    times.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    times[times.len() / 2]
+}
+
+// Checksum (sum of all output channels) for cross-validation against JS.
+fn checksum(samples: &[[f64; 3]], mut f: impl FnMut(&[f64; 3], &mut [f64; 3])) -> f64 {
+    let mut out = [0.0; 3];
+    let mut s = 0.0;
+    for c in samples {
+        f(c, &mut out);
+        s += out[0] + out[1] + out[2];
+    }
+    s
+}
+
+fn max_channel_diff(
+    samples: &[[f64; 3]],
+    mut a: impl FnMut(&[f64; 3], &mut [f64; 3]),
+    mut b: impl FnMut(&[f64; 3], &mut [f64; 3]),
+) -> f64 {
+    let mut a_out = [0.0; 3];
+    let mut b_out = [0.0; 3];
+    let mut max = 0.0;
+    for c in samples {
+        a(c, &mut a_out);
+        b(c, &mut b_out);
+        for i in 0..3 {
+            let diff = (a_out[i] - b_out[i]).abs();
+            if diff > max {
+                max = diff;
+            }
+        }
+    }
+    max
+}
+
+fn main() {
+    let samples = build_grid();
+    let n = samples.len();
+    println!("dataset: {} OKLCh colors (oklch(L 0.4 H))\n", n);
+
+    let warmup = 50;
+    let repeats = 25;
+
+    // Checksums (for parity with the JS port).
+    let mut cubic_cs = OklchCubic::new();
+    let mut edge_cs = EdgeSeeker::new();
+    let cs_clip = checksum(&samples, |c, o| clip(c, o));
+    let cs_cubic = checksum(&samples, |c, o| cubic_cs.map(c, o));
+    let cs_edge = checksum(&samples, |c, o| edge_cs.map(c, o));
+    println!("checksums (sum of all P3 channels):");
+    println!("  clip                 {:.10}", cs_clip);
+    println!("  oklch-cubic-cached   {:.10}", cs_cubic);
+    println!("  edge-seeker          {:.10}\n", cs_edge);
+
+    let mut cubic_eq = OklchCubic::new();
+    let mut cubic_checked_eq = OklchCubic::new();
+    let cubic_check_diff = max_channel_diff(
+        &samples,
+        |c, o| cubic_eq.map(c, o),
+        |c, o| cubic_checked_eq.map_with_in_gamut_check(c, o),
+    );
+    let mut edge_eq = EdgeSeeker::new();
+    let mut edge_checked_eq = EdgeSeeker::new();
+    let edge_check_diff = max_channel_diff(
+        &samples,
+        |c, o| edge_eq.map(c, o),
+        |c, o| edge_checked_eq.map_with_in_gamut_check(c, o),
+    );
+    println!(
+        "equivalence: unchecked/in-gamut-check max channel diff {}\n",
+        cubic_check_diff.max(edge_check_diff)
+    );
+
+    let clip_ns = time_pass(warmup, repeats, n, || {
+        let mut out = [0.0; 3];
+        let mut sink = 0.0;
+        for s in &samples {
+            clip(s, &mut out);
+            sink += out[0];
+        }
+        sink
+    });
+
+    let mut cubic = OklchCubic::new();
+    let cubic_ns = time_pass(warmup, repeats, n, || {
+        let mut out = [0.0; 3];
+        let mut sink = 0.0;
+        for s in &samples {
+            cubic.map(s, &mut out);
+            sink += out[0];
+        }
+        sink
+    });
+
+    let mut cubic_checked = OklchCubic::new();
+    let cubic_checked_ns = time_pass(warmup, repeats, n, || {
+        let mut out = [0.0; 3];
+        let mut sink = 0.0;
+        for s in &samples {
+            cubic_checked.map_with_in_gamut_check(s, &mut out);
+            sink += out[0];
+        }
+        sink
+    });
+
+    let mut edge = EdgeSeeker::new();
+    let edge_ns = time_pass(warmup, repeats, n, || {
+        let mut out = [0.0; 3];
+        let mut sink = 0.0;
+        for s in &samples {
+            edge.map(s, &mut out);
+            sink += out[0];
+        }
+        sink
+    });
+
+    let mut edge_checked = EdgeSeeker::new();
+    let edge_checked_ns = time_pass(warmup, repeats, n, || {
+        let mut out = [0.0; 3];
+        let mut sink = 0.0;
+        for s in &samples {
+            edge_checked.map_with_in_gamut_check(s, &mut out);
+            sink += out[0];
+        }
+        sink
+    });
+
+    let mut timings = vec![
+        ("clip", clip_ns),
+        ("edge-seeker", edge_ns),
+        ("edge-seeker (in-gamut check)", edge_checked_ns),
+        ("oklch-cubic (cached)", cubic_ns),
+        ("oklch-cubic (cached, in-gamut check)", cubic_checked_ns),
+    ];
+    timings.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+    let fastest_ns = timings[0].1;
+    let name_width = timings
+        .iter()
+        .map(|(name, _)| name.len())
+        .max()
+        .unwrap_or(0);
+
+    println!(
+        "scalar Rust (median ns/call over {} grid passes, fastest to slowest):",
+        repeats
+    );
+    for (name, ns) in timings {
+        println!(
+            "  {:<name_width$} {:6.2} ns/call  ({:.2}× fastest)",
+            name,
+            ns,
+            ns / fastest_ns,
+            name_width = name_width
+        );
+    }
+}
