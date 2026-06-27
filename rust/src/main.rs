@@ -1,7 +1,8 @@
 // Scalar (one-color-at-a-time) Rust port of the gma-benchmark methods.
 //
 // Apples-to-apples with the JS benchmark: same algorithms, same conversion
-// math, same 35,640-color grid, one color per call. Built to anchor the
+// math, same 35,640-color workloads (the canonical grid plus a random
+// hue/lightness workload), one color per call. Built to anchor the
 // native-vs-JS comparison.
 
 use std::hint::black_box;
@@ -460,6 +461,44 @@ fn build_grid() -> Vec<[f64; 3]> {
     samples
 }
 
+// Small deterministic PRNG (mulberry32), mirroring the JS benchmark so the
+// random workload is reproducible run to run.
+fn mulberry32(seed: u32) -> impl FnMut() -> f64 {
+    let mut a = seed;
+    move || {
+        a = a.wrapping_add(0x6D2B_79F5);
+        let mut t = (a ^ (a >> 15)).wrapping_mul(a | 1);
+        t = (t.wrapping_add((t ^ (t >> 7)).wrapping_mul(t | 61))) ^ t;
+        f64::from(t ^ (t >> 14)) / 4_294_967_296.0
+    }
+}
+
+// `count` stratified/jittered values evenly covering [min, min+range) — one
+// random sample per equal bin — then Fisher–Yates shuffled so they don't arrive
+// in sorted order. Deterministic via `seed`.
+fn stratified_shuffled(count: usize, min: f64, range: f64, seed: u32) -> Vec<f64> {
+    let mut rand = mulberry32(seed);
+    let mut values: Vec<f64> = (0..count)
+        .map(|i| min + (i as f64 + rand()) * (range / count as f64))
+        .collect();
+    for i in (1..count).rev() {
+        let j = (rand() * (i as f64 + 1.0)) as usize;
+        values.swap(i, j);
+    }
+    values
+}
+
+// Random workload: same sample count as the grid, but every hue and lightness
+// is an independent stratified/jittered fractional value (even coverage of its
+// range, shuffled). Lightness covers the same 0.01..0.99 range as the grid.
+fn build_random(n: usize) -> Vec<[f64; 3]> {
+    let chroma = 0.4;
+    let lightness_step = 0.01;
+    let rand_h = stratified_shuffled(n, 0.0, 360.0, 0x9e37_79b9);
+    let rand_l = stratified_shuffled(n, lightness_step, 1.0 - 2.0 * lightness_step, 0x85eb_ca6b);
+    (0..n).map(|i| [rand_l[i], chroma, rand_h[i]]).collect()
+}
+
 fn time_pass(warmup: usize, repeats: usize, n: usize, mut pass: impl FnMut() -> f64) -> f64 {
     let mut s = 0.0;
     for _ in 0..warmup {
@@ -508,48 +547,13 @@ fn max_channel_diff(
     max
 }
 
-fn main() {
-    let samples = build_grid();
+fn run_timings(label: &str, samples: &[[f64; 3]], warmup: usize, repeats: usize) {
     let n = samples.len();
-    println!("dataset: {} OKLCh colors (oklch(L 0.4 H))\n", n);
-
-    let warmup = 50;
-    let repeats = 25;
-
-    // Checksums (for parity with the JS port).
-    let mut cubic_cs = OklchCubic::new();
-    let mut edge_cs = EdgeSeeker::new();
-    let cs_clip = checksum(&samples, |c, o| clip(c, o));
-    let cs_cubic = checksum(&samples, |c, o| cubic_cs.map(c, o));
-    let cs_edge = checksum(&samples, |c, o| edge_cs.map(c, o));
-    println!("checksums (sum of all P3 channels):");
-    println!("  clip                 {:.10}", cs_clip);
-    println!("  oklch-cubic-cached   {:.10}", cs_cubic);
-    println!("  edge-seeker          {:.10}\n", cs_edge);
-
-    let mut cubic_eq = OklchCubic::new();
-    let mut cubic_checked_eq = OklchCubic::new();
-    let cubic_check_diff = max_channel_diff(
-        &samples,
-        |c, o| cubic_eq.map(c, o),
-        |c, o| cubic_checked_eq.map_with_in_gamut_check(c, o),
-    );
-    let mut edge_eq = EdgeSeeker::new();
-    let mut edge_checked_eq = EdgeSeeker::new();
-    let edge_check_diff = max_channel_diff(
-        &samples,
-        |c, o| edge_eq.map(c, o),
-        |c, o| edge_checked_eq.map_with_in_gamut_check(c, o),
-    );
-    println!(
-        "equivalence: unchecked/in-gamut-check max channel diff {}\n",
-        cubic_check_diff.max(edge_check_diff)
-    );
 
     let clip_ns = time_pass(warmup, repeats, n, || {
         let mut out = [0.0; 3];
         let mut sink = 0.0;
-        for s in &samples {
+        for s in samples {
             clip(s, &mut out);
             sink += out[0];
         }
@@ -560,7 +564,7 @@ fn main() {
     let cubic_ns = time_pass(warmup, repeats, n, || {
         let mut out = [0.0; 3];
         let mut sink = 0.0;
-        for s in &samples {
+        for s in samples {
             cubic.map(s, &mut out);
             sink += out[0];
         }
@@ -571,7 +575,7 @@ fn main() {
     let cubic_checked_ns = time_pass(warmup, repeats, n, || {
         let mut out = [0.0; 3];
         let mut sink = 0.0;
-        for s in &samples {
+        for s in samples {
             cubic_checked.map_with_in_gamut_check(s, &mut out);
             sink += out[0];
         }
@@ -582,7 +586,7 @@ fn main() {
     let edge_ns = time_pass(warmup, repeats, n, || {
         let mut out = [0.0; 3];
         let mut sink = 0.0;
-        for s in &samples {
+        for s in samples {
             edge.map(s, &mut out);
             sink += out[0];
         }
@@ -593,7 +597,7 @@ fn main() {
     let edge_checked_ns = time_pass(warmup, repeats, n, || {
         let mut out = [0.0; 3];
         let mut sink = 0.0;
-        for s in &samples {
+        for s in samples {
             edge_checked.map_with_in_gamut_check(s, &mut out);
             sink += out[0];
         }
@@ -616,7 +620,7 @@ fn main() {
         .unwrap_or(0);
 
     println!(
-        "scalar Rust (median ns/call over {} grid passes, fastest to slowest):",
+        "── {label} ── (median ns/call over {} passes, fastest to slowest):",
         repeats
     );
     for (name, ns) in timings {
@@ -628,4 +632,59 @@ fn main() {
             name_width = name_width
         );
     }
+    println!();
+}
+
+fn main() {
+    let grid = build_grid();
+    let random = build_random(grid.len());
+    let n = grid.len();
+    println!("dataset: {} OKLCh colors per workload (grid + random)\n", n);
+
+    let warmup = 50;
+    let repeats = 25;
+
+    // Checksums on the grid (for parity with the JS port).
+    let mut cubic_cs = OklchCubic::new();
+    let mut edge_cs = EdgeSeeker::new();
+    let cs_clip = checksum(&grid, |c, o| clip(c, o));
+    let cs_cubic = checksum(&grid, |c, o| cubic_cs.map(c, o));
+    let cs_edge = checksum(&grid, |c, o| edge_cs.map(c, o));
+    println!("checksums on grid (sum of all P3 channels):");
+    println!("  clip                 {:.10}", cs_clip);
+    println!("  oklch-cubic-cached   {:.10}", cs_cubic);
+    println!("  edge-seeker          {:.10}\n", cs_edge);
+
+    // Equivalence across both workloads: the in-gamut-check fast path must match
+    // the unchecked path for both methods.
+    let mut max_diff: f64 = 0.0;
+    for samples in [&grid, &random] {
+        let mut cubic_eq = OklchCubic::new();
+        let mut cubic_checked_eq = OklchCubic::new();
+        let cubic_check_diff = max_channel_diff(
+            samples,
+            |c, o| cubic_eq.map(c, o),
+            |c, o| cubic_checked_eq.map_with_in_gamut_check(c, o),
+        );
+        let mut edge_eq = EdgeSeeker::new();
+        let mut edge_checked_eq = EdgeSeeker::new();
+        let edge_check_diff = max_channel_diff(
+            samples,
+            |c, o| edge_eq.map(c, o),
+            |c, o| edge_checked_eq.map_with_in_gamut_check(c, o),
+        );
+        max_diff = max_diff.max(cubic_check_diff).max(edge_check_diff);
+    }
+    println!(
+        "equivalence: unchecked/in-gamut-check max channel diff {} (grid + random)\n",
+        max_diff
+    );
+
+    run_timings("grid (H = 0..359 step 1, repeated per L)", &grid, warmup, repeats);
+    run_timings(
+        "random (stratified/jittered fractional H + L)",
+        &random,
+        warmup,
+        repeats,
+    );
 }

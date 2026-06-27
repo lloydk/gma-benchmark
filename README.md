@@ -33,18 +33,20 @@ npm run bench
 npm run bench:bun
 ```
 
-Uses [mitata](https://github.com/evanwashere/mitata) for benchmarking. The dataset matches
-color.js-org's gamut-mapping benchmark grid: `oklch(L 0.4 H)`, `H = 0..359` step
-1, `L = 0.99..0.01` step 0.01 (35,640 colors, all out of P3 gamut at C=0.4). Each
-`bench` iteration maps the whole grid, so per-call time is the reported time
-divided by 35,640. The in-gamut-check rows run on the same all-out-of-gamut grid,
-so they primarily measure precheck overhead.
+Uses [mitata](https://github.com/evanwashere/mitata) for benchmarking. Each method runs over
+two 35,640-color workloads. The first matches color.js-org's gamut-mapping
+benchmark grid: `oklch(L 0.4 H)`, `H = 0..359` step 1, `L = 0.99..0.01` step 0.01.
+The second uses random fractional hue and lightness (stratified/jittered for even
+coverage, then shuffled) to model arbitrary input rather than a repeating grid.
+All colors are out of P3 gamut at C=0.4, so the in-gamut-check rows primarily
+measure precheck overhead. Each `bench` iteration maps a whole workload, so
+per-call time is the reported time divided by 35,640.
 
 ## Rust benchmark
 
 A scalar Rust implementation lives in [`rust/`](rust/). It ports the same
-one-color-at-a-time algorithms and f64 conversion math over the identical
-35,640-color grid, giving a native baseline for how much of the JS timing is
+one-color-at-a-time algorithms and f64 conversion math over the same two
+35,640-color workloads, giving a native baseline for how much of the JS timing is
 runtime/JIT overhead versus the algorithmic work itself. See
 [`rust/README.md`](rust/README.md) for build commands.
 

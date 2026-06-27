@@ -1,7 +1,8 @@
 # Native (Rust) benchmark
 
-A native point of reference for the JS `gma-benchmark`, timed over the identical
-35,640-color grid (`oklch(L 0.4 H)`).
+A native point of reference for the JS `gma-benchmark`, timed over the same two
+35,640-color workloads: the canonical grid (`oklch(L 0.4 H)`) and a random
+hue/lightness workload (stratified/jittered, shuffled).
 
 ## `gma-bench` — scalar, apples-to-apples
 
