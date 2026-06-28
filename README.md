@@ -49,6 +49,29 @@ here — under `--in-gamut-check` it is pure overhead, which is exactly what tha
 mode measures. Each `bench` iteration maps a whole workload, so per-call time is
 the reported time divided by 35,640.
 
+## Caveats
+
+These are **microbenchmarks** — each method is timed in isolation, in a tight
+loop, over a fixed synthetic dataset. They're good for comparing the algorithms
+under controlled conditions, but **real-world application performance can differ,
+sometimes substantially**, because the numbers don't capture:
+
+- **Input distribution** — results are sensitive to the actual hues and
+  lightnesses an app feeds in. The two workloads above already differ by up to
+  ~2× for the same method, because the repeating grid keeps caches and branch
+  predictors warm in a way arbitrary input does not.
+- **Surrounding code** — in isolation a hot path stays cache-resident and its
+  branches stay well-predicted; interleaved with other work in a real app, that
+  is rarely true.
+- **Compiler / JIT and binary layout** — the same source can compile to
+  meaningfully different machine code depending on what else is built alongside
+  it; the identical routine has been measured swinging ~20% from this alone.
+- **Hardware, runtime version, and build flags** — every number is specific to
+  the machine and toolchain that produced it.
+
+Treat the results as relative indicators under these specific conditions, not as
+a guarantee of how a method will perform in your application.
+
 ## Rust benchmark
 
 A scalar Rust implementation lives in [`rust/`](rust/). It ports the same
