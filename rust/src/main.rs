@@ -617,96 +617,60 @@ fn max_channel_diff(
     max
 }
 
-fn run_timings(label: &str, samples: &[[f64; 3]], warmup: usize, repeats: usize) {
-    let n = samples.len();
-
-    let clip_ns = time_pass(warmup, repeats, n, || {
+fn time_method(
+    warmup: usize,
+    repeats: usize,
+    samples: &[[f64; 3]],
+    mut map: impl FnMut(&[f64; 3], &mut [f64; 3]),
+) -> f64 {
+    time_pass(warmup, repeats, samples.len(), || {
         let mut out = [0.0; 3];
         let mut sink = 0.0;
         for s in samples {
-            clip(s, &mut out);
+            map(s, &mut out);
             sink += out[0];
         }
         sink
-    });
+    })
+}
+
+fn run_timings(label: &str, samples: &[[f64; 3]], warmup: usize, repeats: usize, check: bool) {
+    // `check` selects the in-gamut-precheck variant of every method; the branch
+    // is outside the timed loop so the toggle adds no per-call overhead.
+    let clip_ns = time_method(warmup, repeats, samples, |s, o| clip(s, o));
 
     let mut cubic = OklchCubic::new();
-    let cubic_ns = time_pass(warmup, repeats, n, || {
-        let mut out = [0.0; 3];
-        let mut sink = 0.0;
-        for s in samples {
-            cubic.map(s, &mut out);
-            sink += out[0];
-        }
-        sink
-    });
-
-    let mut cubic_checked = OklchCubic::new();
-    let cubic_checked_ns = time_pass(warmup, repeats, n, || {
-        let mut out = [0.0; 3];
-        let mut sink = 0.0;
-        for s in samples {
-            cubic_checked.map_with_in_gamut_check(s, &mut out);
-            sink += out[0];
-        }
-        sink
-    });
+    let cubic_ns = if check {
+        time_method(warmup, repeats, samples, |s, o| {
+            cubic.map_with_in_gamut_check(s, o)
+        })
+    } else {
+        time_method(warmup, repeats, samples, |s, o| cubic.map(s, o))
+    };
 
     let mut edge = EdgeSeeker::new();
-    let edge_ns = time_pass(warmup, repeats, n, || {
-        let mut out = [0.0; 3];
-        let mut sink = 0.0;
-        for s in samples {
-            edge.map(s, &mut out);
-            sink += out[0];
-        }
-        sink
-    });
+    let edge_ns = if check {
+        time_method(warmup, repeats, samples, |s, o| {
+            edge.map_with_in_gamut_check(s, o)
+        })
+    } else {
+        time_method(warmup, repeats, samples, |s, o| edge.map(s, o))
+    };
 
     let mut edge_indexed = EdgeSeekerIndexed::new();
-    let edge_indexed_ns = time_pass(warmup, repeats, n, || {
-        let mut out = [0.0; 3];
-        let mut sink = 0.0;
-        for s in samples {
-            edge_indexed.map(s, &mut out);
-            sink += out[0];
-        }
-        sink
-    });
-
-    let mut edge_checked = EdgeSeeker::new();
-    let edge_checked_ns = time_pass(warmup, repeats, n, || {
-        let mut out = [0.0; 3];
-        let mut sink = 0.0;
-        for s in samples {
-            edge_checked.map_with_in_gamut_check(s, &mut out);
-            sink += out[0];
-        }
-        sink
-    });
-
-    let mut edge_indexed_checked = EdgeSeekerIndexed::new();
-    let edge_indexed_checked_ns = time_pass(warmup, repeats, n, || {
-        let mut out = [0.0; 3];
-        let mut sink = 0.0;
-        for s in samples {
-            edge_indexed_checked.map_with_in_gamut_check(s, &mut out);
-            sink += out[0];
-        }
-        sink
-    });
+    let edge_indexed_ns = if check {
+        time_method(warmup, repeats, samples, |s, o| {
+            edge_indexed.map_with_in_gamut_check(s, o)
+        })
+    } else {
+        time_method(warmup, repeats, samples, |s, o| edge_indexed.map(s, o))
+    };
 
     let mut timings = vec![
         ("clip", clip_ns),
+        ("oklch-cubic (cached)", cubic_ns),
         ("edge-seeker", edge_ns),
         ("edge-seeker (indexed)", edge_indexed_ns),
-        ("edge-seeker (in-gamut check)", edge_checked_ns),
-        (
-            "edge-seeker (indexed, in-gamut check)",
-            edge_indexed_checked_ns,
-        ),
-        ("oklch-cubic (cached)", cubic_ns),
-        ("oklch-cubic (cached, in-gamut check)", cubic_checked_ns),
     ];
     timings.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
     let fastest_ns = timings[0].1;
@@ -737,6 +701,18 @@ fn main() {
     let random = build_random(grid.len());
     let n = grid.len();
     println!("dataset: {} OKLCh colors per workload (grid + random)\n", n);
+
+    // `--in-gamut-check` times the in-gamut-precheck variant of every method
+    // instead of the plain one, so a run shows one mode rather than both mixed.
+    let check = std::env::args().any(|a| a == "--in-gamut-check");
+    println!(
+        "in-gamut precheck: {}\n",
+        if check {
+            "ENABLED (--in-gamut-check)"
+        } else {
+            "disabled (pass --in-gamut-check to enable)"
+        }
+    );
 
     let warmup = 50;
     let repeats = 25;
@@ -810,11 +786,13 @@ fn main() {
         &grid,
         warmup,
         repeats,
+        check,
     );
     run_timings(
         "random (stratified/jittered fractional H + L)",
         &random,
         warmup,
         repeats,
+        check,
     );
 }

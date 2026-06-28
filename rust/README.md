@@ -14,6 +14,9 @@ only the per-call runtime is ported (the LUT build is irrelevant to timing).
 ```sh
 RUSTFLAGS="-C target-cpu=native" cargo build --release --bin gma-bench
 ./target/release/gma-bench
+
+# time the in-gamut-precheck variant of every method instead:
+./target/release/gma-bench --in-gamut-check
 ```
 
 It prints checksums (sum of all output channels) that match the JS port:

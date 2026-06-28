@@ -76,14 +76,21 @@ const oklchCubicChecked = (oklch, out) => oklchCubic(oklch, out, true);
 const edgeSeekerChecked = (oklch, out) => edgeSeeker(oklch, out, true);
 const edgeSeekerIndexedChecked = (oklch, out) => edgeSeekerIndexed(oklch, out, true);
 
-const methods = [
+// `--in-gamut-check` runs the in-gamut-precheck variant of every method instead
+// of the plain one, so a run shows one mode at a time rather than both mixed.
+const inGamutCheck = process.argv.slice(2).includes("--in-gamut-check");
+console.log(`in-gamut precheck: ${inGamutCheck ? "ENABLED (--in-gamut-check)" : "disabled (pass --in-gamut-check to enable)"}\n`);
+
+const methods = inGamutCheck ? [
+	["clip", clip],
+	["oklch-cubic (cached)", oklchCubicChecked],
+	["edge-seeker", edgeSeekerChecked],
+	["edge-seeker (indexed)", edgeSeekerIndexedChecked],
+] : [
 	["clip", clip],
 	["oklch-cubic (cached)", oklchCubic],
-	["oklch-cubic (cached, in-gamut check)", oklchCubicChecked],
 	["edge-seeker", edgeSeeker],
 	["edge-seeker (indexed)", edgeSeekerIndexed],
-	["edge-seeker (in-gamut check)", edgeSeekerChecked],
-	["edge-seeker (indexed, in-gamut check)", edgeSeekerIndexedChecked],
 ];
 
 const out = [0, 0, 0];
