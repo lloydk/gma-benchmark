@@ -307,6 +307,9 @@ fn lerp(a: f64, b: f64, t: f64) -> f64 {
 }
 
 // LUT row = [l, c, h, curvature].
+const HUE_INDEX_SCALE: usize = 10;
+const HUE_INDEX_BUCKETS: usize = 360 * HUE_INDEX_SCALE;
+
 fn find_closest(hue: f64) -> (usize, usize) {
     let mut start: i64 = 0;
     let mut end: i64 = LUT.len() as i64 - 1;
@@ -348,6 +351,31 @@ fn lerp_lut(start: &[f64; 4], end: &[f64; 4], hue: f64) -> [f64; 4] {
 fn get_lut_item(h: f64) -> [f64; 4] {
     let (lo, hi) = find_closest(h);
     lerp_lut(&LUT[lo], &LUT[hi], h)
+}
+
+fn build_interval_index() -> Vec<usize> {
+    let mut intervals = vec![0; HUE_INDEX_BUCKETS];
+    let mut interval = 0;
+    for (bucket, slot) in intervals.iter_mut().enumerate() {
+        let hue = bucket as f64 / HUE_INDEX_SCALE as f64;
+        while interval + 1 < LUT.len() - 1 && LUT[interval + 1][2] <= hue {
+            interval += 1;
+        }
+        *slot = interval;
+    }
+    intervals
+}
+
+fn get_lut_item_indexed(h: f64, interval_index: &[usize]) -> [f64; 4] {
+    let bucket = ((h * HUE_INDEX_SCALE as f64) as usize).min(HUE_INDEX_BUCKETS - 1);
+    let mut interval = interval_index[bucket];
+    while interval > 0 && h < LUT[interval][2] {
+        interval -= 1;
+    }
+    while interval + 1 < LUT.len() - 1 && h > LUT[interval + 1][2] {
+        interval += 1;
+    }
+    lerp_lut(&LUT[interval], &LUT[interval + 1], h)
 }
 
 #[inline(always)]
@@ -420,6 +448,48 @@ impl EdgeSeeker {
             return 0.0;
         }
         max_chroma_from_item(l, get_lut_item(normalized_hue(h)))
+    }
+
+    #[inline(always)]
+    fn map(&mut self, oklch: &[f64; 3], out: &mut [f64; 3]) {
+        self.map_impl(oklch, out, false);
+    }
+
+    #[inline(always)]
+    fn map_with_in_gamut_check(&mut self, oklch: &[f64; 3], out: &mut [f64; 3]) {
+        self.map_impl(oklch, out, true);
+    }
+
+    #[inline(always)]
+    fn map_impl(&mut self, oklch: &[f64; 3], out: &mut [f64; 3], check_in_gamut: bool) {
+        if check_in_gamut && oklch_to_p3_if_in_gamut(oklch[0], oklch[1], oklch[2], out) {
+            return;
+        }
+        let mc = self.max_chroma(oklch[0], oklch[2]);
+        map_edge_seeker(oklch, mc, out);
+    }
+}
+
+struct EdgeSeekerIndexed {
+    interval_index: Vec<usize>,
+}
+
+impl EdgeSeekerIndexed {
+    fn new() -> Self {
+        EdgeSeekerIndexed {
+            interval_index: build_interval_index(),
+        }
+    }
+
+    #[inline(always)]
+    fn max_chroma(&mut self, l: f64, h: f64) -> f64 {
+        if l <= 0.0 || l >= 1.0 {
+            return 0.0;
+        }
+        max_chroma_from_item(
+            l,
+            get_lut_item_indexed(normalized_hue(h), &self.interval_index),
+        )
     }
 
     #[inline(always)]
@@ -593,6 +663,17 @@ fn run_timings(label: &str, samples: &[[f64; 3]], warmup: usize, repeats: usize)
         sink
     });
 
+    let mut edge_indexed = EdgeSeekerIndexed::new();
+    let edge_indexed_ns = time_pass(warmup, repeats, n, || {
+        let mut out = [0.0; 3];
+        let mut sink = 0.0;
+        for s in samples {
+            edge_indexed.map(s, &mut out);
+            sink += out[0];
+        }
+        sink
+    });
+
     let mut edge_checked = EdgeSeeker::new();
     let edge_checked_ns = time_pass(warmup, repeats, n, || {
         let mut out = [0.0; 3];
@@ -604,10 +685,26 @@ fn run_timings(label: &str, samples: &[[f64; 3]], warmup: usize, repeats: usize)
         sink
     });
 
+    let mut edge_indexed_checked = EdgeSeekerIndexed::new();
+    let edge_indexed_checked_ns = time_pass(warmup, repeats, n, || {
+        let mut out = [0.0; 3];
+        let mut sink = 0.0;
+        for s in samples {
+            edge_indexed_checked.map_with_in_gamut_check(s, &mut out);
+            sink += out[0];
+        }
+        sink
+    });
+
     let mut timings = vec![
         ("clip", clip_ns),
         ("edge-seeker", edge_ns),
+        ("edge-seeker (indexed)", edge_indexed_ns),
         ("edge-seeker (in-gamut check)", edge_checked_ns),
+        (
+            "edge-seeker (indexed, in-gamut check)",
+            edge_indexed_checked_ns,
+        ),
         ("oklch-cubic (cached)", cubic_ns),
         ("oklch-cubic (cached, in-gamut check)", cubic_checked_ns),
     ];
@@ -673,14 +770,47 @@ fn main() {
             |c, o| edge_eq.map(c, o),
             |c, o| edge_checked_eq.map_with_in_gamut_check(c, o),
         );
-        max_diff = max_diff.max(cubic_check_diff).max(edge_check_diff);
+        let mut edge_indexed_eq = EdgeSeekerIndexed::new();
+        let mut edge_indexed_checked_eq = EdgeSeekerIndexed::new();
+        let edge_indexed_check_diff = max_channel_diff(
+            samples,
+            |c, o| edge_indexed_eq.map(c, o),
+            |c, o| edge_indexed_checked_eq.map_with_in_gamut_check(c, o),
+        );
+        max_diff = max_diff
+            .max(cubic_check_diff)
+            .max(edge_check_diff)
+            .max(edge_indexed_check_diff);
     }
     println!(
         "equivalence: unchecked/in-gamut-check max channel diff {} (grid + random)\n",
         max_diff
     );
 
-    run_timings("grid (H = 0..359 step 1, repeated per L)", &grid, warmup, repeats);
+    let mut indexed_max_diff: f64 = 0.0;
+    for samples in [&grid, &random] {
+        let mut edge_eq = EdgeSeeker::new();
+        let mut edge_indexed_eq = EdgeSeekerIndexed::new();
+        indexed_max_diff = indexed_max_diff.max(max_channel_diff(
+            samples,
+            |c, o| edge_eq.map(c, o),
+            |c, o| edge_indexed_eq.map(c, o),
+        ));
+    }
+    if indexed_max_diff != 0.0 {
+        panic!(
+            "edge-seeker indexed differs from edge-seeker: max channel diff {}",
+            indexed_max_diff
+        );
+    }
+    println!("equivalence: edge-seeker indexed max channel diff 0 (grid + random)\n");
+
+    run_timings(
+        "grid (H = 0..359 step 1, repeated per L)",
+        &grid,
+        warmup,
+        repeats,
+    );
     run_timings(
         "random (stratified/jittered fractional H + L)",
         &random,

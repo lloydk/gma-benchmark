@@ -2,6 +2,8 @@ import { makeLut } from "./makeLut.js";
 
 // Number of slices in the LUT
 const SLICES = 400;
+const HUE_INDEX_SCALE = 10;
+const HUE_INDEX_BUCKETS = 360 * HUE_INDEX_SCALE;
 
 /**
  * Creates a function that returns the maximum chroma for a given lightness and hue
@@ -9,22 +11,7 @@ const SLICES = 400;
  * @returns function that returns the maximum chroma for a given lightness and hue
  */
 export function makeEdgeSeeker (rgbToOklch) {
-	const lut = makeLut(rgbToOklch, SLICES);
-	const lutLength = lut.length;
-	// Parallel numeric columns. Keeping the hue column contiguous makes the
-	// binary search cache-friendly for arbitrary (non-repeating) hues, where an
-	// array-of-objects layout would pointer-chase scattered heap objects.
-	const lutL = new Array(lutLength).fill(0);
-	const lutC = new Array(lutLength).fill(0);
-	const lutH = new Array(lutLength).fill(0);
-	const lutCurvature = new Array(lutLength).fill(0);
-	for (let i = 0; i < lutLength; i++) {
-		const item = lut[i];
-		lutL[i] = item.l;
-		lutC[i] = item.c;
-		lutH[i] = item.h;
-		lutCurvature[i] = item.curvature;
-	}
+	const { lutLength, lutL, lutC, lutH, lutCurvature } = makeLutColumns(rgbToOklch);
 
 	return function getMaxChroma (l, h = 0) {
 		if (l <= 0 || l >= 1) {
@@ -58,6 +45,79 @@ export function makeEdgeSeeker (rgbToOklch) {
 
 		return maxChromaFromLutItem(l, itemL, itemC, itemCurvature);
 	};
+}
+
+/**
+ * Creates a function like makeEdgeSeeker, but uses a dense hue interval index as
+ * a starting point and then corrects to the exact LUT interval.
+ * @param rgbToOklch converter from RGB to OKLCH
+ * @returns function that returns the maximum chroma for a given lightness and hue
+ */
+export function makeEdgeSeekerIndexed (rgbToOklch) {
+	const { lutLength, lutL, lutC, lutH, lutCurvature } = makeLutColumns(rgbToOklch);
+	const intervalByBucket = makeIntervalIndex(lutH, lutLength);
+
+	return function getMaxChroma (l, h = 0) {
+		if (l <= 0 || l >= 1) {
+			return 0;
+		}
+		h = h < 0 ? (h % 360) + 360 : h % 360;
+
+		let bucket = Math.floor(h * HUE_INDEX_SCALE);
+		if (bucket >= HUE_INDEX_BUCKETS) {
+			bucket = HUE_INDEX_BUCKETS - 1;
+		}
+
+		let interval = intervalByBucket[bucket];
+		while (interval > 0 && h < lutH[interval]) {
+			interval--;
+		}
+		while (interval + 1 < lutLength - 1 && h > lutH[interval + 1]) {
+			interval++;
+		}
+
+		const lowHue = lutH[interval];
+		const highHue = lutH[interval + 1];
+		const t = (h - lowHue) / (highHue - lowHue);
+		const itemL = lerp(lutL[interval], lutL[interval + 1], t);
+		const itemC = lerp(lutC[interval], lutC[interval + 1], t);
+		const itemCurvature = lerp(lutCurvature[interval], lutCurvature[interval + 1], t);
+
+		return maxChromaFromLutItem(l, itemL, itemC, itemCurvature);
+	};
+}
+
+function makeLutColumns (rgbToOklch) {
+	const lut = makeLut(rgbToOklch, SLICES);
+	const lutLength = lut.length;
+	// Parallel numeric columns. Keeping the hue column contiguous makes the
+	// binary search cache-friendly for arbitrary (non-repeating) hues, where an
+	// array-of-objects layout would pointer-chase scattered heap objects.
+	const lutL = new Array(lutLength).fill(0);
+	const lutC = new Array(lutLength).fill(0);
+	const lutH = new Array(lutLength).fill(0);
+	const lutCurvature = new Array(lutLength).fill(0);
+	for (let i = 0; i < lutLength; i++) {
+		const item = lut[i];
+		lutL[i] = item.l;
+		lutC[i] = item.c;
+		lutH[i] = item.h;
+		lutCurvature[i] = item.curvature;
+	}
+	return { lutLength, lutL, lutC, lutH, lutCurvature };
+}
+
+function makeIntervalIndex (lutH, lutLength) {
+	const intervalByBucket = new Uint16Array(HUE_INDEX_BUCKETS);
+	let interval = 0;
+	for (let bucket = 0; bucket < HUE_INDEX_BUCKETS; bucket++) {
+		const h = bucket / HUE_INDEX_SCALE;
+		while (interval + 1 < lutLength - 1 && lutH[interval + 1] <= h) {
+			interval++;
+		}
+		intervalByBucket[bucket] = interval;
+	}
+	return intervalByBucket;
 }
 
 /** Standard linear interpolation */

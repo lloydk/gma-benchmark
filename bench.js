@@ -9,7 +9,7 @@ import { bench, run, summary } from "mitata";
 
 import { clip } from "./src/clip.js";
 import { oklchCubic } from "./src/oklch-cubic.js";
-import { edgeSeeker } from "./src/edge-seeker/index.js";
+import { edgeSeeker, edgeSeekerIndexed } from "./src/edge-seeker/index.js";
 
 const CHROMA = 0.4;
 const HUE_STEP = 1;
@@ -74,13 +74,16 @@ console.log(`random:  ${randomSamples.length.toLocaleString()} OKLCh colors, C=$
 
 const oklchCubicChecked = (oklch, out) => oklchCubic(oklch, out, true);
 const edgeSeekerChecked = (oklch, out) => edgeSeeker(oklch, out, true);
+const edgeSeekerIndexedChecked = (oklch, out) => edgeSeekerIndexed(oklch, out, true);
 
 const methods = [
 	["clip", clip],
 	["oklch-cubic (cached)", oklchCubic],
 	["oklch-cubic (cached, in-gamut check)", oklchCubicChecked],
 	["edge-seeker", edgeSeeker],
+	["edge-seeker (indexed)", edgeSeekerIndexed],
 	["edge-seeker (in-gamut check)", edgeSeekerChecked],
+	["edge-seeker (indexed, in-gamut check)", edgeSeekerIndexedChecked],
 ];
 
 const out = [0, 0, 0];
@@ -105,7 +108,11 @@ const checkedOut = [0, 0, 0];
 let maxCheckedDiff = 0;
 let maxCheckedSample = null;
 let maxCheckedDataset = null;
-for (const [unchecked, checked] of [[oklchCubic, oklchCubicChecked], [edgeSeeker, edgeSeekerChecked]]) {
+for (const [unchecked, checked] of [
+	[oklchCubic, oklchCubicChecked],
+	[edgeSeeker, edgeSeekerChecked],
+	[edgeSeekerIndexed, edgeSeekerIndexedChecked],
+]) {
 	for (const [label, dataset] of [["grid", samples], ["random", randomSamples]]) {
 		for (const s of dataset) {
 			unchecked(s, uncheckedOut);
@@ -125,6 +132,28 @@ if (maxCheckedDiff > 1e-12) {
 	throw new Error(`in-gamut check variants differ on the ${maxCheckedDataset} workload: max channel diff ${maxCheckedDiff} at oklch(${maxCheckedSample.join(" ")})`);
 }
 console.log(`equivalence: unchecked/in-gamut-check max channel diff ${maxCheckedDiff} (grid + random)\n`);
+
+let maxIndexedDiff = 0;
+let maxIndexedSample = null;
+let maxIndexedDataset = null;
+for (const [label, dataset] of [["grid", samples], ["random", randomSamples]]) {
+	for (const s of dataset) {
+		edgeSeeker(s, uncheckedOut);
+		edgeSeekerIndexed(s, checkedOut);
+		for (let i = 0; i < 3; i++) {
+			const diff = Math.abs(uncheckedOut[i] - checkedOut[i]);
+			if (diff > maxIndexedDiff) {
+				maxIndexedDiff = diff;
+				maxIndexedSample = s;
+				maxIndexedDataset = label;
+			}
+		}
+	}
+}
+if (maxIndexedDiff !== 0) {
+	throw new Error(`edge-seeker indexed differs on the ${maxIndexedDataset} workload: max channel diff ${maxIndexedDiff} at oklch(${maxIndexedSample.join(" ")})`);
+}
+console.log("equivalence: edge-seeker indexed max channel diff 0 (grid + random)\n");
 
 // Grid workload: fixed integer hues 0..359, repeated at every lightness.
 summary(() => {
