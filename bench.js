@@ -9,6 +9,7 @@ import { bench, run, summary } from "mitata";
 
 import { clip } from "./src/clip.js";
 import { oklchCubic } from "./src/oklch-cubic.js";
+import { bottossonLightness } from "./src/bottosson-lightness.js";
 import { edgeSeeker, edgeSeekerIndexed } from "./src/edge-seeker/index.js";
 
 const CHROMA = 0.4;
@@ -73,6 +74,7 @@ for (let i = 0; i < n; i++) {
 console.log(`random:  ${randomSamples.length.toLocaleString()} OKLCh colors, C=${CHROMA}, H=stratified/jittered 0..360, L=stratified/jittered 0.01..0.99 (both shuffled)`);
 
 const oklchCubicChecked = (oklch, out) => oklchCubic(oklch, out, true);
+const bottossonLightnessChecked = (oklch, out) => bottossonLightness(oklch, out, true);
 const edgeSeekerChecked = (oklch, out) => edgeSeeker(oklch, out, true);
 const edgeSeekerIndexedChecked = (oklch, out) => edgeSeekerIndexed(oklch, out, true);
 
@@ -84,11 +86,13 @@ console.log(`in-gamut precheck: ${inGamutCheck ? "ENABLED (--in-gamut-check)" : 
 const methods = inGamutCheck ? [
 	["clip", clip],
 	["oklch-cubic (cached)", oklchCubicChecked],
+	["bottosson-lightness", bottossonLightnessChecked],
 	["edge-seeker", edgeSeekerChecked],
 	["edge-seeker (indexed)", edgeSeekerIndexedChecked],
 ] : [
 	["clip", clip],
 	["oklch-cubic (cached)", oklchCubic],
+	["bottosson-lightness", bottossonLightness],
 	["edge-seeker", edgeSeeker],
 	["edge-seeker (indexed)", edgeSeekerIndexed],
 ];
@@ -117,6 +121,7 @@ let maxCheckedSample = null;
 let maxCheckedDataset = null;
 for (const [unchecked, checked] of [
 	[oklchCubic, oklchCubicChecked],
+	[bottossonLightness, bottossonLightnessChecked],
 	[edgeSeeker, edgeSeekerChecked],
 	[edgeSeekerIndexed, edgeSeekerIndexedChecked],
 ]) {

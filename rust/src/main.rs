@@ -32,6 +32,29 @@ const BL: f64 = -0.02601080193857028;
 const BM: f64 = -0.508041331704167;
 const BS: f64 = 1.5340521336427373;
 
+// ── Bottosson Display-P3 cusp approximation constants ──
+const BOTTOSSON_EPSILON: f64 = 1e-12;
+const P3_RED1: f64 = -1.772343927512981;
+const P3_RED2: f64 = -0.8207587433674072;
+const P3_GREEN1: f64 = 1.8031987175305495;
+const P3_GREEN2: f64 = -1.1932813966558915;
+
+const P3_RED_K0: f64 = 1.1941401817282744;
+const P3_RED_K1: f64 = 1.7629811997119493;
+const P3_RED_K2: f64 = 0.5958599382477117;
+const P3_RED_K3: f64 = 0.7575999740542505;
+const P3_RED_K4: f64 = 0.5681684967813678;
+const P3_GREEN_K0: f64 = 0.7395668192259771;
+const P3_GREEN_K1: f64 = -0.45954279991477065;
+const P3_GREEN_K2: f64 = 0.08285308768965816;
+const P3_GREEN_K3: f64 = 0.1254116495192955;
+const P3_GREEN_K4: f64 = -0.14503290744357106;
+const P3_BLUE_K0: f64 = 1.3650944117698118;
+const P3_BLUE_K1: f64 = -0.013962295571040945;
+const P3_BLUE_K2: f64 = -1.1452305089885595;
+const P3_BLUE_K3: f64 = -0.5025987876721942;
+const P3_BLUE_K4: f64 = 0.003174713114731378;
+
 // ── sRGB / Display-P3 transfer function, clamped to [0,1] ──
 #[inline(always)]
 fn clamped_gamma(x: f64) -> f64 {
@@ -76,6 +99,52 @@ fn oklch_to_p3_if_in_gamut(l: f64, c: f64, h: f64, out: &mut [f64; 3]) -> bool {
     let r = RL * l_ + RM * m_ + RS * s_;
     let g = GL * l_ + GM * m_ + GS * s_;
     let bl = BL * l_ + BM * m_ + BS * s_;
+    if r < 0.0 || r > 1.0 || g < 0.0 || g > 1.0 || bl < 0.0 || bl > 1.0 {
+        return false;
+    }
+    out[0] = clamped_gamma(r);
+    out[1] = clamped_gamma(g);
+    out[2] = clamped_gamma(bl);
+    true
+}
+
+#[inline(always)]
+fn clamp01(x: f64) -> f64 {
+    if x < 0.0 {
+        0.0
+    } else if x > 1.0 {
+        1.0
+    } else {
+        x
+    }
+}
+
+#[inline(always)]
+fn oklab_to_linear_p3_components(l: f64, a: f64, b: f64) -> (f64, f64, f64) {
+    let l_ = l + KA0 * a + KB0 * b;
+    let m_ = l + KA1 * a + KB1 * b;
+    let s_ = l + KA2 * a + KB2 * b;
+    let l3 = l_ * l_ * l_;
+    let m3 = m_ * m_ * m_;
+    let s3 = s_ * s_ * s_;
+    (
+        RL * l3 + RM * m3 + RS * s3,
+        GL * l3 + GM * m3 + GS * s3,
+        BL * l3 + BM * m3 + BS * s3,
+    )
+}
+
+#[inline(always)]
+fn oklab_to_clipped_p3_fast(l: f64, a: f64, b: f64, out: &mut [f64; 3]) {
+    let (r, g, bl) = oklab_to_linear_p3_components(l, a, b);
+    out[0] = clamped_gamma(r);
+    out[1] = clamped_gamma(g);
+    out[2] = clamped_gamma(bl);
+}
+
+#[inline(always)]
+fn oklab_to_p3_if_in_gamut(l: f64, a: f64, b: f64, out: &mut [f64; 3]) -> bool {
+    let (r, g, bl) = oklab_to_linear_p3_components(l, a, b);
     if r < 0.0 || r > 1.0 || g < 0.0 || g > 1.0 || bl < 0.0 || bl > 1.0 {
         return false;
     }
@@ -291,7 +360,185 @@ impl OklchCubic {
     }
 }
 
-// ── Method 3: edge-seeker ───────────────────────────────────────────────────
+// ── Method 3: Bottosson constant lightness ───────────────────────────────────
+
+#[inline(always)]
+fn compute_max_saturation_p3(a: f64, b: f64) -> f64 {
+    let (k0, k1, k2, k3, k4, wl, wm, ws) = if a * P3_RED1 + b * P3_RED2 > 1.0 {
+        (
+            P3_RED_K0, P3_RED_K1, P3_RED_K2, P3_RED_K3, P3_RED_K4, RL, RM, RS,
+        )
+    } else if a * P3_GREEN1 + b * P3_GREEN2 > 1.0 {
+        (
+            P3_GREEN_K0,
+            P3_GREEN_K1,
+            P3_GREEN_K2,
+            P3_GREEN_K3,
+            P3_GREEN_K4,
+            GL,
+            GM,
+            GS,
+        )
+    } else {
+        (
+            P3_BLUE_K0, P3_BLUE_K1, P3_BLUE_K2, P3_BLUE_K3, P3_BLUE_K4, BL, BM, BS,
+        )
+    };
+
+    let a2 = a * a;
+    let sat = k0 + k1 * a + k2 * b + k3 * a2 + k4 * a * b;
+    let kl = KA0 * a + KB0 * b;
+    let km = KA1 * a + KB1 * b;
+    let ks = KA2 * a + KB2 * b;
+    let l = 1.0 + sat * kl;
+    let m = 1.0 + sat * km;
+    let s = 1.0 + sat * ks;
+    let l2 = l * l;
+    let m2 = m * m;
+    let s2 = s * s;
+    let f = wl * l2 * l + wm * m2 * m + ws * s2 * s;
+    let f1 = 3.0 * (wl * kl * l2 + wm * km * m2 + ws * ks * s2);
+    let f2 = 6.0 * (wl * kl * kl * l + wm * km * km * m + ws * ks * ks * s);
+
+    sat - (f * f1) / (f1 * f1 - 0.5 * f * f2)
+}
+
+#[inline(always)]
+fn find_cusp_p3(a: f64, b: f64) -> [f64; 2] {
+    let s_cusp = compute_max_saturation_p3(a, b);
+    let l = 1.0 + s_cusp * (KA0 * a + KB0 * b);
+    let m = 1.0 + s_cusp * (KA1 * a + KB1 * b);
+    let s = 1.0 + s_cusp * (KA2 * a + KB2 * b);
+    let l3 = l * l * l;
+    let m3 = m * m * m;
+    let s3 = s * s * s;
+    let r = RL * l3 + RM * m3 + RS * s3;
+    let g = GL * l3 + GM * m3 + GS * s3;
+    let blue = BL * l3 + BM * m3 + BS * s3;
+    let l_cusp = (1.0 / r.max(g).max(blue)).cbrt();
+
+    [l_cusp, l_cusp * s_cusp]
+}
+
+#[inline(always)]
+fn find_gamut_intersection_p3(a: f64, b: f64, l1: f64, c1: f64, l0: f64, cusp: [f64; 2]) -> f64 {
+    let mut t: f64;
+
+    if (l1 - l0) * cusp[1] - (cusp[0] - l0) * c1 <= 0.0 {
+        let denom = c1 * cusp[0] + cusp[1] * (l0 - l1);
+        t = if denom == 0.0 {
+            0.0
+        } else {
+            (cusp[1] * l0) / denom
+        };
+    } else {
+        let denom = c1 * (cusp[0] - 1.0) + cusp[1] * (l0 - l1);
+        t = if denom == 0.0 {
+            0.0
+        } else {
+            (cusp[1] * (l0 - 1.0)) / denom
+        };
+
+        let dl = l1 - l0;
+        let kl = a * KA0 + b * KB0;
+        let km = a * KA1 + b * KB1;
+        let ks = a * KA2 + b * KB2;
+        let ldt_base = dl + c1 * kl;
+        let mdt_base = dl + c1 * km;
+        let sdt_base = dl + c1 * ks;
+        let l_value = l0 * (1.0 - t) + t * l1;
+        let c = t * c1;
+        let l = l_value + c * kl;
+        let m = l_value + c * km;
+        let s = l_value + c * ks;
+        let l2 = l * l;
+        let m2 = m * m;
+        let s2 = s * s;
+        let l3 = l2 * l;
+        let m3 = m2 * m;
+        let s3 = s2 * s;
+        let ldt = 3.0 * ldt_base * l2;
+        let mdt = 3.0 * mdt_base * m2;
+        let sdt = 3.0 * sdt_base * s2;
+        let ldt2 = 6.0 * ldt_base * ldt_base * l;
+        let mdt2 = 6.0 * mdt_base * mdt_base * m;
+        let sdt2 = 6.0 * sdt_base * sdt_base * s;
+
+        let r = RL * l3 + RM * m3 + RS * s3 - 1.0;
+        let r1 = RL * ldt + RM * mdt + RS * sdt;
+        let r2 = RL * ldt2 + RM * mdt2 + RS * sdt2;
+        let ur = r1 / (r1 * r1 - 0.5 * r * r2);
+        let tr = if ur >= 0.0 { -r * ur } else { f64::MAX };
+
+        let g = GL * l3 + GM * m3 + GS * s3 - 1.0;
+        let g1 = GL * ldt + GM * mdt + GS * sdt;
+        let g2 = GL * ldt2 + GM * mdt2 + GS * sdt2;
+        let ug = g1 / (g1 * g1 - 0.5 * g * g2);
+        let tg = if ug >= 0.0 { -g * ug } else { f64::MAX };
+
+        let blue = BL * l3 + BM * m3 + BS * s3 - 1.0;
+        let blue1 = BL * ldt + BM * mdt + BS * sdt;
+        let blue2 = BL * ldt2 + BM * mdt2 + BS * sdt2;
+        let ub = blue1 / (blue1 * blue1 - 0.5 * blue * blue2);
+        let tb = if ub >= 0.0 { -blue * ub } else { f64::MAX };
+
+        t += tr.min(tg.min(tb));
+    }
+
+    t
+}
+
+struct BottossonLightness;
+
+impl BottossonLightness {
+    fn new() -> Self {
+        BottossonLightness
+    }
+
+    #[inline(always)]
+    fn map(&mut self, oklch: &[f64; 3], out: &mut [f64; 3]) {
+        self.map_impl(oklch, out, false);
+    }
+
+    #[inline(always)]
+    fn map_with_in_gamut_check(&mut self, oklch: &[f64; 3], out: &mut [f64; 3]) {
+        self.map_impl(oklch, out, true);
+    }
+
+    #[inline(always)]
+    fn map_impl(&mut self, oklch: &[f64; 3], out: &mut [f64; 3], check_in_gamut: bool) {
+        let mut l = oklch[0];
+        let c = oklch[1].max(0.0);
+        let h = oklch[2];
+
+        if c <= BOTTOSSON_EPSILON {
+            l = clamp01(l);
+            let gray = clamped_gamma(l * l * l);
+            *out = [gray, gray, gray];
+            return;
+        }
+
+        let hr = h * PI / 180.0;
+        let unit_a = hr.cos();
+        let unit_b = hr.sin();
+        let lab_a = c * unit_a;
+        let lab_b = c * unit_b;
+
+        if check_in_gamut && oklab_to_p3_if_in_gamut(l, lab_a, lab_b, out) {
+            return;
+        }
+
+        let cusp = find_cusp_p3(unit_a, unit_b);
+        let l0 = clamp01(l);
+        let t = find_gamut_intersection_p3(unit_a, unit_b, l, c, l0, cusp);
+        let mapped_l = l0 * (1.0 - t) + t * l;
+        let mapped_c = t * c;
+
+        oklab_to_clipped_p3_fast(mapped_l, mapped_c * unit_a, mapped_c * unit_b, out);
+    }
+}
+
+// ── Method 4: edge-seeker ───────────────────────────────────────────────────
 // Reduce chroma to a precomputed LUT of the gamut edge. The lookup evaluates the
 // LUT at the exact normalized hue.
 
@@ -648,6 +895,15 @@ fn run_timings(label: &str, samples: &[[f64; 3]], warmup: usize, repeats: usize,
         time_method(warmup, repeats, samples, |s, o| cubic.map(s, o))
     };
 
+    let mut bottosson = BottossonLightness::new();
+    let bottosson_ns = if check {
+        time_method(warmup, repeats, samples, |s, o| {
+            bottosson.map_with_in_gamut_check(s, o)
+        })
+    } else {
+        time_method(warmup, repeats, samples, |s, o| bottosson.map(s, o))
+    };
+
     let mut edge = EdgeSeeker::new();
     let edge_ns = if check {
         time_method(warmup, repeats, samples, |s, o| {
@@ -669,6 +925,7 @@ fn run_timings(label: &str, samples: &[[f64; 3]], warmup: usize, repeats: usize,
     let mut timings = vec![
         ("clip", clip_ns),
         ("oklch-cubic (cached)", cubic_ns),
+        ("bottosson-lightness", bottosson_ns),
         ("edge-seeker", edge_ns),
         ("edge-seeker (indexed)", edge_indexed_ns),
     ];
@@ -719,13 +976,16 @@ fn main() {
 
     // Checksums on the grid (for parity with the JS port).
     let mut cubic_cs = OklchCubic::new();
+    let mut bottosson_cs = BottossonLightness::new();
     let mut edge_cs = EdgeSeeker::new();
     let cs_clip = checksum(&grid, |c, o| clip(c, o));
     let cs_cubic = checksum(&grid, |c, o| cubic_cs.map(c, o));
+    let cs_bottosson = checksum(&grid, |c, o| bottosson_cs.map(c, o));
     let cs_edge = checksum(&grid, |c, o| edge_cs.map(c, o));
     println!("checksums on grid (sum of all P3 channels):");
     println!("  clip                 {:.10}", cs_clip);
     println!("  oklch-cubic-cached   {:.10}", cs_cubic);
+    println!("  bottosson-lightness  {:.10}", cs_bottosson);
     println!("  edge-seeker          {:.10}\n", cs_edge);
 
     // Equivalence across both workloads: the in-gamut-check fast path must match
@@ -738,6 +998,13 @@ fn main() {
             samples,
             |c, o| cubic_eq.map(c, o),
             |c, o| cubic_checked_eq.map_with_in_gamut_check(c, o),
+        );
+        let mut bottosson_eq = BottossonLightness::new();
+        let mut bottosson_checked_eq = BottossonLightness::new();
+        let bottosson_check_diff = max_channel_diff(
+            samples,
+            |c, o| bottosson_eq.map(c, o),
+            |c, o| bottosson_checked_eq.map_with_in_gamut_check(c, o),
         );
         let mut edge_eq = EdgeSeeker::new();
         let mut edge_checked_eq = EdgeSeeker::new();
@@ -755,6 +1022,7 @@ fn main() {
         );
         max_diff = max_diff
             .max(cubic_check_diff)
+            .max(bottosson_check_diff)
             .max(edge_check_diff)
             .max(edge_indexed_check_diff);
     }
