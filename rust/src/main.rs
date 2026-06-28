@@ -360,7 +360,201 @@ impl OklchCubic {
     }
 }
 
-// ── Method 3: Bottosson constant lightness ───────────────────────────────────
+// ── Method 3: oklch-cubic (no cache) ─────────────────────────────────────────
+// Same fixed 0.1° bucket semantics as the cached variant, but recomputes the
+// per-hue cubic structure for every call. Kept separate so this row cannot affect
+// the cached implementation.
+
+#[derive(Clone, Copy)]
+struct NoCacheHueData {
+    a: [f64; 3],
+    b: [f64; 3],
+    d: [f64; 3],
+    t_lower: f64,
+    turn: [f64; 3],
+}
+
+#[inline(always)]
+fn first_root_no_cache(a: f64, mut b: f64, mut c: f64, mut d: f64, lo: f64, hi: f64) -> f64 {
+    let mut r0 = f64::INFINITY;
+    let mut r1 = f64::INFINITY;
+    let mut r2 = f64::INFINITY;
+    if a.abs() < 1e-12 {
+        if b.abs() < 1e-12 {
+            if c.abs() >= 1e-12 {
+                r0 = -d / c;
+            }
+        } else {
+            let disc = c * c - 4.0 * b * d;
+            if disc >= 0.0 {
+                let s = disc.sqrt();
+                r0 = (-c + s) / (2.0 * b);
+                r1 = (-c - s) / (2.0 * b);
+            }
+        }
+    } else {
+        b /= a;
+        c /= a;
+        d /= a;
+        let p = c - b * b / 3.0;
+        let q = 2.0 * b * b * b / 27.0 - b * c / 3.0 + d;
+        let off = -b / 3.0;
+        let disc = q * q / 4.0 + p * p * p / 27.0;
+        if disc > 1e-14 {
+            let s = disc.sqrt();
+            r0 = (-q / 2.0 + s).cbrt() + (-q / 2.0 - s).cbrt() + off;
+        } else if disc > -1e-14 {
+            let u = (-q / 2.0).cbrt();
+            r0 = 2.0 * u + off;
+            r1 = -u + off;
+        } else {
+            let m = 2.0 * (-p / 3.0).sqrt();
+            let phi = (3.0 * q / (p * m)).clamp(-1.0, 1.0).acos();
+            r0 = m * (phi / 3.0).cos() + off;
+            r1 = m * ((phi - 2.0 * PI) / 3.0).cos() + off;
+            r2 = m * ((phi - 4.0 * PI) / 3.0).cos() + off;
+        }
+    }
+    let mut best = f64::INFINITY;
+    if r0 > lo && r0 < hi {
+        best = r0;
+    }
+    if r1 > lo && r1 < hi && r1 < best {
+        best = r1;
+    }
+    if r2 > lo && r2 < hi && r2 < best {
+        best = r2;
+    }
+    best
+}
+
+#[inline(always)]
+fn first_turn_no_cache(d: f64, b: f64, a: f64) -> f64 {
+    first_root_no_cache(0.0, d, 2.0 * b, a, 1e-12, f64::INFINITY)
+}
+
+fn get_hue_data_no_cache(h: f64) -> NoCacheHueData {
+    let mut hh = h % 360.0;
+    if hh < 0.0 {
+        hh += 360.0;
+    }
+    let bucket_h = ((hh * 10.0).round() as usize) as f64 / 10.0;
+    let rad = bucket_h * PI / 180.0;
+    let (cos, sin) = (rad.cos(), rad.sin());
+    let q0 = KA0 * cos + KB0 * sin;
+    let q1 = KA1 * cos + KB1 * sin;
+    let q2 = KA2 * cos + KB2 * sin;
+    let a = [
+        RL * q0 + RM * q1 + RS * q2,
+        GL * q0 + GM * q1 + GS * q2,
+        BL * q0 + BM * q1 + BS * q2,
+    ];
+    let (q0b, q1b, q2b) = (q0 * q0, q1 * q1, q2 * q2);
+    let b = [
+        RL * q0b + RM * q1b + RS * q2b,
+        GL * q0b + GM * q1b + GS * q2b,
+        BL * q0b + BM * q1b + BS * q2b,
+    ];
+    let (q0c, q1c, q2c) = (q0b * q0, q1b * q1, q2b * q2);
+    let d = [
+        RL * q0c + RM * q1c + RS * q2c,
+        GL * q0c + GM * q1c + GS * q2c,
+        BL * q0c + BM * q1c + BS * q2c,
+    ];
+    let mut t_lower = f64::INFINITY;
+    let mut turn = [0.0; 3];
+    for i in 0..3 {
+        t_lower = t_lower.min(first_root_no_cache(
+            d[i],
+            3.0 * b[i],
+            3.0 * a[i],
+            1.0,
+            1e-9,
+            f64::INFINITY,
+        ));
+        turn[i] = first_turn_no_cache(d[i], b[i], a[i]);
+    }
+    NoCacheHueData {
+        a,
+        b,
+        d,
+        t_lower,
+        turn,
+    }
+}
+
+struct OklchCubicNoCache;
+
+impl OklchCubicNoCache {
+    fn new() -> Self {
+        OklchCubicNoCache
+    }
+
+    #[inline(always)]
+    fn map(&mut self, oklch: &[f64; 3], out: &mut [f64; 3]) {
+        self.map_impl(oklch, out, false);
+    }
+
+    #[inline(always)]
+    fn map_with_in_gamut_check(&mut self, oklch: &[f64; 3], out: &mut [f64; 3]) {
+        self.map_impl(oklch, out, true);
+    }
+
+    #[inline(always)]
+    fn map_impl(&mut self, oklch: &[f64; 3], out: &mut [f64; 3], check_in_gamut: bool) {
+        let (l, c, h) = (oklch[0], oklch[1], oklch[2]);
+        if l <= 0.0 || l >= 1.0 || c <= 0.0 {
+            let ll = if l <= 0.0 {
+                0.0
+            } else if l >= 1.0 {
+                1.0
+            } else {
+                l
+            };
+            oklch_to_clipped_p3(ll, 0.0, h, out);
+            return;
+        }
+        if check_in_gamut && oklch_to_p3_if_in_gamut(l, c, h, out) {
+            return;
+        }
+
+        let hd = get_hue_data_no_cache(h);
+        let (a, b, d, t_lower, turn) = (hd.a, hd.b, hd.d, hd.t_lower, hd.turn);
+        let t0 = c / l;
+        let mut max_t = t0.min(t_lower);
+        let target = 1.0 / (l * l * l);
+        let dd = 1.0 - target;
+        for i in 0..3 {
+            if turn[i] > max_t {
+                if a[i] <= 0.0 {
+                    continue;
+                }
+                let p_max = ((d[i] * max_t + 3.0 * b[i]) * max_t + 3.0 * a[i]) * max_t + 1.0;
+                if p_max < target {
+                    continue;
+                }
+            }
+            max_t = max_t.min(first_root_no_cache(
+                d[i],
+                3.0 * b[i],
+                3.0 * a[i],
+                dd,
+                1e-9,
+                max_t,
+            ));
+        }
+
+        let l3 = l * l * l;
+        out[0] =
+            clamped_gamma(l3 * (((d[0] * max_t + 3.0 * b[0]) * max_t + 3.0 * a[0]) * max_t + 1.0));
+        out[1] =
+            clamped_gamma(l3 * (((d[1] * max_t + 3.0 * b[1]) * max_t + 3.0 * a[1]) * max_t + 1.0));
+        out[2] =
+            clamped_gamma(l3 * (((d[2] * max_t + 3.0 * b[2]) * max_t + 3.0 * a[2]) * max_t + 1.0));
+    }
+}
+
+// ── Method 4: Bottosson constant lightness ───────────────────────────────────
 
 #[inline(always)]
 fn compute_max_saturation_p3(a: f64, b: f64) -> f64 {
@@ -538,7 +732,7 @@ impl BottossonLightness {
     }
 }
 
-// ── Method 4: edge-seeker ───────────────────────────────────────────────────
+// ── Method 5: edge-seeker ───────────────────────────────────────────────────
 // Reduce chroma to a precomputed LUT of the gamut edge. The lookup evaluates the
 // LUT at the exact normalized hue.
 
@@ -895,6 +1089,15 @@ fn run_timings(label: &str, samples: &[[f64; 3]], warmup: usize, repeats: usize,
         time_method(warmup, repeats, samples, |s, o| cubic.map(s, o))
     };
 
+    let mut cubic_no_cache = OklchCubicNoCache::new();
+    let cubic_no_cache_ns = if check {
+        time_method(warmup, repeats, samples, |s, o| {
+            cubic_no_cache.map_with_in_gamut_check(s, o)
+        })
+    } else {
+        time_method(warmup, repeats, samples, |s, o| cubic_no_cache.map(s, o))
+    };
+
     let mut bottosson = BottossonLightness::new();
     let bottosson_ns = if check {
         time_method(warmup, repeats, samples, |s, o| {
@@ -925,6 +1128,7 @@ fn run_timings(label: &str, samples: &[[f64; 3]], warmup: usize, repeats: usize,
     let mut timings = vec![
         ("clip", clip_ns),
         ("oklch-cubic (cached)", cubic_ns),
+        ("oklch-cubic (no cache)", cubic_no_cache_ns),
         ("bottosson-lightness", bottosson_ns),
         ("edge-seeker", edge_ns),
         ("edge-seeker (indexed)", edge_indexed_ns),
@@ -976,15 +1180,18 @@ fn main() {
 
     // Checksums on the grid (for parity with the JS port).
     let mut cubic_cs = OklchCubic::new();
+    let mut cubic_no_cache_cs = OklchCubicNoCache::new();
     let mut bottosson_cs = BottossonLightness::new();
     let mut edge_cs = EdgeSeeker::new();
     let cs_clip = checksum(&grid, |c, o| clip(c, o));
     let cs_cubic = checksum(&grid, |c, o| cubic_cs.map(c, o));
+    let cs_cubic_no_cache = checksum(&grid, |c, o| cubic_no_cache_cs.map(c, o));
     let cs_bottosson = checksum(&grid, |c, o| bottosson_cs.map(c, o));
     let cs_edge = checksum(&grid, |c, o| edge_cs.map(c, o));
     println!("checksums on grid (sum of all P3 channels):");
     println!("  clip                 {:.10}", cs_clip);
     println!("  oklch-cubic-cached   {:.10}", cs_cubic);
+    println!("  oklch-cubic-nocache  {:.10}", cs_cubic_no_cache);
     println!("  bottosson-lightness  {:.10}", cs_bottosson);
     println!("  edge-seeker          {:.10}\n", cs_edge);
 
@@ -998,6 +1205,13 @@ fn main() {
             samples,
             |c, o| cubic_eq.map(c, o),
             |c, o| cubic_checked_eq.map_with_in_gamut_check(c, o),
+        );
+        let mut cubic_no_cache_eq = OklchCubicNoCache::new();
+        let mut cubic_no_cache_checked_eq = OklchCubicNoCache::new();
+        let cubic_no_cache_check_diff = max_channel_diff(
+            samples,
+            |c, o| cubic_no_cache_eq.map(c, o),
+            |c, o| cubic_no_cache_checked_eq.map_with_in_gamut_check(c, o),
         );
         let mut bottosson_eq = BottossonLightness::new();
         let mut bottosson_checked_eq = BottossonLightness::new();
@@ -1022,6 +1236,7 @@ fn main() {
         );
         max_diff = max_diff
             .max(cubic_check_diff)
+            .max(cubic_no_cache_check_diff)
             .max(bottosson_check_diff)
             .max(edge_check_diff)
             .max(edge_indexed_check_diff);
@@ -1029,6 +1244,27 @@ fn main() {
     println!(
         "equivalence: unchecked/in-gamut-check max channel diff {} (grid + random)\n",
         max_diff
+    );
+
+    let mut cubic_no_cache_max_diff: f64 = 0.0;
+    for samples in [&grid, &random] {
+        let mut cubic_eq = OklchCubic::new();
+        let mut cubic_no_cache_eq = OklchCubicNoCache::new();
+        cubic_no_cache_max_diff = cubic_no_cache_max_diff.max(max_channel_diff(
+            samples,
+            |c, o| cubic_eq.map(c, o),
+            |c, o| cubic_no_cache_eq.map(c, o),
+        ));
+    }
+    if cubic_no_cache_max_diff > 1e-12 {
+        panic!(
+            "oklch-cubic no-cache differs from cached: max channel diff {}",
+            cubic_no_cache_max_diff
+        );
+    }
+    println!(
+        "equivalence: oklch-cubic cached/no-cache max channel diff {} (grid + random)\n",
+        cubic_no_cache_max_diff
     );
 
     let mut indexed_max_diff: f64 = 0.0;

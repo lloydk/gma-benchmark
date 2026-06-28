@@ -9,6 +9,7 @@ import { bench, run, summary } from "mitata";
 
 import { clip } from "./src/clip.js";
 import { oklchCubic } from "./src/oklch-cubic.js";
+import { oklchCubicNoCache } from "./src/oklch-cubic-no-cache.js";
 import { bottossonLightness } from "./src/bottosson-lightness.js";
 import { edgeSeeker, edgeSeekerIndexed } from "./src/edge-seeker/index.js";
 
@@ -74,6 +75,7 @@ for (let i = 0; i < n; i++) {
 console.log(`random:  ${randomSamples.length.toLocaleString()} OKLCh colors, C=${CHROMA}, H=stratified/jittered 0..360, L=stratified/jittered 0.01..0.99 (both shuffled)`);
 
 const oklchCubicChecked = (oklch, out) => oklchCubic(oklch, out, true);
+const oklchCubicNoCacheChecked = (oklch, out) => oklchCubicNoCache(oklch, out, true);
 const bottossonLightnessChecked = (oklch, out) => bottossonLightness(oklch, out, true);
 const edgeSeekerChecked = (oklch, out) => edgeSeeker(oklch, out, true);
 const edgeSeekerIndexedChecked = (oklch, out) => edgeSeekerIndexed(oklch, out, true);
@@ -86,12 +88,14 @@ console.log(`in-gamut precheck: ${inGamutCheck ? "ENABLED (--in-gamut-check)" : 
 const methods = inGamutCheck ? [
 	["clip", clip],
 	["oklch-cubic (cached)", oklchCubicChecked],
+	["oklch-cubic (no cache)", oklchCubicNoCacheChecked],
 	["bottosson-lightness", bottossonLightnessChecked],
 	["edge-seeker", edgeSeekerChecked],
 	["edge-seeker (indexed)", edgeSeekerIndexedChecked],
 ] : [
 	["clip", clip],
 	["oklch-cubic (cached)", oklchCubic],
+	["oklch-cubic (no cache)", oklchCubicNoCache],
 	["bottosson-lightness", bottossonLightness],
 	["edge-seeker", edgeSeeker],
 	["edge-seeker (indexed)", edgeSeekerIndexed],
@@ -121,6 +125,7 @@ let maxCheckedSample = null;
 let maxCheckedDataset = null;
 for (const [unchecked, checked] of [
 	[oklchCubic, oklchCubicChecked],
+	[oklchCubicNoCache, oklchCubicNoCacheChecked],
 	[bottossonLightness, bottossonLightnessChecked],
 	[edgeSeeker, edgeSeekerChecked],
 	[edgeSeekerIndexed, edgeSeekerIndexedChecked],
@@ -144,6 +149,28 @@ if (maxCheckedDiff > 1e-12) {
 	throw new Error(`in-gamut check variants differ on the ${maxCheckedDataset} workload: max channel diff ${maxCheckedDiff} at oklch(${maxCheckedSample.join(" ")})`);
 }
 console.log(`equivalence: unchecked/in-gamut-check max channel diff ${maxCheckedDiff} (grid + random)\n`);
+
+let maxCubicNoCacheDiff = 0;
+let maxCubicNoCacheSample = null;
+let maxCubicNoCacheDataset = null;
+for (const [label, dataset] of [["grid", samples], ["random", randomSamples]]) {
+	for (const s of dataset) {
+		oklchCubic(s, uncheckedOut);
+		oklchCubicNoCache(s, checkedOut);
+		for (let i = 0; i < 3; i++) {
+			const diff = Math.abs(uncheckedOut[i] - checkedOut[i]);
+			if (diff > maxCubicNoCacheDiff) {
+				maxCubicNoCacheDiff = diff;
+				maxCubicNoCacheSample = s;
+				maxCubicNoCacheDataset = label;
+			}
+		}
+	}
+}
+if (maxCubicNoCacheDiff > 1e-12) {
+	throw new Error(`oklch-cubic no-cache differs on the ${maxCubicNoCacheDataset} workload: max channel diff ${maxCubicNoCacheDiff} at oklch(${maxCubicNoCacheSample.join(" ")})`);
+}
+console.log(`equivalence: oklch-cubic cached/no-cache max channel diff ${maxCubicNoCacheDiff} (grid + random)\n`);
 
 let maxIndexedDiff = 0;
 let maxIndexedSample = null;
