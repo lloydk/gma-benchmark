@@ -12,6 +12,7 @@ import { oklchCubic } from "./src/oklch-cubic.js";
 import { oklchCubicNoCache } from "./src/oklch-cubic-no-cache.js";
 import { bottossonLightness } from "./src/bottosson-lightness.js";
 import { edgeSeeker, edgeSeekerIndexed } from "./src/edge-seeker/index.js";
+import { raytrace } from "./src/raytrace.js";
 
 const CHROMA = 0.4;
 const HUE_STEP = 1;
@@ -79,6 +80,7 @@ const oklchCubicNoCacheChecked = (oklch, out) => oklchCubicNoCache(oklch, out, t
 const bottossonLightnessChecked = (oklch, out) => bottossonLightness(oklch, out, true);
 const edgeSeekerChecked = (oklch, out) => edgeSeeker(oklch, out, true);
 const edgeSeekerIndexedChecked = (oklch, out) => edgeSeekerIndexed(oklch, out, true);
+const raytraceChecked = (oklch, out) => raytrace(oklch, out, true);
 
 // `--in-gamut-check` runs the in-gamut-precheck variant of every method instead
 // of the plain one, so a run shows one mode at a time rather than both mixed.
@@ -92,6 +94,7 @@ const methods = inGamutCheck ? [
 	["bottosson-lightness", bottossonLightnessChecked],
 	["edge-seeker", edgeSeekerChecked],
 	["edge-seeker (indexed)", edgeSeekerIndexedChecked],
+	["raytrace", raytraceChecked],
 ] : [
 	["clip", clip],
 	["oklch-cubic (cached)", oklchCubic],
@@ -99,6 +102,7 @@ const methods = inGamutCheck ? [
 	["bottosson-lightness", bottossonLightness],
 	["edge-seeker", edgeSeeker],
 	["edge-seeker (indexed)", edgeSeekerIndexed],
+	["raytrace", raytrace],
 ];
 
 const out = [0, 0, 0];
@@ -129,6 +133,7 @@ for (const [unchecked, checked] of [
 	[bottossonLightness, bottossonLightnessChecked],
 	[edgeSeeker, edgeSeekerChecked],
 	[edgeSeekerIndexed, edgeSeekerIndexedChecked],
+	[raytrace, raytraceChecked],
 ]) {
 	for (const [label, dataset] of [["grid", samples], ["random", randomSamples]]) {
 		for (const s of dataset) {

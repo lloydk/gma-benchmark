@@ -55,6 +55,11 @@ const P3_BLUE_K2: f64 = -1.1452305089885595;
 const P3_BLUE_K3: f64 = -0.5025987876721942;
 const P3_BLUE_K4: f64 = 0.003174713114731378;
 
+// ── Raytrace constants ──
+const RAYTRACE_EPSILON: f64 = 1e-12;
+const RAYTRACE_LOW: f64 = 1e-12;
+const RAYTRACE_HIGH: f64 = 1.0 - RAYTRACE_LOW;
+
 // ── sRGB / Display-P3 transfer function, clamped to [0,1] ──
 #[inline(always)]
 fn clamped_gamma(x: f64) -> f64 {
@@ -152,6 +157,106 @@ fn oklab_to_p3_if_in_gamut(l: f64, a: f64, b: f64, out: &mut [f64; 3]) -> bool {
     out[1] = clamped_gamma(g);
     out[2] = clamped_gamma(bl);
     true
+}
+
+#[inline(always)]
+fn linear_p3_to_oklab_chroma(r: f64, g: f64, b: f64) -> f64 {
+    let l = (0.4813798527499543 * r + 0.4621183710113182 * g + 0.05650177623872754 * b).cbrt();
+    let m = (0.2288319418112447 * r + 0.6532168193835677 * g + 0.11795123880518772 * b).cbrt();
+    let s = (0.08394575232299314 * r + 0.22416527097756647 * g + 0.6918889766994405 * b).cbrt();
+    let a = 1.9779985324311684 * l - 2.4285922420485799 * m + 0.4505937096174110 * s;
+    let lab_b = 0.0259040424655478 * l + 0.7827717124575296 * m - 0.8086757549230774 * s;
+    (a * a + lab_b * lab_b).sqrt()
+}
+
+#[inline(always)]
+fn raytrace_unit_box_t(ar: f64, ag: f64, ab: f64, mr: f64, mg: f64, mb: f64) -> f64 {
+    let mut tnear = f64::NEG_INFINITY;
+    let mut tfar = f64::INFINITY;
+
+    let mut d = mr - ar;
+    if d > RAYTRACE_EPSILON || d < -RAYTRACE_EPSILON {
+        let inv_d = 1.0 / d;
+        let t1 = -ar * inv_d;
+        let t2 = (1.0 - ar) * inv_d;
+        if t1 < t2 {
+            if t1 > tnear {
+                tnear = t1;
+            }
+            if t2 < tfar {
+                tfar = t2;
+            }
+        } else {
+            if t2 > tnear {
+                tnear = t2;
+            }
+            if t1 < tfar {
+                tfar = t1;
+            }
+        }
+    } else if ar < 0.0 || ar > 1.0 {
+        return f64::NAN;
+    }
+
+    d = mg - ag;
+    if d > RAYTRACE_EPSILON || d < -RAYTRACE_EPSILON {
+        let inv_d = 1.0 / d;
+        let t1 = -ag * inv_d;
+        let t2 = (1.0 - ag) * inv_d;
+        if t1 < t2 {
+            if t1 > tnear {
+                tnear = t1;
+            }
+            if t2 < tfar {
+                tfar = t2;
+            }
+        } else {
+            if t2 > tnear {
+                tnear = t2;
+            }
+            if t1 < tfar {
+                tfar = t1;
+            }
+        }
+    } else if ag < 0.0 || ag > 1.0 {
+        return f64::NAN;
+    }
+
+    d = mb - ab;
+    if d > RAYTRACE_EPSILON || d < -RAYTRACE_EPSILON {
+        let inv_d = 1.0 / d;
+        let t1 = -ab * inv_d;
+        let t2 = (1.0 - ab) * inv_d;
+        if t1 < t2 {
+            if t1 > tnear {
+                tnear = t1;
+            }
+            if t2 < tfar {
+                tfar = t2;
+            }
+        } else {
+            if t2 > tnear {
+                tnear = t2;
+            }
+            if t1 < tfar {
+                tfar = t1;
+            }
+        }
+    } else if ab < 0.0 || ab > 1.0 {
+        return f64::NAN;
+    }
+
+    if tnear > tfar || tfar < 0.0 {
+        return f64::NAN;
+    }
+    if tnear < 0.0 {
+        tnear = tfar;
+    }
+    if tnear > f64::NEG_INFINITY && tnear < f64::INFINITY {
+        tnear
+    } else {
+        f64::NAN
+    }
 }
 
 // ── Method 1: clip ──
@@ -732,7 +837,117 @@ impl BottossonLightness {
     }
 }
 
-// ── Method 5: edge-seeker ───────────────────────────────────────────────────
+// ── Method 5: raytrace ───────────────────────────────────────────────────────
+
+struct Raytrace;
+
+impl Raytrace {
+    fn new() -> Self {
+        Raytrace
+    }
+
+    #[inline(always)]
+    fn map(&mut self, oklch: &[f64; 3], out: &mut [f64; 3]) {
+        self.map_impl(oklch, out, false);
+    }
+
+    #[inline(always)]
+    fn map_with_in_gamut_check(&mut self, oklch: &[f64; 3], out: &mut [f64; 3]) {
+        self.map_impl(oklch, out, true);
+    }
+
+    #[inline(always)]
+    fn map_impl(&mut self, oklch: &[f64; 3], out: &mut [f64; 3], check_in_gamut: bool) {
+        let l = oklch[0];
+        let c = oklch[1];
+        let h = oklch[2];
+
+        if l <= 0.0 {
+            *out = [0.0, 0.0, 0.0];
+            return;
+        }
+        if l >= 1.0 {
+            *out = [1.0, 1.0, 1.0];
+            return;
+        }
+        if c <= 0.0 {
+            let gray = clamped_gamma(l * l * l);
+            *out = [gray, gray, gray];
+            return;
+        }
+        let hr = h * PI / 180.0;
+        let unit_a = hr.cos();
+        let unit_b = hr.sin();
+        let (mut mr, mut mg, mut mb) = oklab_to_linear_p3_components(l, c * unit_a, c * unit_b);
+        if check_in_gamut
+            && mr >= 0.0
+            && mr <= 1.0
+            && mg >= 0.0
+            && mg <= 1.0
+            && mb >= 0.0
+            && mb <= 1.0
+        {
+            out[0] = clamped_gamma(mr);
+            out[1] = clamped_gamma(mg);
+            out[2] = clamped_gamma(mb);
+            return;
+        }
+
+        let anchor = l * l * l;
+        let mut ar = anchor;
+        let mut ag = anchor;
+        let mut ab = anchor;
+        let mut last_r = mr;
+        let mut last_g = mg;
+        let mut last_b = mb;
+
+        for i in 0..4 {
+            if i != 0 {
+                let corrected_c = linear_p3_to_oklab_chroma(mr, mg, mb);
+                (mr, mg, mb) =
+                    oklab_to_linear_p3_components(l, corrected_c * unit_a, corrected_c * unit_b);
+            }
+
+            let t = raytrace_unit_box_t(ar, ag, ab, mr, mg, mb);
+            if t.is_nan() {
+                mr = last_r;
+                mg = last_g;
+                mb = last_b;
+                break;
+            }
+
+            let hit_r = ar + (mr - ar) * t;
+            let hit_g = ag + (mg - ag) * t;
+            let hit_b = ab + (mb - ab) * t;
+
+            if i != 0
+                && mr > RAYTRACE_LOW
+                && mr < RAYTRACE_HIGH
+                && mg > RAYTRACE_LOW
+                && mg < RAYTRACE_HIGH
+                && mb > RAYTRACE_LOW
+                && mb < RAYTRACE_HIGH
+            {
+                ar = mr;
+                ag = mg;
+                ab = mb;
+            }
+
+            last_r = hit_r;
+            last_g = hit_g;
+            last_b = hit_b;
+            mr = last_r;
+            mg = last_g;
+            mb = last_b;
+        }
+
+        out[0] = clamped_gamma(mr);
+        out[1] = clamped_gamma(mg);
+        out[2] = clamped_gamma(mb);
+    }
+}
+
+// ── Method 6: edge-seeker ───────────────────────────────────────────────────
 // Reduce chroma to a precomputed LUT of the gamut edge. The lookup evaluates the
 // LUT at the exact normalized hue.
 
@@ -1107,6 +1322,15 @@ fn run_timings(label: &str, samples: &[[f64; 3]], warmup: usize, repeats: usize,
         time_method(warmup, repeats, samples, |s, o| bottosson.map(s, o))
     };
 
+    let mut raytrace = Raytrace::new();
+    let raytrace_ns = if check {
+        time_method(warmup, repeats, samples, |s, o| {
+            raytrace.map_with_in_gamut_check(s, o)
+        })
+    } else {
+        time_method(warmup, repeats, samples, |s, o| raytrace.map(s, o))
+    };
+
     let mut edge = EdgeSeeker::new();
     let edge_ns = if check {
         time_method(warmup, repeats, samples, |s, o| {
@@ -1132,6 +1356,7 @@ fn run_timings(label: &str, samples: &[[f64; 3]], warmup: usize, repeats: usize,
         ("bottosson-lightness", bottosson_ns),
         ("edge-seeker", edge_ns),
         ("edge-seeker (indexed)", edge_indexed_ns),
+        ("raytrace", raytrace_ns),
     ];
     timings.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
     let fastest_ns = timings[0].1;
@@ -1182,17 +1407,20 @@ fn main() {
     let mut cubic_cs = OklchCubic::new();
     let mut cubic_no_cache_cs = OklchCubicNoCache::new();
     let mut bottosson_cs = BottossonLightness::new();
+    let mut raytrace_cs = Raytrace::new();
     let mut edge_cs = EdgeSeeker::new();
     let cs_clip = checksum(&grid, |c, o| clip(c, o));
     let cs_cubic = checksum(&grid, |c, o| cubic_cs.map(c, o));
     let cs_cubic_no_cache = checksum(&grid, |c, o| cubic_no_cache_cs.map(c, o));
     let cs_bottosson = checksum(&grid, |c, o| bottosson_cs.map(c, o));
+    let cs_raytrace = checksum(&grid, |c, o| raytrace_cs.map(c, o));
     let cs_edge = checksum(&grid, |c, o| edge_cs.map(c, o));
     println!("checksums on grid (sum of all P3 channels):");
     println!("  clip                 {:.10}", cs_clip);
     println!("  oklch-cubic-cached   {:.10}", cs_cubic);
     println!("  oklch-cubic-nocache  {:.10}", cs_cubic_no_cache);
     println!("  bottosson-lightness  {:.10}", cs_bottosson);
+    println!("  raytrace             {:.10}", cs_raytrace);
     println!("  edge-seeker          {:.10}\n", cs_edge);
 
     // Equivalence across both workloads: the in-gamut-check fast path must match
@@ -1220,6 +1448,13 @@ fn main() {
             |c, o| bottosson_eq.map(c, o),
             |c, o| bottosson_checked_eq.map_with_in_gamut_check(c, o),
         );
+        let mut raytrace_eq = Raytrace::new();
+        let mut raytrace_checked_eq = Raytrace::new();
+        let raytrace_check_diff = max_channel_diff(
+            samples,
+            |c, o| raytrace_eq.map(c, o),
+            |c, o| raytrace_checked_eq.map_with_in_gamut_check(c, o),
+        );
         let mut edge_eq = EdgeSeeker::new();
         let mut edge_checked_eq = EdgeSeeker::new();
         let edge_check_diff = max_channel_diff(
@@ -1238,6 +1473,7 @@ fn main() {
             .max(cubic_check_diff)
             .max(cubic_no_cache_check_diff)
             .max(bottosson_check_diff)
+            .max(raytrace_check_diff)
             .max(edge_check_diff)
             .max(edge_indexed_check_diff);
     }
