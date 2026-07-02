@@ -29,6 +29,10 @@ bullet links to the original it was derived from.
   specialized for OKLCh → Display-P3 with P3 cusp/intersection constants hoisted
   into the module.
   ([original](https://github.com/color-js/apps/blob/main/gamut-mapping/methods/bjorn.js))
+- **bottosson-lightness (cached)** — same algorithm, but the hue-only structure
+  (cusp + LMS′ hue slopes) is memoized in 0.1° buckets like oklch-cubic's, which
+  also makes the per-call path trig-free. Matches the exact method on
+  bucket-center hues; on fractional hues it answers for the bucket hue.
 - **edge-seeker** — reduce chroma to a precomputed LUT of the gamut edge,
   evaluating the LUT at the exact normalized hue as the original color.js-org
   implementation does.

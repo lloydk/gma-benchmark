@@ -781,6 +781,205 @@ impl BottossonLightness {
     }
 }
 
+// ── Method 4b: Bottosson constant lightness, cached ─────────────────────────
+// The cusp and the LMS' hue slopes depend only on hue, so they are memoized in
+// 0.1° buckets (same bucketed-hue semantics as oklch-cubic's hue structure).
+// Each bucket stores [cusp_l, cusp_c, q0, q1, q2] where q_i is the LMS' slope
+// for the hue direction: LMS'_i(L, C) = L + C * q_i. With those cached, the
+// per-call path needs no trig at all.
+
+// find_gamut_intersection_p3 with the hue expressed as LMS' slopes q0..q2 (the
+// kl/km/ks it would otherwise recompute) and the cusp as scalars.
+#[inline(always)]
+fn find_gamut_intersection_q(
+    q0: f64,
+    q1: f64,
+    q2: f64,
+    l1: f64,
+    c1: f64,
+    l0: f64,
+    cusp_l: f64,
+    cusp_c: f64,
+) -> f64 {
+    let mut t: f64;
+
+    if (l1 - l0) * cusp_c - (cusp_l - l0) * c1 <= 0.0 {
+        let denom = c1 * cusp_l + cusp_c * (l0 - l1);
+        t = if denom == 0.0 {
+            0.0
+        } else {
+            (cusp_c * l0) / denom
+        };
+    } else {
+        let denom = c1 * (cusp_l - 1.0) + cusp_c * (l0 - l1);
+        t = if denom == 0.0 {
+            0.0
+        } else {
+            (cusp_c * (l0 - 1.0)) / denom
+        };
+
+        let dl = l1 - l0;
+        let ldt_base = dl + c1 * q0;
+        let mdt_base = dl + c1 * q1;
+        let sdt_base = dl + c1 * q2;
+        let l_value = l0 * (1.0 - t) + t * l1;
+        let c = t * c1;
+        let l = l_value + c * q0;
+        let m = l_value + c * q1;
+        let s = l_value + c * q2;
+        let l2 = l * l;
+        let m2 = m * m;
+        let s2 = s * s;
+        let l3 = l2 * l;
+        let m3 = m2 * m;
+        let s3 = s2 * s;
+        let ldt = 3.0 * ldt_base * l2;
+        let mdt = 3.0 * mdt_base * m2;
+        let sdt = 3.0 * sdt_base * s2;
+        let ldt2 = 6.0 * ldt_base * ldt_base * l;
+        let mdt2 = 6.0 * mdt_base * mdt_base * m;
+        let sdt2 = 6.0 * sdt_base * sdt_base * s;
+
+        let r = RL * l3 + RM * m3 + RS * s3 - 1.0;
+        let r1 = RL * ldt + RM * mdt + RS * sdt;
+        let r2 = RL * ldt2 + RM * mdt2 + RS * sdt2;
+        let ur = r1 / (r1 * r1 - 0.5 * r * r2);
+        let tr = if ur >= 0.0 { -r * ur } else { f64::MAX };
+
+        let g = GL * l3 + GM * m3 + GS * s3 - 1.0;
+        let g1 = GL * ldt + GM * mdt + GS * sdt;
+        let g2 = GL * ldt2 + GM * mdt2 + GS * sdt2;
+        let ug = g1 / (g1 * g1 - 0.5 * g * g2);
+        let tg = if ug >= 0.0 { -g * ug } else { f64::MAX };
+
+        let blue = BL * l3 + BM * m3 + BS * s3 - 1.0;
+        let blue1 = BL * ldt + BM * mdt + BS * sdt;
+        let blue2 = BL * ldt2 + BM * mdt2 + BS * sdt2;
+        let ub = blue1 / (blue1 * blue1 - 0.5 * blue * blue2);
+        let tb = if ub >= 0.0 { -blue * ub } else { f64::MAX };
+
+        t += tr.min(tg.min(tb));
+    }
+
+    t
+}
+
+// LMS'-slope form of the OKLab -> clipped P3 conversion: LMS'_i = L + C * q_i.
+#[inline(always)]
+fn lms_slopes_to_clipped_p3(l: f64, c: f64, q0: f64, q1: f64, q2: f64, out: &mut [f64; 3]) {
+    let l0 = l + c * q0;
+    let m0 = l + c * q1;
+    let s0 = l + c * q2;
+    let l3 = l0 * l0 * l0;
+    let m3 = m0 * m0 * m0;
+    let s3 = s0 * s0 * s0;
+    out[0] = clamped_gamma(RL * l3 + RM * m3 + RS * s3);
+    out[1] = clamped_gamma(GL * l3 + GM * m3 + GS * s3);
+    out[2] = clamped_gamma(BL * l3 + BM * m3 + BS * s3);
+}
+
+#[inline(always)]
+fn lms_slopes_to_p3_if_in_gamut(
+    l: f64,
+    c: f64,
+    q0: f64,
+    q1: f64,
+    q2: f64,
+    out: &mut [f64; 3],
+) -> bool {
+    let l0 = l + c * q0;
+    let m0 = l + c * q1;
+    let s0 = l + c * q2;
+    let l3 = l0 * l0 * l0;
+    let m3 = m0 * m0 * m0;
+    let s3 = s0 * s0 * s0;
+    let r = RL * l3 + RM * m3 + RS * s3;
+    let g = GL * l3 + GM * m3 + GS * s3;
+    let bl = BL * l3 + BM * m3 + BS * s3;
+    if r < 0.0 || r > 1.0 || g < 0.0 || g > 1.0 || bl < 0.0 || bl > 1.0 {
+        return false;
+    }
+    out[0] = clamped_gamma(r);
+    out[1] = clamped_gamma(g);
+    out[2] = clamped_gamma(bl);
+    true
+}
+
+struct BottossonLightnessCached {
+    cache: Vec<[f64; 5]>, // 3601 buckets of 0.1°; slot 0 (cusp L) is never 0 once filled
+}
+
+impl BottossonLightnessCached {
+    fn new() -> Self {
+        BottossonLightnessCached {
+            cache: vec![[0.0; 5]; 3601],
+        }
+    }
+
+    #[inline(always)]
+    fn cusp_data(&mut self, h: f64) -> [f64; 5] {
+        let mut hh = h % 360.0;
+        if hh < 0.0 {
+            hh += 360.0;
+        }
+        let key = (hh * 10.0).round() as usize;
+        if self.cache[key][0] != 0.0 {
+            return self.cache[key];
+        }
+        let rad = key as f64 / 10.0 * PI / 180.0;
+        let unit_a = rad.cos();
+        let unit_b = rad.sin();
+        let cusp = find_cusp_p3(unit_a, unit_b);
+        let d = [
+            cusp[0],
+            cusp[1],
+            unit_a * KA0 + unit_b * KB0,
+            unit_a * KA1 + unit_b * KB1,
+            unit_a * KA2 + unit_b * KB2,
+        ];
+        self.cache[key] = d;
+        d
+    }
+
+    #[inline(always)]
+    fn map(&mut self, oklch: &[f64; 3], out: &mut [f64; 3]) {
+        self.map_impl(oklch, out, false);
+    }
+
+    #[inline(always)]
+    fn map_with_in_gamut_check(&mut self, oklch: &[f64; 3], out: &mut [f64; 3]) {
+        self.map_impl(oklch, out, true);
+    }
+
+    #[inline(always)]
+    fn map_impl(&mut self, oklch: &[f64; 3], out: &mut [f64; 3], check_in_gamut: bool) {
+        let mut l = oklch[0];
+        let c = oklch[1].max(0.0);
+        let h = oklch[2];
+
+        if c <= BOTTOSSON_EPSILON {
+            l = clamp01(l);
+            let gray = clamped_gamma(l * l * l);
+            *out = [gray, gray, gray];
+            return;
+        }
+
+        let d = self.cusp_data(h);
+        let (cusp_l, cusp_c, q0, q1, q2) = (d[0], d[1], d[2], d[3], d[4]);
+
+        if check_in_gamut && lms_slopes_to_p3_if_in_gamut(l, c, q0, q1, q2, out) {
+            return;
+        }
+
+        let l0 = clamp01(l);
+        let t = find_gamut_intersection_q(q0, q1, q2, l, c, l0, cusp_l, cusp_c);
+        let mapped_l = l0 * (1.0 - t) + t * l;
+        let mapped_c = t * c;
+
+        lms_slopes_to_clipped_p3(mapped_l, mapped_c, q0, q1, q2, out);
+    }
+}
+
 // ── Method 5: raytrace ───────────────────────────────────────────────────────
 
 struct Raytrace;
@@ -1275,6 +1474,15 @@ fn run_timings(label: &str, samples: &[[f64; 3]], warmup: usize, repeats: usize,
         time_method(warmup, repeats, samples, |s, o| bottosson.map(s, o))
     };
 
+    let mut bottosson_cached = BottossonLightnessCached::new();
+    let bottosson_cached_ns = if check {
+        time_method(warmup, repeats, samples, |s, o| {
+            bottosson_cached.map_with_in_gamut_check(s, o)
+        })
+    } else {
+        time_method(warmup, repeats, samples, |s, o| bottosson_cached.map(s, o))
+    };
+
     let mut raytrace = Raytrace::new();
     let raytrace_ns = if check {
         time_method(warmup, repeats, samples, |s, o| {
@@ -1307,6 +1515,7 @@ fn run_timings(label: &str, samples: &[[f64; 3]], warmup: usize, repeats: usize,
         ("oklch-cubic (cached)", cubic_ns),
         ("oklch-cubic (no cache)", cubic_no_cache_ns),
         ("bottosson-lightness", bottosson_ns),
+        ("bottosson-lightness (cached)", bottosson_cached_ns),
         ("edge-seeker", edge_ns),
         ("edge-seeker (indexed)", edge_indexed_ns),
         ("raytrace", raytrace_ns),
@@ -1360,12 +1569,14 @@ fn main() {
     let mut cubic_cs = OklchCubic::new();
     let mut cubic_no_cache_cs = OklchCubicNoCache::new();
     let mut bottosson_cs = BottossonLightness::new();
+    let mut bottosson_cached_cs = BottossonLightnessCached::new();
     let mut raytrace_cs = Raytrace::new();
     let mut edge_cs = EdgeSeeker::new();
     let cs_clip = checksum(&grid, |c, o| clip(c, o));
     let cs_cubic = checksum(&grid, |c, o| cubic_cs.map(c, o));
     let cs_cubic_no_cache = checksum(&grid, |c, o| cubic_no_cache_cs.map(c, o));
     let cs_bottosson = checksum(&grid, |c, o| bottosson_cs.map(c, o));
+    let cs_bottosson_cached = checksum(&grid, |c, o| bottosson_cached_cs.map(c, o));
     let cs_raytrace = checksum(&grid, |c, o| raytrace_cs.map(c, o));
     let cs_edge = checksum(&grid, |c, o| edge_cs.map(c, o));
     println!("checksums on grid (sum of all P3 channels):");
@@ -1373,6 +1584,7 @@ fn main() {
     println!("  oklch-cubic-cached   {:.10}", cs_cubic);
     println!("  oklch-cubic-nocache  {:.10}", cs_cubic_no_cache);
     println!("  bottosson-lightness  {:.10}", cs_bottosson);
+    println!("  bottosson-cached     {:.10}", cs_bottosson_cached);
     println!("  raytrace             {:.10}", cs_raytrace);
     println!("  edge-seeker          {:.10}\n", cs_edge);
 
@@ -1401,6 +1613,13 @@ fn main() {
             |c, o| bottosson_eq.map(c, o),
             |c, o| bottosson_checked_eq.map_with_in_gamut_check(c, o),
         );
+        let mut bottosson_cached_eq = BottossonLightnessCached::new();
+        let mut bottosson_cached_checked_eq = BottossonLightnessCached::new();
+        let bottosson_cached_check_diff = max_channel_diff(
+            samples,
+            |c, o| bottosson_cached_eq.map(c, o),
+            |c, o| bottosson_cached_checked_eq.map_with_in_gamut_check(c, o),
+        );
         let mut raytrace_eq = Raytrace::new();
         let mut raytrace_checked_eq = Raytrace::new();
         let raytrace_check_diff = max_channel_diff(
@@ -1426,6 +1645,7 @@ fn main() {
             .max(cubic_check_diff)
             .max(cubic_no_cache_check_diff)
             .max(bottosson_check_diff)
+            .max(bottosson_cached_check_diff)
             .max(raytrace_check_diff)
             .max(edge_check_diff)
             .max(edge_indexed_check_diff);
@@ -1455,6 +1675,35 @@ fn main() {
         "equivalence: oklch-cubic cached/no-cache max channel diff {} (grid + random)\n",
         cubic_no_cache_max_diff
     );
+
+    // The cached bottosson variant evaluates the hue-dependent structure at the
+    // 0.1° bucket hue: bucket-exact grid hues must match to float noise; random
+    // fractional hues are bounded by the hue quantization.
+    {
+        let mut exact = BottossonLightness::new();
+        let mut cached = BottossonLightnessCached::new();
+        let grid_diff = max_channel_diff(
+            &grid,
+            |c, o| exact.map(c, o),
+            |c, o| cached.map(c, o),
+        );
+        if grid_diff > 1e-12 {
+            panic!("bottosson cached differs on bucket-exact grid hues: max channel diff {grid_diff}");
+        }
+        let mut exact_r = BottossonLightness::new();
+        let mut cached_r = BottossonLightnessCached::new();
+        let random_diff = max_channel_diff(
+            &random,
+            |c, o| exact_r.map(c, o),
+            |c, o| cached_r.map(c, o),
+        );
+        if random_diff > 0.05 {
+            panic!("bottosson cached exceeds the hue-quantization bound on random hues: max channel diff {random_diff}");
+        }
+        println!(
+            "equivalence: bottosson cached/exact max channel diff {grid_diff} (grid, bucket-exact hues), {random_diff:.2e} (random, 0.1° hue quantization)\n"
+        );
+    }
 
     let mut indexed_max_diff: f64 = 0.0;
     for samples in [&grid, &random] {

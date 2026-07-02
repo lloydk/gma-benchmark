@@ -10,7 +10,7 @@ import { bench, run, summary } from "mitata";
 import { clip } from "./src/clip.js";
 import { oklchCubic } from "./src/oklch-cubic.js";
 import { oklchCubicNoCache } from "./src/oklch-cubic-no-cache.js";
-import { bottossonLightness } from "./src/bottosson-lightness.js";
+import { bottossonLightness, bottossonLightnessCached } from "./src/bottosson-lightness.js";
 import { edgeSeeker, edgeSeekerIndexed } from "./src/edge-seeker/index.js";
 import { raytrace } from "./src/raytrace.js";
 
@@ -78,6 +78,7 @@ console.log(`random:  ${randomSamples.length.toLocaleString()} OKLCh colors, C=$
 const oklchCubicChecked = (oklch, out) => oklchCubic(oklch, out, true);
 const oklchCubicNoCacheChecked = (oklch, out) => oklchCubicNoCache(oklch, out, true);
 const bottossonLightnessChecked = (oklch, out) => bottossonLightness(oklch, out, true);
+const bottossonLightnessCachedChecked = (oklch, out) => bottossonLightnessCached(oklch, out, true);
 const edgeSeekerChecked = (oklch, out) => edgeSeeker(oklch, out, true);
 const edgeSeekerIndexedChecked = (oklch, out) => edgeSeekerIndexed(oklch, out, true);
 const raytraceChecked = (oklch, out) => raytrace(oklch, out, true);
@@ -92,6 +93,7 @@ const methods = inGamutCheck ? [
 	["oklch-cubic (cached)", oklchCubicChecked],
 	["oklch-cubic (no cache)", oklchCubicNoCacheChecked],
 	["bottosson-lightness", bottossonLightnessChecked],
+	["bottosson-lightness (cached)", bottossonLightnessCachedChecked],
 	["edge-seeker", edgeSeekerChecked],
 	["edge-seeker (indexed)", edgeSeekerIndexedChecked],
 	["raytrace", raytraceChecked],
@@ -100,6 +102,7 @@ const methods = inGamutCheck ? [
 	["oklch-cubic (cached)", oklchCubic],
 	["oklch-cubic (no cache)", oklchCubicNoCache],
 	["bottosson-lightness", bottossonLightness],
+	["bottosson-lightness (cached)", bottossonLightnessCached],
 	["edge-seeker", edgeSeeker],
 	["edge-seeker (indexed)", edgeSeekerIndexed],
 	["raytrace", raytrace],
@@ -131,6 +134,7 @@ for (const [unchecked, checked] of [
 	[oklchCubic, oklchCubicChecked],
 	[oklchCubicNoCache, oklchCubicNoCacheChecked],
 	[bottossonLightness, bottossonLightnessChecked],
+	[bottossonLightnessCached, bottossonLightnessCachedChecked],
 	[edgeSeeker, edgeSeekerChecked],
 	[edgeSeekerIndexed, edgeSeekerIndexedChecked],
 	[raytrace, raytraceChecked],
@@ -176,6 +180,44 @@ if (maxCubicNoCacheDiff > 1e-12) {
 	throw new Error(`oklch-cubic no-cache differs on the ${maxCubicNoCacheDataset} workload: max channel diff ${maxCubicNoCacheDiff} at oklch(${maxCubicNoCacheSample.join(" ")})`);
 }
 console.log(`equivalence: oklch-cubic cached/no-cache max channel diff ${maxCubicNoCacheDiff} (grid + random)\n`);
+
+// The cached bottosson variant evaluates the hue-dependent structure (cusp +
+// LMS' slopes) at the 0.1° bucket hue. On the grid the integer hues hit bucket
+// centers exactly, so it must match the exact method to float noise; on random
+// fractional hues the difference is bounded by the hue quantization.
+let maxBottossonCachedGridDiff = 0;
+let maxBottossonCachedGridSample = null;
+for (const s of samples) {
+	bottossonLightness(s, uncheckedOut);
+	bottossonLightnessCached(s, checkedOut);
+	for (let i = 0; i < 3; i++) {
+		const diff = Math.abs(uncheckedOut[i] - checkedOut[i]);
+		if (diff > maxBottossonCachedGridDiff) {
+			maxBottossonCachedGridDiff = diff;
+			maxBottossonCachedGridSample = s;
+		}
+	}
+}
+if (maxBottossonCachedGridDiff > 1e-12) {
+	throw new Error(`bottosson cached differs on bucket-exact grid hues: max channel diff ${maxBottossonCachedGridDiff} at oklch(${maxBottossonCachedGridSample.join(" ")})`);
+}
+let maxBottossonCachedRandomDiff = 0;
+let maxBottossonCachedRandomSample = null;
+for (const s of randomSamples) {
+	bottossonLightness(s, uncheckedOut);
+	bottossonLightnessCached(s, checkedOut);
+	for (let i = 0; i < 3; i++) {
+		const diff = Math.abs(uncheckedOut[i] - checkedOut[i]);
+		if (diff > maxBottossonCachedRandomDiff) {
+			maxBottossonCachedRandomDiff = diff;
+			maxBottossonCachedRandomSample = s;
+		}
+	}
+}
+if (maxBottossonCachedRandomDiff > 0.05) {
+	throw new Error(`bottosson cached exceeds the hue-quantization bound on random hues: max channel diff ${maxBottossonCachedRandomDiff} at oklch(${maxBottossonCachedRandomSample.join(" ")})`);
+}
+console.log(`equivalence: bottosson cached/exact max channel diff ${maxBottossonCachedGridDiff} (grid, bucket-exact hues), ${maxBottossonCachedRandomDiff.toExponential(2)} (random, 0.1° hue quantization)\n`);
 
 let maxIndexedDiff = 0;
 let maxIndexedSample = null;
