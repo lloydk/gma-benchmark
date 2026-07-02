@@ -40,8 +40,10 @@ bullet links to the original it was derived from.
   original color.js-org implementation does.
   ([original](https://github.com/color-js/apps/tree/main/gamut-mapping/methods/edge-seeker))
 - **edge-seeker (indexed)** — same result as Edge Seeker, but starts the LUT
-  lookup from a dense hue-interval index (~7 KiB in JS, ~28 KiB in Rust) and
-  corrects to the exact LUT interval.
+  lookup from a dense hue-interval index and corrects to the exact LUT interval.
+  Used by itself it stores the same ~22 KiB gamut-edge LUT plus the index
+  (~7 KiB in JS, ~28 KiB in Rust because the Rust port currently stores the
+  buckets as `usize`; a `u16` index would be ~7 KiB there too).
 - **raytrace** — port of the color.js-org ray-tracing chroma-reduction method,
   specialized to OKLCh → Display-P3 with scalar linear-P3 box intersection. The
   ray anchor is always strictly inside the RGB cube, so the slab test reduces to

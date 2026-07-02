@@ -255,7 +255,7 @@ workload's 360 integer hues populate only 10% of the hue caches):
 | oklch-cubic (cached) — 3,601 × [A₀..A₂, B₀..B₂, D₀..D₂, tLower, turn₀..turn₂] | **366 KiB** exact (one pre-allocated `Float64Array`, 13 doubles/bucket) | **366 KiB** (`Vec<HueData>`, 104 B/bucket, contiguous, `tLower` as fill sentinel) |
 | bottosson-lightness (cached) — 3,601 × [cuspL, cuspC, q0, q1, q2] | **141 KiB** exact (one pre-allocated `Float64Array`) | **141 KiB** exact (`Vec<[f64; 5]>`, contiguous) |
 | edge-seeker — gamut-edge LUT, 710 rows × 4 doubles | **~22 KiB** (four parallel plain arrays) | **~22 KiB** (static array in the binary) |
-| edge-seeker (indexed) — dense hue→interval index, 3,600 buckets | **7 KiB** (`Uint16Array`) | **28 KiB** (`Vec<usize>`; 8 B where 2 would do) |
+| edge-seeker (indexed) — same LUT plus dense hue→interval index, 3,600 buckets | **~29 KiB** total: ~22 KiB LUT + 7 KiB `Uint16Array` index | **~50 KiB** total: ~22 KiB LUT + 28 KiB `Vec<usize>` index (8 B where 2 would do) |
 
 The cubic cache was originally an object per bucket ({A, B, D, tLower, turn},
 four small arrays plus a boxed number): the identical 104 bytes of payload
@@ -265,6 +265,16 @@ Rewriting it as the flat array above (the layout the bottosson cache used
 from the start) removed the tax, produced bitwise-identical outputs, and sped
 up the JS random workload ~1.16× — the lookup now touches 2 cache lines
 instead of ~6. Every structure in the table fits comfortably in L2.
+
+The indexed Edge Seeker row is therefore larger than plain Edge Seeker. The
+index numbers above are additional to the gamut-edge LUT. In the current JS
+module, both `edgeSeeker` and `edgeSeekerIndexed` are constructed at import time,
+so loading the module holds two separate ~22 KiB LUT payloads plus the indexed
+row's ~7 KiB interval table before JS array/object overhead. The Rust port shares
+one static LUT between both rows and adds the indexed row's `Vec<usize>`. That
+28 KiB index is a representation choice, not a requirement: the interval values
+only address 710 LUT rows, so a `Vec<u16>` or `[u16; 3600]` would have the same
+~7 KiB payload as the JS `Uint16Array` with a cast to `usize` at lookup time.
 
 ### Output-conversion reuse
 
