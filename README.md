@@ -11,19 +11,28 @@ Node, and Bun compare.
 
 ## Methods
 
+The methods are optimized ports of the implementations in the color.js
+[gamut-mapping app](https://github.com/color-js/apps/tree/main/gamut-mapping),
+with the color-library conversions replaced by the hand-rolled ones here. Each
+bullet links to the original it was derived from.
+
 - **clip** — convert OKLCh straight to Display-P3 and clamp into gamut. This is the
   floor: the cost of the conversion every method must do anyway.
+  ([original](https://github.com/color-js/apps/blob/main/gamut-mapping/methods/clip.js))
 - **oklch-cubic (cached)** — reduce chroma to the *exact* P3 boundary by solving,
   in closed form, the cubic each linear-P3 channel traces vs chroma. The per-hue
   structure is memoized in 0.1° buckets.
+  ([original](https://github.com/color-js/apps/blob/main/gamut-mapping/methods/oklch-cubic.js))
 - **oklch-cubic (no cache)** — same 0.1° bucket semantics as the cached cubic
   method, but recomputes the per-hue structure every call to isolate cache reuse.
 - **bottosson-lightness** — Bjorn Ottosson's constant-lightness gamut clipping,
   specialized for OKLCh → Display-P3 with P3 cusp/intersection constants hoisted
   into the module.
+  ([original](https://github.com/color-js/apps/blob/main/gamut-mapping/methods/bjorn.js))
 - **edge-seeker** — reduce chroma to a precomputed LUT of the gamut edge,
   evaluating the LUT at the exact normalized hue as the original color.js-org
   implementation does.
+  ([original](https://github.com/color-js/apps/tree/main/gamut-mapping/methods/edge-seeker))
 - **edge-seeker (indexed)** — same result as Edge Seeker, but starts the LUT
   lookup from a dense hue-interval index and corrects to the exact LUT interval.
 - **raytrace** — port of the color.js-org ray-tracing chroma-reduction method,
@@ -31,6 +40,7 @@ Node, and Bun compare.
   ray anchor is always strictly inside the RGB cube, so the slab test reduces to
   the ray's exit distance (`min` over axes of `max((1-a)/d, -a/d)`), replacing
   the general tnear/tfar bookkeeping.
+  ([original](https://github.com/color-js/apps/blob/main/gamut-mapping/methods/raytrace.js))
 
 Every method except `clip` also has an **in-gamut precheck** variant that first
 checks whether the input already lies inside Display-P3 and skips the chroma
