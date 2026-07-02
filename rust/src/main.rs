@@ -169,94 +169,38 @@ fn linear_p3_to_oklab_chroma(r: f64, g: f64, b: f64) -> f64 {
     (a * a + lab_b * lab_b).sqrt()
 }
 
+// Exit distance of a ray from a point strictly inside the unit box:
+// min over axes of max((1 - a) / d, -a / d). The raytrace anchor always
+// satisfies "strictly inside" (it starts at gray (L^3, L^3, L^3) with
+// 0 < L < 1, and anchor updates are gated on RAYTRACE_LOW..RAYTRACE_HIGH),
+// so the slab method always resolves to this exit distance. |d| <= epsilon
+// is flushed to 0 so that axis contributes max(-inf, +inf) = +inf (no
+// constraint), matching the slab method's parallel-axis skip; if all three
+// axes are parallel the result is +inf, which the caller treats as "no hit".
 #[inline(always)]
-fn raytrace_unit_box_t(ar: f64, ag: f64, ab: f64, mr: f64, mg: f64, mb: f64) -> f64 {
-    let mut tnear = f64::NEG_INFINITY;
-    let mut tfar = f64::INFINITY;
-
-    let mut d = mr - ar;
-    if d > RAYTRACE_EPSILON || d < -RAYTRACE_EPSILON {
-        let inv_d = 1.0 / d;
-        let t1 = -ar * inv_d;
-        let t2 = (1.0 - ar) * inv_d;
-        if t1 < t2 {
-            if t1 > tnear {
-                tnear = t1;
-            }
-            if t2 < tfar {
-                tfar = t2;
-            }
-        } else {
-            if t2 > tnear {
-                tnear = t2;
-            }
-            if t1 < tfar {
-                tfar = t1;
-            }
-        }
-    } else if ar < 0.0 || ar > 1.0 {
-        return f64::NAN;
-    }
-
-    d = mg - ag;
-    if d > RAYTRACE_EPSILON || d < -RAYTRACE_EPSILON {
-        let inv_d = 1.0 / d;
-        let t1 = -ag * inv_d;
-        let t2 = (1.0 - ag) * inv_d;
-        if t1 < t2 {
-            if t1 > tnear {
-                tnear = t1;
-            }
-            if t2 < tfar {
-                tfar = t2;
-            }
-        } else {
-            if t2 > tnear {
-                tnear = t2;
-            }
-            if t1 < tfar {
-                tfar = t1;
-            }
-        }
-    } else if ag < 0.0 || ag > 1.0 {
-        return f64::NAN;
-    }
-
-    d = mb - ab;
-    if d > RAYTRACE_EPSILON || d < -RAYTRACE_EPSILON {
-        let inv_d = 1.0 / d;
-        let t1 = -ab * inv_d;
-        let t2 = (1.0 - ab) * inv_d;
-        if t1 < t2 {
-            if t1 > tnear {
-                tnear = t1;
-            }
-            if t2 < tfar {
-                tfar = t2;
-            }
-        } else {
-            if t2 > tnear {
-                tnear = t2;
-            }
-            if t1 < tfar {
-                tfar = t1;
-            }
-        }
-    } else if ab < 0.0 || ab > 1.0 {
-        return f64::NAN;
-    }
-
-    if tnear > tfar || tfar < 0.0 {
-        return f64::NAN;
-    }
-    if tnear < 0.0 {
-        tnear = tfar;
-    }
-    if tnear > f64::NEG_INFINITY && tnear < f64::INFINITY {
-        tnear
+fn exit_t(ar: f64, ag: f64, ab: f64, dr: f64, dg: f64, db: f64) -> f64 {
+    let dr = if dr <= RAYTRACE_EPSILON && dr >= -RAYTRACE_EPSILON {
+        0.0
     } else {
-        f64::NAN
-    }
+        dr
+    };
+    let dg = if dg <= RAYTRACE_EPSILON && dg >= -RAYTRACE_EPSILON {
+        0.0
+    } else {
+        dg
+    };
+    let db = if db <= RAYTRACE_EPSILON && db >= -RAYTRACE_EPSILON {
+        0.0
+    } else {
+        db
+    };
+    let ir = 1.0 / dr;
+    let ig = 1.0 / dg;
+    let ib = 1.0 / db;
+    let tr = ((1.0 - ar) * ir).max(-ar * ir);
+    let tg = ((1.0 - ag) * ig).max(-ag * ig);
+    let tb = ((1.0 - ab) * ib).max(-ab * ib);
+    tr.min(tg).min(tb)
 }
 
 // ── Method 1: clip ──
@@ -908,8 +852,8 @@ impl Raytrace {
                     oklab_to_linear_p3_components(l, corrected_c * unit_a, corrected_c * unit_b);
             }
 
-            let t = raytrace_unit_box_t(ar, ag, ab, mr, mg, mb);
-            if t.is_nan() {
+            let t = exit_t(ar, ag, ab, mr - ar, mg - ag, mb - ab);
+            if t == f64::INFINITY {
                 mr = last_r;
                 mg = last_g;
                 mb = last_b;

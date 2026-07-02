@@ -7,24 +7,18 @@ import {
 // Optimized scalar port of color.js-org/apps/gamut-mapping/methods/raytrace.js.
 // It traces in linear Display-P3, then corrects only the OKLab chroma after each
 // hit because L and H are overwritten with the original values.
+//
+// The ray anchor is always strictly inside the unit box: it starts at gray
+// (L^3, L^3, L^3) with 0 < L < 1 (the L <= 0 / L >= 1 cases early-return), and
+// anchor updates are gated on the corrected color being strictly inside
+// (LOW..HIGH). For an interior origin the slab method always resolves to the
+// ray's exit distance, so the general tnear/tfar bookkeeping collapses to the
+// closed form in exitT.
 
 const DEG_TO_RAD = Math.PI / 180;
 const RAY_EPSILON = 1e-12;
 const LOW = 1e-12;
 const HIGH = 1 - LOW;
-
-function oklabToLinearP3 (L, a, b, out) {
-	const l = L + KA0 * a + KB0 * b;
-	const m = L + KA1 * a + KB1 * b;
-	const s = L + KA2 * a + KB2 * b;
-	const l3 = l * l * l;
-	const m3 = m * m * m;
-	const s3 = s * s * s;
-	out[0] = RL * l3 + RM * m3 + RS * s3;
-	out[1] = GL * l3 + GM * m3 + GS * s3;
-	out[2] = BL * l3 + BM * m3 + BS * s3;
-	return out;
-}
 
 function linearP3ToOklabChroma (r, g, b) {
 	let l = Math.cbrt(0.4813798527499543 * r + 0.4621183710113182 * g + 0.05650177623872754 * b);
@@ -35,98 +29,28 @@ function linearP3ToOklabChroma (r, g, b) {
 	return Math.sqrt(a * a + labB * labB);
 }
 
-function raytraceUnitBoxT (ar, ag, ab, mr, mg, mb) {
-	let tnear = -Infinity;
-	let tfar = Infinity;
-
-	let d = mr - ar;
-	if (d > RAY_EPSILON || d < -RAY_EPSILON) {
-		const invD = 1 / d;
-		const t1 = -ar * invD;
-		const t2 = (1 - ar) * invD;
-		if (t1 < t2) {
-			if (t1 > tnear) {
-				tnear = t1;
-			}
-			if (t2 < tfar) {
-				tfar = t2;
-			}
-		}
-		else {
-			if (t2 > tnear) {
-				tnear = t2;
-			}
-			if (t1 < tfar) {
-				tfar = t1;
-			}
-		}
+// Exit distance of a ray from a point strictly inside the unit box:
+// min over axes of max((1 - a) / d, -a / d). |d| <= RAY_EPSILON is flushed to
+// 0 so that axis contributes max(-Infinity, +Infinity) = +Infinity (no
+// constraint), matching the slab method's parallel-axis skip; if all three
+// axes are parallel the result is +Infinity, which the caller treats as
+// "no hit".
+function exitT (ar, ag, ab, dr, dg, db) {
+	if (dr <= RAY_EPSILON && dr >= -RAY_EPSILON) {
+		dr = 0;
 	}
-	else if (ar < 0 || ar > 1) {
-		return NaN;
+	if (dg <= RAY_EPSILON && dg >= -RAY_EPSILON) {
+		dg = 0;
 	}
-
-	d = mg - ag;
-	if (d > RAY_EPSILON || d < -RAY_EPSILON) {
-		const invD = 1 / d;
-		const t1 = -ag * invD;
-		const t2 = (1 - ag) * invD;
-		if (t1 < t2) {
-			if (t1 > tnear) {
-				tnear = t1;
-			}
-			if (t2 < tfar) {
-				tfar = t2;
-			}
-		}
-		else {
-			if (t2 > tnear) {
-				tnear = t2;
-			}
-			if (t1 < tfar) {
-				tfar = t1;
-			}
-		}
+	if (db <= RAY_EPSILON && db >= -RAY_EPSILON) {
+		db = 0;
 	}
-	else if (ag < 0 || ag > 1) {
-		return NaN;
-	}
-
-	d = mb - ab;
-	if (d > RAY_EPSILON || d < -RAY_EPSILON) {
-		const invD = 1 / d;
-		const t1 = -ab * invD;
-		const t2 = (1 - ab) * invD;
-		if (t1 < t2) {
-			if (t1 > tnear) {
-				tnear = t1;
-			}
-			if (t2 < tfar) {
-				tfar = t2;
-			}
-		}
-		else {
-			if (t2 > tnear) {
-				tnear = t2;
-			}
-			if (t1 < tfar) {
-				tfar = t1;
-			}
-		}
-	}
-	else if (ab < 0 || ab > 1) {
-		return NaN;
-	}
-
-	if (tnear > tfar || tfar < 0) {
-		return NaN;
-	}
-	if (tnear < 0) {
-		tnear = tfar;
-	}
-	return tnear > -Infinity && tnear < Infinity ? tnear : NaN;
+	const ir = 1 / dr, ig = 1 / dg, ib = 1 / db;
+	const tr = Math.max((1 - ar) * ir, -ar * ir);
+	const tg = Math.max((1 - ag) * ig, -ag * ig);
+	const tb = Math.max((1 - ab) * ib, -ab * ib);
+	return Math.min(tr, tg, tb);
 }
-
-const linearScratch = [0, 0, 0];
 
 // `oklch` is [L, C, H]; clipped Display-P3 is written into `out`.
 export function raytrace (oklch, out, checkInGamut = false) {
@@ -148,8 +72,16 @@ export function raytrace (oklch, out, checkInGamut = false) {
 	const hr = H * DEG_TO_RAD;
 	const hueA = Math.cos(hr);
 	const hueB = Math.sin(hr);
-	oklabToLinearP3(L, C * hueA, C * hueB, linearScratch);
-	let mr = linearScratch[0], mg = linearScratch[1], mb = linearScratch[2];
+
+	let a = C * hueA, b = C * hueB;
+	let l = L + KA0 * a + KB0 * b;
+	let m = L + KA1 * a + KB1 * b;
+	let s = L + KA2 * a + KB2 * b;
+	let l3 = l * l * l, m3 = m * m * m, s3 = s * s * s;
+	let mr = RL * l3 + RM * m3 + RS * s3;
+	let mg = GL * l3 + GM * m3 + GS * s3;
+	let mb = BL * l3 + BM * m3 + BS * s3;
+
 	if (checkInGamut && mr >= 0 && mr <= 1 && mg >= 0 && mg <= 1 && mb >= 0 && mb <= 1) {
 		out[0] = clampedGamma(mr);
 		out[1] = clampedGamma(mg);
@@ -164,14 +96,21 @@ export function raytrace (oklch, out, checkInGamut = false) {
 	for (let i = 0; i < 4; i++) {
 		if (i) {
 			const correctedC = linearP3ToOklabChroma(mr, mg, mb);
-			oklabToLinearP3(L, correctedC * hueA, correctedC * hueB, linearScratch);
-			mr = linearScratch[0];
-			mg = linearScratch[1];
-			mb = linearScratch[2];
+			a = correctedC * hueA;
+			b = correctedC * hueB;
+			l = L + KA0 * a + KB0 * b;
+			m = L + KA1 * a + KB1 * b;
+			s = L + KA2 * a + KB2 * b;
+			l3 = l * l * l;
+			m3 = m * m * m;
+			s3 = s * s * s;
+			mr = RL * l3 + RM * m3 + RS * s3;
+			mg = GL * l3 + GM * m3 + GS * s3;
+			mb = BL * l3 + BM * m3 + BS * s3;
 		}
 
-		const t = raytraceUnitBoxT(ar, ag, ab, mr, mg, mb);
-		if (t !== t) {
+		const t = exitT(ar, ag, ab, mr - ar, mg - ag, mb - ab);
+		if (t === Infinity) {
 			mr = lastR;
 			mg = lastG;
 			mb = lastB;
