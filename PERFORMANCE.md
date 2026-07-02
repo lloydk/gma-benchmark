@@ -31,6 +31,14 @@ gamut reaches maximum chroma (computed with the Bottosson approximation, the
 same one `bottosson-lightness` uses internally). Below/above should be compared
 against *random* (they also use fractional hues), not against *grid*.
 
+All timings call the plain **unchecked** variants — the in-gamut precheck
+(the `--in-gamut-check` mode of the benchmark harnesses) is not included in
+any number here. On these workloads it could only add overhead: every sample
+is out of gamut, so the precheck never short-circuits. On real inputs that
+do contain in-gamut colors, the checked variants can return early after a
+single conversion, which shrinks the differences between methods — mostly
+in-gamut traffic makes every method cost roughly clip plus the precheck.
+
 ## 1. Headline numbers (ns/call)
 
 ### grid workload
