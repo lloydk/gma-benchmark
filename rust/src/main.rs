@@ -328,13 +328,25 @@ fn get_hue_data(h: f64) -> HueData {
 }
 
 struct OklchCubic {
-    cache: Vec<Option<HueData>>, // 3601 buckets of 0.1°
+    // 3601 buckets of 0.1°, stored without Option so the cache stays a dense
+    // 104 B/bucket array (~366 KiB); t_lower (a root strictly greater than
+    // 1e-9, or +inf) doubles as the bucket-filled marker: 0 means empty.
+    cache: Vec<HueData>,
 }
 
 impl OklchCubic {
     fn new() -> Self {
         OklchCubic {
-            cache: vec![None; 3601],
+            cache: vec![
+                HueData {
+                    a: [0.0; 3],
+                    b: [0.0; 3],
+                    d: [0.0; 3],
+                    t_lower: 0.0,
+                    turn: [0.0; 3],
+                };
+                3601
+            ],
         }
     }
 
@@ -345,11 +357,12 @@ impl OklchCubic {
             hh += 360.0;
         }
         let key = (hh * 10.0).round() as usize;
-        if let Some(d) = self.cache[key] {
+        let d = self.cache[key];
+        if d.t_lower != 0.0 {
             return d;
         }
         let d = get_hue_data(key as f64 / 10.0);
-        self.cache[key] = Some(d);
+        self.cache[key] = d;
         d
     }
 

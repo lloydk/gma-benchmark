@@ -38,7 +38,7 @@ against *random* (they also use fractional hues), not against *grid*.
 | method                        | Rust  | Node  | Bun   | Node/Rust | Bun/Rust |
 |-------------------------------|------:|------:|------:|----------:|---------:|
 | clip                          |  17.6 |  42.6 |  42.8 |     2.4×  |    2.4×  |
-| oklch-cubic (cached)          |  45.0 |  74.2 |  64.9 |     1.6×  |    1.4×  |
+| oklch-cubic (cached)          |  45.9 |  72.9 |  61.0 |     1.6×  |    1.3×  |
 | oklch-cubic (no cache)        | 177.4 | 234.6 | 230.6 |     1.3×  |    1.3×  |
 | bottosson-lightness           |  72.0 | 107.3 | 101.3 |     1.5×  |    1.4×  |
 | bottosson-lightness (cached)  |  17.6 |  57.0 |  49.3 |     3.2×  |    2.8×  |
@@ -51,7 +51,7 @@ against *random* (they also use fractional hues), not against *grid*.
 | method                        | Rust  | Node  | Bun   | Node/Rust | Bun/Rust |
 |-------------------------------|------:|------:|------:|----------:|---------:|
 | clip                          |  28.6 |  57.6 |  57.7 |     2.0×  |    2.0×  |
-| oklch-cubic (cached)          |  58.2 | 116.3 |  97.5 |     2.0×  |    1.7×  |
+| oklch-cubic (cached)          |  60.9 |  99.6 |  82.8 |     1.6×  |    1.4×  |
 | oklch-cubic (no cache)        | 202.6 | 262.3 | 250.9 |     1.3×  |    1.2×  |
 | bottosson-lightness           |  82.8 | 125.1 | 116.7 |     1.5×  |    1.4×  |
 | bottosson-lightness (cached)  |  29.9 |  81.8 |  69.9 |     2.7×  |    2.3×  |
@@ -62,7 +62,10 @@ against *random* (they also use fractional hues), not against *grid*.
 (Tables re-measured in one session after adding the cached bottosson row;
 adding a method perturbs binary layout, which moved Rust cubic-cached by
 ~15% versus the previous build — exactly the compilation-layout caveat the
-README warns about.)
+README warns about. The oklch-cubic (cached) rows were then re-measured once
+more after its cache was rewritten as a flat array — a JS-side win, ~1.16×
+on random hues; Rust was contiguous all along and is unchanged within noise.
+Other rows were spot-checked and left as-is.)
 
 Three facts stand out: **raytrace is the one method where JavaScript matches
 native Rust** (explained in §2), after the `** 3` fix **Node and Bun are
@@ -159,9 +162,9 @@ table/cache lookups, branches, loads/stores, and engine overhead.
 | clip                          | Rust    |    28.6  |   21.2 (74%)   |       7.4       |
 |                               | Node    |    57.6  |   25.1 (44%)   |      32.5       |
 |                               | Bun     |    57.7  |   24.4 (42%)   |      33.3       |
-| oklch-cubic (cached)          | Rust    |    58.2  |   20.0 (34%)   |      38.2       |
-|                               | Node    |   116.3  |   19.2 (17%)   |      97.1       |
-|                               | Bun     |    97.5  |   21.0 (22%)   |      76.5       |
+| oklch-cubic (cached)          | Rust    |    60.9  |   20.0 (33%)   |      40.9       |
+|                               | Node    |    99.6  |   19.2 (19%)   |      80.4       |
+|                               | Bun     |    82.8  |   21.0 (25%)   |      61.8       |
 | oklch-cubic (no cache)        | Rust    |   202.6  |   88.4 (44%)   |     114.2       |
 |                               | Node    |   262.3  |   73.0 (28%)   |     189.3       |
 |                               | Bun     |   250.9  |   90.7 (36%)   |     160.2       |
@@ -191,9 +194,13 @@ Per-method notes:
   0.1°-bucket cache (no trig on the hot path), then solves at most three
   "channel hits white" cubics — but guard tests skip most of them (see §4).
   The dominant remaining costs are the Horner evaluations, the root-solve
-  arithmetic, and the cache lookup: the 3,601-entry cache is ~380 KB of
-  scattered structures, and random fractional hues make it an L2-resident
-  pointer chase (grid → random adds ~19 ns in Rust, ~41 ns in Node).
+  arithmetic, and the cache lookup. The cache is one flat pre-allocated array
+  of 13 doubles per bucket (~366 KiB; see the memory table below) — it was
+  originally an object per bucket, which cost ~1.0–1.7 MiB in the JS engines
+  and scattered each lookup across ~6 heap allocations; the flat rewrite is
+  output-identical (same doubles, same reads) and sped the JS random workload
+  up ~1.16× while shrinking the grid → random penalty to ~15 ns in Rust and
+  ~27 ns in Node.
 - **oklch-cubic (no cache)** pays ~146 ns (Rust) / ~152 ns (Node) per call to
   rebuild the hue structure: the trig, the Q/A/B/D matrix products, and above
   all six `firstRoot`/`firstTurn` solves for `tLower` and the per-channel turn
@@ -211,7 +218,7 @@ Per-method notes:
   edge-seeker (indexed) do — and it is exactly what the cached variant removes.
 - **bottosson-lightness (cached)** memoizes the hue-only structure — the cusp
   *and* the LMS′ hue slopes `q0..q2` — in 0.1° buckets (a flat, contiguous
-  ~144 KB `Float64Array`/`Vec<[f64; 5]>`). With the slopes cached, the
+  ~141 KiB `Float64Array`/`Vec<[f64; 5]>`). With the slopes cached, the
   intersection's `kl`/`km`/`ks` and the final conversion both come from the
   cache, so the per-call path does **no trig and no cbrt at all**: its op
   counts are a bucket lookup plus the γ-pows. That makes it the fastest real
@@ -236,6 +243,28 @@ Per-method notes:
   3 γ-pows. The 9 serial-chained cbrts dominate: they are ~44% of the Rust
   and Bun totals (glibc cbrt) and the reason Node — with V8's faster cbrt —
   matches native speed here and nowhere else.
+
+### Cache and table memory
+
+What the per-hue caches and lookup tables cost in memory, fully populated
+(they fill lazily, one 0.1° bucket per distinct hue touched — the grid
+workload's 360 integer hues populate only 10% of the hue caches):
+
+| structure | JS | Rust |
+|---|---|---|
+| oklch-cubic (cached) — 3,601 × [A₀..A₂, B₀..B₂, D₀..D₂, tLower, turn₀..turn₂] | **366 KiB** exact (one pre-allocated `Float64Array`, 13 doubles/bucket) | **366 KiB** (`Vec<HueData>`, 104 B/bucket, contiguous, `tLower` as fill sentinel) |
+| bottosson-lightness (cached) — 3,601 × [cuspL, cuspC, q0, q1, q2] | **141 KiB** exact (one pre-allocated `Float64Array`) | **141 KiB** exact (`Vec<[f64; 5]>`, contiguous) |
+| edge-seeker — gamut-edge LUT, 710 rows × 4 doubles | **~22 KiB** (four parallel plain arrays) | **~22 KiB** (static array in the binary) |
+| edge-seeker (indexed) — dense hue→interval index, 3,600 buckets | **7 KiB** (`Uint16Array`) | **28 KiB** (`Vec<usize>`; 8 B where 2 would do) |
+
+The cubic cache was originally an object per bucket ({A, B, D, tLower, turn},
+four small arrays plus a boxed number): the identical 104 bytes of payload
+measured **~1.7 MiB** on Node/V8 and **~1.0 MiB** on Bun/JSC — a 2.5–4×
+structure tax that also scattered every lookup across ~6 heap allocations.
+Rewriting it as the flat array above (the layout the bottosson cache used
+from the start) removed the tax, produced bitwise-identical outputs, and sped
+up the JS random workload ~1.16× — the lookup now touches 2 cache lines
+instead of ~6. Every structure in the table fits comfortably in L2.
 
 ### Output-conversion reuse
 
@@ -289,7 +318,7 @@ hue's cusp (ns/call, with above/below ratio):
 | method                        | Rust below | Rust above | ratio | Node below | Node above | ratio | Bun below | Bun above | ratio |
 |-------------------------------|-----------:|-----------:|------:|-----------:|-----------:|------:|----------:|----------:|------:|
 | clip                          |      27.3  |      25.0  | 0.91× |      54.5  |      56.3  | 1.03× |     54.2  |     55.7  | 1.03× |
-| oklch-cubic (cached)          |      40.4  |      99.0  | **2.45×** |   97.8  |     163.4  | **1.67×** |  79.2  |    144.0  | **1.82×** |
+| oklch-cubic (cached)          |      42.4  |      99.1  | **2.34×** |   80.9  |     159.7  | **1.97×** |  63.7  |    126.2  | **1.98×** |
 | oklch-cubic (no cache)        |     184.9  |     229.6  | 1.24× |     243.2  |     304.8  | 1.25× |    233.0  |    292.8  | 1.26× |
 | bottosson-lightness           |      75.6  |      95.8  | 1.27× |     114.9  |     141.1  | 1.23× |    106.9  |    129.8  | 1.21× |
 | bottosson-lightness (cached)  |      23.0  |      40.8  | **1.78×** |   70.9  |     102.6  | 1.45× |     59.3  |     89.2  | 1.50× |
@@ -310,7 +339,9 @@ The instrumented op counts show exactly why (per call, below → above):
 | γ transfer (all)       | γ-pow count 1.65 → 3.00: dark outputs put 1–2 channels on the linear branch, saving ~8–10 ns/call below the cusp for every method. Despite that tailwind being *shared*, every asymmetric method is still faster below — the algorithmic effects above dominate. |
 
 Summary: **oklch-cubic (cached) is the most cusp-sensitive method**
-(≈1.7–2.5× slower above), bottosson-cached is next (1.45–1.78×, because the
+(≈2.0–2.3× slower above — the flat-cache rewrite widened the JS ratios by
+speeding up the lookup-bound below side more than the solver-bound above
+side), bottosson-cached is next (1.45–1.78×, because the
 Halley step dominates once the fixed cusp phase is cached away), exact
 bottosson and the edge-seekers are mildly sensitive (≈1.1–1.36×), and
 raytrace/clip are flat. If an input distribution skews dark (below-cusp),
@@ -320,10 +351,11 @@ edge-seeker (indexed) closes the gap.
 ## 5. Rust vs JavaScript
 
 - For **arithmetic-heavy** code the gap is solid but not huge after the `** 3`
-  fix: Rust is ~2× faster than JS on clip, cubic-cached, and the edge-seekers
-  (random workload), and 1.2–1.5× on bottosson and cubic-no-cache. The
-  remaining JS overhead is spread across boxed array access, bounds checks,
-  and less aggressive instruction scheduling. bottosson-cached stretches the
+  fix: Rust is ~2× faster than JS on clip and the edge-seekers (random
+  workload), and 1.2–1.6× on the cubics and bottosson (cubic-cached's JS gap
+  narrowed to 1.4–1.6× once its cache went flat). The remaining JS overhead
+  is spread across boxed array access, bounds checks, and less aggressive
+  instruction scheduling. bottosson-cached stretches the
   gap again (2.3–2.7× random, up to 3.2× grid): once the libm calls are
   cached away, what's left — cache reads and straight arithmetic — is exactly
   what native code does best.
@@ -341,7 +373,7 @@ edge-seeker (indexed) closes the gap.
 Before the `** 3` fix, Bun beat Node by 1.25–1.45× on every method that cubes
 through `convert.js` (clip, edge-seeker, oklch-cubic) because JSC
 strength-reduces `** 3` and V8 does not. With the fix applied, the engines are
-close to parity (random workload, Node/Bun): clip 1.00×, cubic-cached 1.19×,
+close to parity (random workload, Node/Bun): clip 1.00×, cubic-cached 1.20×,
 cubic-no-cache 1.05×, bottosson 1.07×, bottosson-cached 1.17×, edge-seeker
 1.06×, edge-seeker-indexed 1.10×, raytrace 0.96×.
 
@@ -350,7 +382,7 @@ What remains of the gap:
 1. **`cbrt`**: V8's own implementation is 2.1× faster than the glibc one JSC
    calls. Raytrace (9 cbrts) is the only method where this dominates — and
    the only one where Node still wins.
-2. **cubic-cached (1.19×) and bottosson-cached (1.17×)** are the largest
+2. **cubic-cached (1.20×) and bottosson-cached (1.17×)** are the largest
    remaining Bun edges; both hot loops are hue-cache lookups plus straight
    arithmetic, where JSC's codegen appears simply tighter on this workload.
 3. Everything else is within ~10% — noise territory for cross-engine
@@ -365,12 +397,13 @@ random fractional hues defeat both. The methods hurt most (random vs grid):
   branches go from perfectly predicted to ~50/50 mispredicted. The indexed
   variant only degrades 27.9 → 40.6 ns. In JS the same pattern holds
   (Node 100.6 → 156.5 vs indexed 67.4 → 82.8).
-- **oklch-cubic (cached)**: Rust 45.0 → 58.2, Node 74.2 → 116.3 — the hue
-  cache goes from 360 hot buckets to 3,601 L2-resident ones.
+- **oklch-cubic (cached)**: Rust 45.9 → 60.9, Node 72.9 → 99.6 — the hue
+  cache goes from 360 hot buckets to 3,601 L2-resident ones. (Before the flat
+  rewrite the Node penalty was ~42 ns; the contiguous layout cut it to ~27.)
 - **bottosson-lightness (cached)**: Rust 17.6 → 29.9 (+70%) — but clip, which
   has no per-hue state at all, degrades almost identically (17.6 → 28.6), so
   this is mostly the shared γ-branch/value patterns rather than its flat
-  144 KB cache.
+  141 KiB cache.
 - **clip / bottosson / raytrace**: +6–63% effects (largest on Rust clip,
   where there is little else to hide it), mostly the shared γ-branch and
   workload-value patterns.
@@ -402,7 +435,15 @@ any method with per-hue state.
    trade-off is oklch-cubic-style bucketed-hue semantics: identical on
    bucket-center hues, up to 1.8e-2 per channel on fractional hues (both
    gated in the harnesses).
-5. **Method choice by input distribution**: across all three runtimes the
+5. **(Idea) Shrink the oklch-cubic cache to 7 doubles per bucket (~197 KiB).**
+   `A`, `B`, `D` are fixed matrix products of the hue slopes `q`, `q²`, `q³`,
+   so the minimal per-bucket state is `[q0, q1, q2, tLower, turn0..2]` — only
+   the six root solves behind `tLower`/`turn` are expensive to rebuild.
+   Recomputing `A/B/D` per call costs ~27 multiplies (roughly 2–4 ns, a
+   ~3–8% slowdown) and, using the same expressions, stays bitwise-identical.
+   Only worth taking if memory matters more than nanoseconds; the flat
+   13-double layout (366 KiB) already applied is the better default.
+6. **Method choice by input distribution**: across all three runtimes the
    fastest full-quality rows are bottosson-lightness (cached), oklch-cubic
    (cached), and edge-seeker (indexed) — with bottosson-cached now leading
    everywhere if bucketed-hue semantics are acceptable. For dark-skewed

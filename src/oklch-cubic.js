@@ -72,7 +72,20 @@ function firstTurn (D, B, A) {
 
 // Per-hue cubic structure. At fixed L,H each linear-P3 channel is exactly cubic in
 // chroma: channelᵢ(c) = L³·Pᵢ(t), t = c/L, Pᵢ(t) = 1 + 3Aᵢt + 3Bᵢt² + Dᵢt³.
-function getHueData (H) {
+//
+// The structure is cached in fixed 0.1° buckets inside one flat pre-allocated
+// Float64Array (13 doubles per bucket: A₀..A₂, B₀..B₂, D₀..D₂, tLower,
+// turn₀..turn₂ — ~366 KiB total) rather than an object per bucket, which costs
+// several times more on both V8 and JSC and scatters each lookup across the
+// heap. tLower (a root strictly greater than 1e-9, or Infinity) doubles as the
+// bucket-filled marker: 0 means empty.
+const HUE_SCALE = 10;
+const HUE_STRIDE = 13;
+const T_LOWER = 9;
+const TURN = 10;
+const hueCache = new Float64Array((360 * HUE_SCALE + 1) * HUE_STRIDE);
+
+function fillHueData (H, k) {
 	const rad = H * Math.PI / 180;
 	const cos = Math.cos(rad), sin = Math.sin(rad);
 	// Q = OKLab→LMS · [0, cos, sin] (the L column contributes nothing here).
@@ -80,36 +93,36 @@ function getHueData (H) {
 	const q1 = KA1 * cos + KB1 * sin;
 	const q2 = KA2 * cos + KB2 * sin;
 	// A = Q·(LMS→RGB), B = Q²·(LMS→RGB), D = Q³·(LMS→RGB).
-	const A = [RL * q0 + RM * q1 + RS * q2, GL * q0 + GM * q1 + GS * q2, BL * q0 + BM * q1 + BS * q2];
 	const q0b = q0 * q0, q1b = q1 * q1, q2b = q2 * q2;
-	const B = [RL * q0b + RM * q1b + RS * q2b, GL * q0b + GM * q1b + GS * q2b, BL * q0b + BM * q1b + BS * q2b];
 	const q0c = q0b * q0, q1c = q1b * q1, q2c = q2b * q2;
-	const D = [RL * q0c + RM * q1c + RS * q2c, GL * q0c + GM * q1c + GS * q2c, BL * q0c + BM * q1c + BS * q2c];
+	hueCache[k] = RL * q0 + RM * q1 + RS * q2;
+	hueCache[k + 1] = GL * q0 + GM * q1 + GS * q2;
+	hueCache[k + 2] = BL * q0 + BM * q1 + BS * q2;
+	hueCache[k + 3] = RL * q0b + RM * q1b + RS * q2b;
+	hueCache[k + 4] = GL * q0b + GM * q1b + GS * q2b;
+	hueCache[k + 5] = BL * q0b + BM * q1b + BS * q2b;
+	hueCache[k + 6] = RL * q0c + RM * q1c + RS * q2c;
+	hueCache[k + 7] = GL * q0c + GM * q1c + GS * q2c;
+	hueCache[k + 8] = BL * q0c + BM * q1c + BS * q2c;
 
 	let tLower = Infinity;
-	const turn = [];
 	for (let i = 0; i < 3; i++) {
-		tLower = Math.min(tLower, firstRoot(D[i], 3 * B[i], 3 * A[i], 1, 1e-9, Infinity));
-		turn[i] = firstTurn(D[i], B[i], A[i]);
+		tLower = Math.min(tLower, firstRoot(hueCache[k + 6 + i], 3 * hueCache[k + 3 + i], 3 * hueCache[k + i], 1, 1e-9, Infinity));
+		hueCache[k + TURN + i] = firstTurn(hueCache[k + 6 + i], hueCache[k + 3 + i], hueCache[k + i]);
 	}
-	return { A, B, D, tLower, turn };
+	hueCache[k + T_LOWER] = tLower;
 }
 
-// Cache the per-hue structure in fixed 0.1° buckets indexed into a pre-sized array.
-const HUE_SCALE = 10;
-const hueCache = new Array(360 * HUE_SCALE + 1);
 function cachedHueData (H) {
 	H %= 360;
 	if (H < 0) {
 		H += 360;
 	}
-	const key = Math.round(H * HUE_SCALE);
-	let data = hueCache[key];
-	if (data === undefined) {
-		data = getHueData(key / HUE_SCALE);
-		hueCache[key] = data;
+	const k = Math.round(H * HUE_SCALE) * HUE_STRIDE;
+	if (hueCache[k + T_LOWER] === 0) {
+		fillHueData((k / HUE_STRIDE) / HUE_SCALE, k);
 	}
-	return data;
+	return k;
 }
 
 // `oklch` is [L, C, H]; clipped Display-P3 is written into `out`.
@@ -124,32 +137,33 @@ export function oklchCubic (oklch, out, checkInGamut = false) {
 		return out;
 	}
 
-	const { A, B, D, tLower, turn } = cachedHueData(H);
+	const k = cachedHueData(H);
 
 	// Work in t = c/L. Cap at the input chroma and the (hue-only) lower exit; the
 	// white bound below can only pull it lower.
 	const t0 = C / L;
-	let maxT = Math.min(t0, tLower);
+	let maxT = Math.min(t0, hueCache[k + T_LOWER]);
 	const L3 = L * L * L;
 	const target = 1 / L3; // Pᵢ value at the white bound
 	const d = 1 - target;
 	for (let i = 0; i < 3; i++) {
-		if (turn[i] > maxT) {
-			if (A[i] <= 0) {
+		const Ai = hueCache[k + i], Bi = hueCache[k + 3 + i], Di = hueCache[k + 6 + i];
+		if (hueCache[k + TURN + i] > maxT) {
+			if (Ai <= 0) {
 				continue;
 			}
-			const PmaxT = ((D[i] * maxT + 3 * B[i]) * maxT + 3 * A[i]) * maxT + 1;
+			const PmaxT = ((Di * maxT + 3 * Bi) * maxT + 3 * Ai) * maxT + 1;
 			if (PmaxT < target) {
 				continue;
 			}
 		}
-		maxT = Math.min(maxT, firstRoot(D[i], 3 * B[i], 3 * A[i], d, 1e-9, maxT));
+		maxT = Math.min(maxT, firstRoot(Di, 3 * Bi, 3 * Ai, d, 1e-9, maxT));
 	}
 
 	// linear-P3 straight from the hue cubic (channelᵢ = L³·Pᵢ(maxT)),
 	// reusing A,B,D — no second trig + matrix conversion.
-	out[0] = clampedGamma(L3 * (((D[0] * maxT + 3 * B[0]) * maxT + 3 * A[0]) * maxT + 1));
-	out[1] = clampedGamma(L3 * (((D[1] * maxT + 3 * B[1]) * maxT + 3 * A[1]) * maxT + 1));
-	out[2] = clampedGamma(L3 * (((D[2] * maxT + 3 * B[2]) * maxT + 3 * A[2]) * maxT + 1));
+	out[0] = clampedGamma(L3 * (((hueCache[k + 6] * maxT + 3 * hueCache[k + 3]) * maxT + 3 * hueCache[k]) * maxT + 1));
+	out[1] = clampedGamma(L3 * (((hueCache[k + 7] * maxT + 3 * hueCache[k + 4]) * maxT + 3 * hueCache[k + 1]) * maxT + 1));
+	out[2] = clampedGamma(L3 * (((hueCache[k + 8] * maxT + 3 * hueCache[k + 5]) * maxT + 3 * hueCache[k + 2]) * maxT + 1));
 	return out;
 }

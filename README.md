@@ -21,7 +21,8 @@ bullet links to the original it was derived from.
   ([original](https://github.com/color-js/apps/blob/main/gamut-mapping/methods/clip.js))
 - **oklch-cubic (cached)** — reduce chroma to the *exact* P3 boundary by solving,
   in closed form, the cubic each linear-P3 channel traces vs chroma. The per-hue
-  structure is memoized in 0.1° buckets.
+  structure is memoized in 0.1° buckets, stored as one flat pre-allocated
+  array (~366 KiB in both languages, filled lazily per hue touched).
   ([original](https://github.com/color-js/apps/blob/main/gamut-mapping/methods/oklch-cubic.js))
 - **oklch-cubic (no cache)** — same 0.1° bucket semantics as the cached cubic
   method, but recomputes the per-hue structure every call to isolate cache reuse.
@@ -32,13 +33,15 @@ bullet links to the original it was derived from.
 - **bottosson-lightness (cached)** — same algorithm, but the hue-only structure
   (cusp + LMS′ hue slopes) is memoized in 0.1° buckets like oklch-cubic's, which
   also makes the per-call path trig-free. Matches the exact method on
-  bucket-center hues; on fractional hues it answers for the bucket hue.
-- **edge-seeker** — reduce chroma to a precomputed LUT of the gamut edge,
-  evaluating the LUT at the exact normalized hue as the original color.js-org
-  implementation does.
+  bucket-center hues; on fractional hues it answers for the bucket hue. The
+  cache is one flat pre-allocated array, ~141 KiB in both languages.
+- **edge-seeker** — reduce chroma to a precomputed LUT of the gamut edge
+  (710 rows ≈ 22 KiB), evaluating the LUT at the exact normalized hue as the
+  original color.js-org implementation does.
   ([original](https://github.com/color-js/apps/tree/main/gamut-mapping/methods/edge-seeker))
 - **edge-seeker (indexed)** — same result as Edge Seeker, but starts the LUT
-  lookup from a dense hue-interval index and corrects to the exact LUT interval.
+  lookup from a dense hue-interval index (~7 KiB in JS, ~28 KiB in Rust) and
+  corrects to the exact LUT interval.
 - **raytrace** — port of the color.js-org ray-tracing chroma-reduction method,
   specialized to OKLCh → Display-P3 with scalar linear-P3 box intersection. The
   ray anchor is always strictly inside the RGB cube, so the slab test reduces to
