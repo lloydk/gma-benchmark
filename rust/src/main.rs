@@ -838,6 +838,15 @@ impl Raytrace {
         }
 
         let anchor = l * l * l;
+        // L^3 underflows to 0 for L below ~1.7e-108; the anchor then sits on
+        // the cube corner, breaking the strictly-inside invariant exit_t
+        // relies on (a flushed-parallel axis would yield -0 * inf = NaN).
+        // Lightness that underflows in linear space is black, same as the
+        // l <= 0 early-return.
+        if anchor == 0.0 {
+            *out = [0.0, 0.0, 0.0];
+            return;
+        }
         let mut ar = anchor;
         let mut ag = anchor;
         let mut ab = anchor;
@@ -853,7 +862,7 @@ impl Raytrace {
             }
 
             let t = exit_t(ar, ag, ab, mr - ar, mg - ag, mb - ab);
-            if t == f64::INFINITY {
+            if !t.is_finite() {
                 mr = last_r;
                 mg = last_g;
                 mb = last_b;

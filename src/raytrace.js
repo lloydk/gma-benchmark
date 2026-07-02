@@ -9,11 +9,11 @@ import {
 // hit because L and H are overwritten with the original values.
 //
 // The ray anchor is always strictly inside the unit box: it starts at gray
-// (L^3, L^3, L^3) with 0 < L < 1 (the L <= 0 / L >= 1 cases early-return), and
-// anchor updates are gated on the corrected color being strictly inside
-// (LOW..HIGH). For an interior origin the slab method always resolves to the
-// ray's exit distance, so the general tnear/tfar bookkeeping collapses to the
-// closed form in exitT.
+// (L^3, L^3, L^3) with 0 < L < 1 (the L <= 0 / L >= 1 cases early-return, and
+// an L^3 that underflows to 0 is treated as black), and anchor updates are
+// gated on the corrected color being strictly inside (LOW..HIGH). For an
+// interior origin the slab method always resolves to the ray's exit distance,
+// so the general tnear/tfar bookkeeping collapses to the closed form in exitT.
 
 const DEG_TO_RAD = Math.PI / 180;
 const RAY_EPSILON = 1e-12;
@@ -90,6 +90,14 @@ export function raytrace (oklch, out, checkInGamut = false) {
 	}
 
 	const anchor = L * L * L;
+	// L^3 underflows to 0 for L below ~1.7e-108; the anchor then sits on the
+	// cube corner, breaking the strictly-inside invariant exitT relies on
+	// (a flushed-parallel axis would yield -0 * Infinity = NaN). Lightness that
+	// underflows in linear space is black, same as the L <= 0 early-return.
+	if (anchor === 0) {
+		out[0] = out[1] = out[2] = 0;
+		return out;
+	}
 	let ar = anchor, ag = anchor, ab = anchor;
 	let lastR = mr, lastG = mg, lastB = mb;
 
@@ -110,7 +118,7 @@ export function raytrace (oklch, out, checkInGamut = false) {
 		}
 
 		const t = exitT(ar, ag, ab, mr - ar, mg - ag, mb - ab);
-		if (t === Infinity) {
+		if (!Number.isFinite(t)) {
 			mr = lastR;
 			mg = lastG;
 			mb = lastB;
