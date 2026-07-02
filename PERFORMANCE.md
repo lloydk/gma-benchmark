@@ -4,7 +4,11 @@ A deep dive into where each gamut-mapping method spends its time, how the two
 sides of the gamut cusp differ, and how the three runtimes (Rust, Node/V8,
 Bun/JavaScriptCore) compare. All numbers were measured on the same machine in
 one session; treat them as relative indicators, subject to the caveats in
-[README.md](README.md#caveats).
+[README.md](README.md#caveats). In particular, these implementations are
+hand-specialized for OKLCh → Display-P3 (hoisted constants, fixed gamut,
+conversions fused into the solvers — see the output-conversion-reuse section);
+generic or modular implementations of the same algorithms will differ in both
+absolute cost and relative ranking.
 
 The JS numbers include the `x ** 3` → `x * x * x` fix in `convert.js` and the
 oklch-cubic solvers (see §2) — V8 compiles `** 3` to a full pow call, and

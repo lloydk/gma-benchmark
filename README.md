@@ -89,6 +89,17 @@ loop, over a fixed synthetic dataset. They're good for comparing the algorithms
 under controlled conditions, but **real-world application performance can differ,
 sometimes substantially**, because the numbers don't capture:
 
+- **Implementation specialization** — these are hand-optimized implementations
+  specialized for exactly one conversion, OKLCh → Display-P3: the matrices are
+  composed and hoisted to compile-time constants, the target gamut is fixed,
+  conversions are fused into the algorithms wherever possible (see
+  [PERFORMANCE.md](PERFORMANCE.md)'s output-conversion-reuse section), and no
+  call allocates. A generic or modular implementation of the same algorithms —
+  a color library with runtime space/gamut selection, dynamic matrix lookup,
+  intermediate color objects — will be slower in absolute terms and can rank
+  the methods differently, because the overheads don't fall evenly: methods
+  that avoid whole conversion stages here would lose that edge behind a
+  generic conversion pipeline.
 - **Input distribution** — results are sensitive to the actual hues and
   lightnesses an app feeds in. The two workloads above already differ by up to
   ~2× for the same method, because the repeating grid keeps caches and branch
