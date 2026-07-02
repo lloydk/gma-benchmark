@@ -212,6 +212,43 @@ Per-method notes:
   and Bun totals (glibc cbrt) and the reason Node — with V8's faster cbrt —
   matches native speed here and nowhere else.
 
+### Output-conversion reuse
+
+The numbers above bake in how much of the final OKLCh → Display-P3 conversion
+each implementation *reuses* from its own solver, and the methods differ a lot.
+A naive port that ends every method with a generic "convert the mapped OKLCh to
+P3" call would redo work these implementations avoid, and it would shift the
+rankings — worth knowing before comparing these results to another codebase:
+
+- **oklch-cubic (cached)** reuses everything. Each linear-P3 channel is exactly
+  `L³·Pᵢ(t)` in the solver's own cubic coefficients, so once the boundary
+  `maxT` is known the output is three Horner evaluations
+  (`src/oklch-cubic.js`) — no second trig, no LMS cubing, no 3×3 matrix. This
+  is why its steady-state op counts show *zero* `sin`/`cos` (trig runs only
+  when a hue bucket is first built).
+- **raytrace** never leaves the output space: the iteration works in linear P3
+  and the "final conversion" is just the three γ encodes of the last hit
+  point. The hue `sin`/`cos` is computed once and reused by all three chroma
+  rebuilds.
+- **bottosson-lightness** reuses only the hue trig (`unitA`/`unitB` thread
+  through cusp, intersection, and final conversion); the final
+  `oklabToLinearP3` redoes the LMS + cube + matrix work, including the
+  `kl`/`km`/`ks` slope products the intersection already computed (reusing
+  those would save only ~6 multiplies — negligible next to its ~45 ns cusp
+  phase).
+- **edge-seeker (both)** reuses nothing: the LUT lookup yields only a
+  max-chroma scalar, and the single full conversion (trig included) happens at
+  the end. There is no redundancy to remove — the lookup produces no
+  conversion intermediates — but also nothing shared.
+
+The cost of getting this wrong is not small relative to the fast methods: a
+redundant `sin`/`cos` pair alone is 10.6–12.9 ns, and the cube + matrix stage
+another ~5–10 ns. Appending a naive full conversion to oklch-cubic (cached)
+would add roughly 20 ns — ~35–50% of its Rust total and ~20–30% of its JS
+total — and erode exactly the advantage that makes it the fastest real method. For
+bottosson and edge-seeker the numbers here already include an (almost) full
+final conversion, so they translate more directly to naive ports.
+
 ## 4. Cusp-side breakdown
 
 The cusp sits high: averaged across hues, the P3 cusp lightness is ≈ 0.74, so
