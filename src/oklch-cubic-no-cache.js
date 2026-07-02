@@ -31,9 +31,9 @@ function firstRootNoCache (a, b, c, d, lo, hi) {
 	else {
 		b /= a; c /= a; d /= a;
 		const p = c - b * b / 3;
-		const q = 2 * b ** 3 / 27 - b * c / 3 + d;
+		const q = 2 * b * b * b / 27 - b * c / 3 + d;
 		const off = -b / 3;
-		const disc = q * q / 4 + p ** 3 / 27;
+		const disc = q * q / 4 + p * p * p / 27;
 
 		if (disc > 1e-14) {
 			const s = Math.sqrt(disc);
@@ -114,7 +114,8 @@ export function oklchCubicNoCache (oklch, out, checkInGamut = false) {
 	const turn1 = firstTurnNoCache(d1, b1, a1);
 	const turn2 = firstTurnNoCache(d2, b2, a2);
 
-	const target = 1 / L ** 3;
+	const L3 = L * L * L;
+	const target = 1 / L3;
 	const dd = 1 - target;
 
 	if (turn0 <= maxT || (a0 > 0 && !((((d0 * maxT + 3 * b0) * maxT + 3 * a0) * maxT + 1) < target))) {
@@ -127,7 +128,6 @@ export function oklchCubicNoCache (oklch, out, checkInGamut = false) {
 		maxT = Math.min(maxT, firstRootNoCache(d2, 3 * b2, 3 * a2, dd, 1e-9, maxT));
 	}
 
-	const L3 = L * L * L;
 	out[0] = clampedGamma(L3 * (((d0 * maxT + 3 * b0) * maxT + 3 * a0) * maxT + 1));
 	out[1] = clampedGamma(L3 * (((d1 * maxT + 3 * b1) * maxT + 3 * a1) * maxT + 1));
 	out[2] = clampedGamma(L3 * (((d2 * maxT + 3 * b2) * maxT + 3 * a2) * maxT + 1));

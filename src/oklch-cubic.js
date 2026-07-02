@@ -30,9 +30,9 @@ function firstRoot (a, b, c, d, lo, hi) {
 	else {
 		b /= a; c /= a; d /= a;
 		const p = c - b * b / 3;
-		const q = 2 * b ** 3 / 27 - b * c / 3 + d;
+		const q = 2 * b * b * b / 27 - b * c / 3 + d;
 		const off = -b / 3;
-		const disc = q * q / 4 + p ** 3 / 27;
+		const disc = q * q / 4 + p * p * p / 27;
 
 		if (disc > 1e-14) {
 			const s = Math.sqrt(disc);
@@ -130,7 +130,8 @@ export function oklchCubic (oklch, out, checkInGamut = false) {
 	// white bound below can only pull it lower.
 	const t0 = C / L;
 	let maxT = Math.min(t0, tLower);
-	const target = 1 / L ** 3; // Pᵢ value at the white bound
+	const L3 = L * L * L;
+	const target = 1 / L3; // Pᵢ value at the white bound
 	const d = 1 - target;
 	for (let i = 0; i < 3; i++) {
 		if (turn[i] > maxT) {
@@ -147,7 +148,6 @@ export function oklchCubic (oklch, out, checkInGamut = false) {
 
 	// linear-P3 straight from the hue cubic (channelᵢ = L³·Pᵢ(maxT)),
 	// reusing A,B,D — no second trig + matrix conversion.
-	const L3 = L * L * L;
 	out[0] = clampedGamma(L3 * (((D[0] * maxT + 3 * B[0]) * maxT + 3 * A[0]) * maxT + 1));
 	out[1] = clampedGamma(L3 * (((D[1] * maxT + 3 * B[1]) * maxT + 3 * A[1]) * maxT + 1));
 	out[2] = clampedGamma(L3 * (((D[2] * maxT + 3 * B[2]) * maxT + 3 * A[2]) * maxT + 1));

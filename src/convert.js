@@ -30,10 +30,15 @@ function gammaToLinear (x) {
 }
 
 // ── OKLab → clipped Display-P3, written into `out` (no allocation) ──
+// Cubes are explicit multiplications: V8 compiles `x ** 3` to a full pow call
+// (~7 ns each) while JSC and rustc reduce it to multiplies.
 export function oklabToClippedP3 (L, a, b, out) {
-	const l = (L + KA0 * a + KB0 * b) ** 3;
-	const m = (L + KA1 * a + KB1 * b) ** 3;
-	const s = (L + KA2 * a + KB2 * b) ** 3;
+	const l0 = L + KA0 * a + KB0 * b;
+	const m0 = L + KA1 * a + KB1 * b;
+	const s0 = L + KA2 * a + KB2 * b;
+	const l = l0 * l0 * l0;
+	const m = m0 * m0 * m0;
+	const s = s0 * s0 * s0;
 	out[0] = clampedGamma(RL * l + RM * m + RS * s);
 	out[1] = clampedGamma(GL * l + GM * m + GS * s);
 	out[2] = clampedGamma(BL * l + BM * m + BS * s);
@@ -51,9 +56,12 @@ export function oklchToP3IfInGamut (L, C, H, out) {
 	const hr = H * Math.PI / 180;
 	const a = C * Math.cos(hr);
 	const b = C * Math.sin(hr);
-	const l = (L + KA0 * a + KB0 * b) ** 3;
-	const m = (L + KA1 * a + KB1 * b) ** 3;
-	const s = (L + KA2 * a + KB2 * b) ** 3;
+	const l0 = L + KA0 * a + KB0 * b;
+	const m0 = L + KA1 * a + KB1 * b;
+	const s0 = L + KA2 * a + KB2 * b;
+	const l = l0 * l0 * l0;
+	const m = m0 * m0 * m0;
+	const s = s0 * s0 * s0;
 	const r = RL * l + RM * m + RS * s;
 	const g = GL * l + GM * m + GS * s;
 	const bl = BL * l + BM * m + BS * s;
