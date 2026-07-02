@@ -35,31 +35,40 @@ against *random* (they also use fractional hues), not against *grid*.
 
 ### grid workload
 
-| method                 | Rust  | Node  | Bun   | Node/Rust | Bun/Rust |
-|------------------------|------:|------:|------:|----------:|---------:|
-| clip                   |  18.0 |  42.6 |  42.4 |     2.4×  |    2.4×  |
-| oklch-cubic (cached)   |  37.4 |  75.4 |  63.9 |     2.0×  |    1.7×  |
-| oklch-cubic (no cache) | 177.8 | 238.3 | 228.2 |     1.3×  |    1.3×  |
-| bottosson-lightness    |  71.9 | 109.4 | 100.8 |     1.5×  |    1.4×  |
-| edge-seeker            |  31.8 | 101.9 |  98.4 |     3.2×  |    3.1×  |
-| edge-seeker (indexed)  |  27.7 |  67.5 |  59.5 |     2.4×  |    2.1×  |
-| raytrace               | 200.4 | 200.9 | 210.0 |     1.0×  |    1.0×  |
+| method                        | Rust  | Node  | Bun   | Node/Rust | Bun/Rust |
+|-------------------------------|------:|------:|------:|----------:|---------:|
+| clip                          |  17.6 |  42.6 |  42.8 |     2.4×  |    2.4×  |
+| oklch-cubic (cached)          |  45.0 |  74.2 |  64.9 |     1.6×  |    1.4×  |
+| oklch-cubic (no cache)        | 177.4 | 234.6 | 230.6 |     1.3×  |    1.3×  |
+| bottosson-lightness           |  72.0 | 107.3 | 101.3 |     1.5×  |    1.4×  |
+| bottosson-lightness (cached)  |  17.6 |  57.0 |  49.3 |     3.2×  |    2.8×  |
+| edge-seeker                   |  30.6 | 100.6 |  98.3 |     3.3×  |    3.2×  |
+| edge-seeker (indexed)         |  27.9 |  67.4 |  59.4 |     2.4×  |    2.1×  |
+| raytrace                      | 200.9 | 199.8 | 211.3 |     1.0×  |    1.1×  |
 
 ### random workload
 
-| method                 | Rust  | Node  | Bun   | Node/Rust | Bun/Rust |
-|------------------------|------:|------:|------:|----------:|---------:|
-| clip                   |  28.8 |  58.1 |  57.9 |     2.0×  |    2.0×  |
-| oklch-cubic (cached)   |  56.0 | 116.0 |  97.5 |     2.1×  |    1.7×  |
-| oklch-cubic (no cache) | 202.4 | 267.7 | 251.2 |     1.3×  |    1.2×  |
-| bottosson-lightness    |  83.2 | 127.7 | 117.1 |     1.5×  |    1.4×  |
-| edge-seeker            |  75.3 | 157.9 | 148.7 |     2.1×  |    2.0×  |
-| edge-seeker (indexed)  |  40.6 |  84.5 |  75.2 |     2.1×  |    1.9×  |
-| raytrace               | 222.2 | 221.1 | 228.1 |     1.0×  |    1.0×  |
+| method                        | Rust  | Node  | Bun   | Node/Rust | Bun/Rust |
+|-------------------------------|------:|------:|------:|----------:|---------:|
+| clip                          |  28.6 |  57.6 |  57.7 |     2.0×  |    2.0×  |
+| oklch-cubic (cached)          |  58.2 | 116.3 |  97.5 |     2.0×  |    1.7×  |
+| oklch-cubic (no cache)        | 202.6 | 262.3 | 250.9 |     1.3×  |    1.2×  |
+| bottosson-lightness           |  82.8 | 125.1 | 116.7 |     1.5×  |    1.4×  |
+| bottosson-lightness (cached)  |  29.9 |  81.8 |  69.9 |     2.7×  |    2.3×  |
+| edge-seeker                   |  74.2 | 156.5 | 147.0 |     2.1×  |    2.0×  |
+| edge-seeker (indexed)         |  40.6 |  82.8 |  75.1 |     2.0×  |    1.8×  |
+| raytrace                      | 213.4 | 220.1 | 229.7 |     1.0×  |    1.1×  |
 
-Two facts stand out and are explained in §2: **raytrace is the one method
-where JavaScript matches native Rust**, and after the `** 3` fix **Node and
-Bun are nearly at parity** (they weren't before).
+(Tables re-measured in one session after adding the cached bottosson row;
+adding a method perturbs binary layout, which moved Rust cubic-cached by
+~15% versus the previous build — exactly the compilation-layout caveat the
+README warns about.)
+
+Three facts stand out: **raytrace is the one method where JavaScript matches
+native Rust** (explained in §2), after the `** 3` fix **Node and Bun are
+nearly at parity** (§2), and **bottosson-lightness (cached) — the §8 cusp
+memoization, since applied — is the fastest real method everywhere**, tying
+clip outright in Rust because its per-call path does no trig at all (§3).
 
 ## 2. The primitive costs that explain almost everything
 
@@ -130,43 +139,47 @@ how many of the three output channels take the nonlinear branch of the
 transfer function (dark channels ≤ 0.0031308 linear take a cheap linear
 branch instead).
 
-| method                 | cbrt | sqrt | sin+cos | cos | acos | γ-pow |
-|------------------------|-----:|-----:|--------:|----:|-----:|------:|
-| clip                   |   —  |   —  |    1    |  —  |  —   | 1.78  |
-| oklch-cubic (cached)   | 0.82 | 0.46 |    —    | 0.17| 0.06 | 1.99  |
-| oklch-cubic (no cache) | 5.30 | 5.17 |    1    | 2.45| 0.82 | 1.99  |
-| bottosson-lightness    | 1.00 |   —  |    1    |  —  |  —   | 1.99  |
-| edge-seeker (both)     |   —  | 1.01 |    1    |  —  |  —   | 1.99  |
-| raytrace               | 9.00 | 3.00 |    1    |  —  |  —   | 1.99  |
+| method                        | cbrt | sqrt | sin+cos | cos | acos | γ-pow |
+|-------------------------------|-----:|-----:|--------:|----:|-----:|------:|
+| clip                          |   —  |   —  |    1    |  —  |  —   | 1.78  |
+| oklch-cubic (cached)          | 0.82 | 0.46 |    —    | 0.17| 0.06 | 1.99  |
+| oklch-cubic (no cache)        | 5.30 | 5.17 |    1    | 2.45| 0.82 | 1.99  |
+| bottosson-lightness           | 1.00 |   —  |    1    |  —  |  —   | 1.99  |
+| bottosson-lightness (cached)  |   —  |   —  |    —    |  —  |  —   | 1.99  |
+| edge-seeker (both)            |   —  | 1.01 |    1    |  —  |  —   | 1.99  |
+| raytrace                      | 9.00 | 3.00 |    1    |  —  |  —   | 1.99  |
 
 Multiplying counts by the per-op costs and comparing against the measured
 totals (random workload) gives the attribution below. "transcendental" =
 cbrt + sqrt + trig + γ-pow; "everything else" = polynomial arithmetic,
 table/cache lookups, branches, loads/stores, and engine overhead.
 
-| method                 | runtime | measured | transcendental | everything else |
-|------------------------|---------|---------:|---------------:|----------------:|
-| clip                   | Rust    |    28.8  |   21.2 (74%)   |       7.6       |
-|                        | Node    |    58.1  |   25.1 (43%)   |      33.0       |
-|                        | Bun     |    57.9  |   24.4 (42%)   |      33.5       |
-| oklch-cubic (cached)   | Rust    |    56.0  |   20.0 (36%)   |      36.0       |
-|                        | Node    |   116.0  |   19.2 (17%)   |      96.8       |
-|                        | Bun     |    97.5  |   21.0 (22%)   |      76.5       |
-| oklch-cubic (no cache) | Rust    |   202.4  |   88.4 (44%)   |     114.0       |
-|                        | Node    |   267.7  |   73.0 (27%)   |     194.7       |
-|                        | Bun     |   251.2  |   90.7 (36%)   |     160.5       |
-| bottosson-lightness    | Rust    |    83.2  |   30.4 (37%)   |      52.8       |
-|                        | Node    |   127.7  |   30.4 (24%)   |      97.3       |
-|                        | Bun     |   117.1  |   33.5 (29%)   |      83.6       |
-| edge-seeker            | Rust    |    75.3  |   23.6 (31%)   |      51.7       |
-|                        | Node    |   157.9  |   27.7 (18%)   |     130.2       |
-|                        | Bun     |   148.7  |   26.8 (18%)   |     121.9       |
-| edge-seeker (indexed)  | Rust    |    40.6  |   23.6 (58%)   |      17.0       |
-|                        | Node    |    84.5  |   27.7 (33%)   |      56.8       |
-|                        | Bun     |    75.2  |   26.8 (36%)   |      48.4       |
-| raytrace               | Rust    |   222.2  |   97.2 (44%)   |     125.0       |
-|                        | Node    |   221.1  |   63.1 (29%)   |     158.0       |
-|                        | Bun     |   228.1  |   99.1 (43%)   |     129.0       |
+| method                        | runtime | measured | transcendental | everything else |
+|-------------------------------|---------|---------:|---------------:|----------------:|
+| clip                          | Rust    |    28.6  |   21.2 (74%)   |       7.4       |
+|                               | Node    |    57.6  |   25.1 (44%)   |      32.5       |
+|                               | Bun     |    57.7  |   24.4 (42%)   |      33.3       |
+| oklch-cubic (cached)          | Rust    |    58.2  |   20.0 (34%)   |      38.2       |
+|                               | Node    |   116.3  |   19.2 (17%)   |      97.1       |
+|                               | Bun     |    97.5  |   21.0 (22%)   |      76.5       |
+| oklch-cubic (no cache)        | Rust    |   202.6  |   88.4 (44%)   |     114.2       |
+|                               | Node    |   262.3  |   73.0 (28%)   |     189.3       |
+|                               | Bun     |   250.9  |   90.7 (36%)   |     160.2       |
+| bottosson-lightness           | Rust    |    82.8  |   30.4 (37%)   |      52.4       |
+|                               | Node    |   125.1  |   30.4 (24%)   |      94.7       |
+|                               | Bun     |   116.7  |   33.5 (29%)   |      83.2       |
+| bottosson-lightness (cached)  | Rust    |    29.9  |   11.9 (40%)   |      18.0       |
+|                               | Node    |    81.8  |   14.4 (18%)   |      67.4       |
+|                               | Bun     |    69.9  |   12.8 (18%)   |      57.1       |
+| edge-seeker                   | Rust    |    74.2  |   23.6 (32%)   |      50.6       |
+|                               | Node    |   156.5  |   27.7 (18%)   |     128.8       |
+|                               | Bun     |   147.0  |   26.8 (18%)   |     120.2       |
+| edge-seeker (indexed)         | Rust    |    40.6  |   23.6 (58%)   |      17.0       |
+|                               | Node    |    82.8  |   27.7 (33%)   |      55.1       |
+|                               | Bun     |    75.1  |   26.8 (36%)   |      48.3       |
+| raytrace                      | Rust    |   213.4  |   97.2 (46%)   |     116.2       |
+|                               | Node    |   220.1  |   63.1 (29%)   |     157.0       |
+|                               | Bun     |   229.7  |   99.1 (43%)   |     130.6       |
 
 Per-method notes:
 
@@ -194,8 +207,20 @@ Per-method notes:
   third of the Node total to the cusp approximation alone (~45 ns), a *fixed*
   cost paid for every non-achromatic color, with the intersection step adding
   only ~15 ns below the cusp vs ~45 ns above. That fixed cusp cost is why
-  bottosson never gets as cheap on the dark side as cubic-cached or
-  edge-seeker (indexed) do.
+  the exact variant never gets as cheap on the dark side as cubic-cached or
+  edge-seeker (indexed) do — and it is exactly what the cached variant removes.
+- **bottosson-lightness (cached)** memoizes the hue-only structure — the cusp
+  *and* the LMS′ hue slopes `q0..q2` — in 0.1° buckets (a flat, contiguous
+  ~144 KB `Float64Array`/`Vec<[f64; 5]>`). With the slopes cached, the
+  intersection's `kl`/`km`/`ks` and the final conversion both come from the
+  cache, so the per-call path does **no trig and no cbrt at all**: its op
+  counts are a bucket lookup plus the γ-pows. That makes it the fastest real
+  method in every runtime, tying clip outright in Rust (17.6 ns grid — clip
+  pays sin/cos where this pays a cache read). Semantics: like oklch-cubic, it
+  answers for the 0.1° bucket hue — identical to the exact method on
+  bucket-center hues (grid diff 1.7e-14) and within the hue quantization on
+  fractional hues (max 1.8e-2 on the random workload, gated in both
+  harnesses).
 - **edge-seeker** is the final conversion (same as clip) plus the LUT lookup:
   a binary search over the 710-entry hue table, three lerps, and the
   chroma-boundary evaluation. The binary search is pure dependent branches:
@@ -235,7 +260,9 @@ rankings — worth knowing before comparing these results to another codebase:
   `oklabToLinearP3` redoes the LMS + cube + matrix work, including the
   `kl`/`km`/`ks` slope products the intersection already computed (reusing
   those would save only ~6 multiplies — negligible next to its ~45 ns cusp
-  phase).
+  phase). The **cached** variant moves to the full-reuse end of the spectrum:
+  the cached LMS′ slopes serve the intersection *and* the final conversion,
+  eliminating the per-call trig entirely.
 - **edge-seeker (both)** reuses nothing: the LUT lookup yields only a
   max-chroma scalar, and the single full conversion (trig included) happens at
   the end. There is no redundancy to remove — the lookup produces no
@@ -259,15 +286,16 @@ mixed-workload behavior; the columns here weight the two sides equally.
 Same C = 0.4, fractional hues; lightness strictly below vs strictly above the
 hue's cusp (ns/call, with above/below ratio):
 
-| method                 | Rust below | Rust above | ratio | Node below | Node above | ratio | Bun below | Bun above | ratio |
-|------------------------|-----------:|-----------:|------:|-----------:|-----------:|------:|----------:|----------:|------:|
-| clip                   |      27.5  |      25.0  | 0.91× |      54.4  |      56.1  | 1.03× |     54.0  |     55.9  | 1.04× |
-| oklch-cubic (cached)   |      38.8  |      92.2  | **2.37×** |   97.0  |     161.9  | **1.67×** |  79.3  |    142.5  | **1.80×** |
-| oklch-cubic (no cache) |     183.4  |     227.5  | 1.24× |     246.6  |     305.9  | 1.24× |    233.4  |    294.5  | 1.26× |
-| bottosson-lightness    |      75.5  |      95.8  | 1.27× |     115.1  |     140.7  | 1.22× |    106.8  |    129.2  | 1.21× |
-| edge-seeker            |      68.3  |      78.0  | 1.14× |     145.9  |     165.9  | 1.14× |    138.8  |    154.2  | 1.11× |
-| edge-seeker (indexed)  |      34.7  |      46.9  | 1.35× |      73.9  |      92.1  | 1.25× |     68.6  |     82.2  | 1.20× |
-| raytrace               |     210.4  |     210.6  | 1.00× |     213.4  |     218.9  | 1.03× |    222.5  |    225.1  | 1.01× |
+| method                        | Rust below | Rust above | ratio | Node below | Node above | ratio | Bun below | Bun above | ratio |
+|-------------------------------|-----------:|-----------:|------:|-----------:|-----------:|------:|----------:|----------:|------:|
+| clip                          |      27.3  |      25.0  | 0.91× |      54.5  |      56.3  | 1.03× |     54.2  |     55.7  | 1.03× |
+| oklch-cubic (cached)          |      40.4  |      99.0  | **2.45×** |   97.8  |     163.4  | **1.67×** |  79.2  |    144.0  | **1.82×** |
+| oklch-cubic (no cache)        |     184.9  |     229.6  | 1.24× |     243.2  |     304.8  | 1.25× |    233.0  |    292.8  | 1.26× |
+| bottosson-lightness           |      75.6  |      95.8  | 1.27× |     114.9  |     141.1  | 1.23× |    106.9  |    129.8  | 1.21× |
+| bottosson-lightness (cached)  |      23.0  |      40.8  | **1.78×** |   70.9  |     102.6  | 1.45× |     59.3  |     89.2  | 1.50× |
+| edge-seeker                   |      69.3  |      78.6  | 1.13× |     145.3  |     164.9  | 1.13× |    137.2  |    153.3  | 1.12× |
+| edge-seeker (indexed)         |      34.5  |      47.0  | 1.36× |      73.8  |      91.4  | 1.24× |     68.9  |     82.1  | 1.19× |
+| raytrace                      |     209.9  |     210.3  | 1.00× |     215.4  |     220.4  | 1.02× |    222.7  |    224.8  | 1.01× |
 
 The instrumented op counts show exactly why (per call, below → above):
 
@@ -275,16 +303,19 @@ The instrumented op counts show exactly why (per call, below → above):
 |------------------------|------------------------------|
 | oklch-cubic (cached)   | cbrt 0.38 → 1.93, sqrt 0.19 → 1.26, acos 0.00 → 0.30, cos 0.00 → 0.90. Below the cusp the binding constraint is a channel hitting **0**, and that bound (`tLower`) is hue-only — precomputed and cached. The guard tests (`turn[i] > maxT`, `A[i] ≤ 0`, `P(maxT) < target`) then skip nearly every "channel hits **1**" solve. Above the cusp those guards stop helping: ~1.26 `firstRoot` solves run per call (0.96 via the sqrt+2·cbrt path, 0.30 via the acos+3·cos path). |
 | bottosson-lightness    | The gamut-intersection branch. With constant-lightness mapping the test reduces to exactly L ≤ L_cusp: below takes a one-division projective formula; above adds a full Halley refinement step (~60 flops + 3 divides). On the mixed workloads 74.5% of samples take the cheap lower branch. |
+| bottosson-lightness (cached) | Same branch as the exact variant, but with the fixed cusp phase gone the Halley step *is* most of what remains — the above/below ratio grows (1.45–1.78×) even though both absolute costs drop sharply. Below the cusp it is *faster than clip* in Rust (23.0 vs 27.3) and within ~10–30% of clip in JS. |
 | edge-seeker (both)     | sqrt 0 → 4, abs 0 → 1. Below the cusp the boundary is modeled as a straight line (one divide + multiply). Above, it is a circular-arc intersection: four sqrts plus extra divides per call. |
 | raytrace               | Nothing structural — always 4 box traces + 3 corrections. Flat within 3%. |
 | clip                   | Nothing structural. In Rust it is slightly *faster* above the cusp: bright outputs always take the γ-pow branch (predictable), while the dark side mixes linear/pow branches and 0-clamps (mispredicts). |
 | γ transfer (all)       | γ-pow count 1.65 → 3.00: dark outputs put 1–2 channels on the linear branch, saving ~8–10 ns/call below the cusp for every method. Despite that tailwind being *shared*, every asymmetric method is still faster below — the algorithmic effects above dominate. |
 
-Summary: **oklch-cubic (cached) is by far the most cusp-sensitive method**
-(≈1.7–2.4× slower above), bottosson and the edge-seekers are mildly sensitive
-(≈1.1–1.35×), and raytrace/clip are flat. If an input distribution skews dark
-(below-cusp), cubic-cached widens its lead; if it skews bright, edge-seeker
-(indexed) and bottosson close the gap.
+Summary: **oklch-cubic (cached) is the most cusp-sensitive method**
+(≈1.7–2.5× slower above), bottosson-cached is next (1.45–1.78×, because the
+Halley step dominates once the fixed cusp phase is cached away), exact
+bottosson and the edge-seekers are mildly sensitive (≈1.1–1.36×), and
+raytrace/clip are flat. If an input distribution skews dark (below-cusp),
+bottosson-cached and cubic-cached widen their leads; if it skews bright,
+edge-seeker (indexed) closes the gap.
 
 ## 5. Rust vs JavaScript
 
@@ -292,7 +323,10 @@ Summary: **oklch-cubic (cached) is by far the most cusp-sensitive method**
   fix: Rust is ~2× faster than JS on clip, cubic-cached, and the edge-seekers
   (random workload), and 1.2–1.5× on bottosson and cubic-no-cache. The
   remaining JS overhead is spread across boxed array access, bounds checks,
-  and less aggressive instruction scheduling.
+  and less aggressive instruction scheduling. bottosson-cached stretches the
+  gap again (2.3–2.7× random, up to 3.2× grid): once the libm calls are
+  cached away, what's left — cache reads and straight arithmetic — is exactly
+  what native code does best.
 - For **libm-bound** code the gap disappears: raytrace is 222 ns in Rust,
   221 ns in Node. Nine serial cbrts per call put both runtimes on their math
   library's latency, and V8's cbrt is twice as fast as glibc's. A faster cbrt
@@ -308,17 +342,17 @@ Before the `** 3` fix, Bun beat Node by 1.25–1.45× on every method that cubes
 through `convert.js` (clip, edge-seeker, oklch-cubic) because JSC
 strength-reduces `** 3` and V8 does not. With the fix applied, the engines are
 close to parity (random workload, Node/Bun): clip 1.00×, cubic-cached 1.19×,
-cubic-no-cache 1.07×, bottosson 1.09×, edge-seeker 1.06×, edge-seeker-indexed
-1.12×, raytrace 0.97×.
+cubic-no-cache 1.05×, bottosson 1.07×, bottosson-cached 1.17×, edge-seeker
+1.06×, edge-seeker-indexed 1.10×, raytrace 0.96×.
 
 What remains of the gap:
 
 1. **`cbrt`**: V8's own implementation is 2.1× faster than the glibc one JSC
    calls. Raytrace (9 cbrts) is the only method where this dominates — and
    the only one where Node still wins.
-2. **cubic-cached (1.19×)** is the largest remaining Bun edge; the hot loop is
-   cache lookups and Horner arithmetic, where JSC's codegen appears simply
-   tighter on this workload.
+2. **cubic-cached (1.19×) and bottosson-cached (1.17×)** are the largest
+   remaining Bun edges; both hot loops are hue-cache lookups plus straight
+   arithmetic, where JSC's codegen appears simply tighter on this workload.
 3. Everything else is within ~10% — noise territory for cross-engine
    comparisons.
 
@@ -327,13 +361,17 @@ What remains of the gap:
 The grid repeats 360 integer hues, keeping branch history and caches hot;
 random fractional hues defeat both. The methods hurt most (random vs grid):
 
-- **edge-seeker**: Rust 31.8 → 75.3 ns (2.4×) — the binary search's dependent
+- **edge-seeker**: Rust 30.6 → 74.2 ns (2.4×) — the binary search's dependent
   branches go from perfectly predicted to ~50/50 mispredicted. The indexed
-  variant only degrades 27.7 → 40.6 ns. In JS the same pattern holds
-  (Node 101.9 → 157.9 vs indexed 67.5 → 84.5).
-- **oklch-cubic (cached)**: Rust 37.4 → 56.0, Node 75.4 → 116.0 — the hue
+  variant only degrades 27.9 → 40.6 ns. In JS the same pattern holds
+  (Node 100.6 → 156.5 vs indexed 67.4 → 82.8).
+- **oklch-cubic (cached)**: Rust 45.0 → 58.2, Node 74.2 → 116.3 — the hue
   cache goes from 360 hot buckets to 3,601 L2-resident ones.
-- **clip / bottosson / raytrace**: +11–60% effects (largest on Rust clip,
+- **bottosson-lightness (cached)**: Rust 17.6 → 29.9 (+70%) — but clip, which
+  has no per-hue state at all, degrades almost identically (17.6 → 28.6), so
+  this is mostly the shared γ-branch/value patterns rather than its flat
+  144 KB cache.
+- **clip / bottosson / raytrace**: +6–63% effects (largest on Rust clip,
   where there is little else to hide it), mostly the shared γ-branch and
   workload-value patterns.
 
@@ -356,15 +394,20 @@ any method with per-hue state.
    fewer correction passes — an algorithm change, not an implementation tweak.
 3. **(Rust) `sin_cos()` is not worth it** on glibc — measured no faster than
    separate calls.
-4. **(Idea) Memoize bottosson's cusp per hue.** The cusp approximation depends
-   only on hue and is a fixed ~third of bottosson's Node cost; it could be
-   cached in 0.1° buckets exactly like oklch-cubic's hue structure, with the
-   same bucketed-hue semantics and cache-residency trade-offs.
+4. **(Applied) Memoize bottosson's hue-only structure.** The
+   bottosson-lightness (cached) row caches the cusp *and* the LMS′ hue slopes
+   in 0.1° buckets, making the per-call path trig-free. Measured (random
+   workload): Rust 82.8 → 29.9 ns (−64%), Node 125.1 → 81.8 (−35%),
+   Bun 116.7 → 69.9 (−40%); on the grid it ties clip in Rust (17.6 ns). The
+   trade-off is oklch-cubic-style bucketed-hue semantics: identical on
+   bucket-center hues, up to 1.8e-2 per channel on fractional hues (both
+   gated in the harnesses).
 5. **Method choice by input distribution**: across all three runtimes the
-   fastest full-quality rows are oklch-cubic (cached) and edge-seeker
-   (indexed). For dark-skewed content, oklch-cubic (cached) extends its lead;
-   for bright-skewed content its advantage halves and edge-seeker (indexed) /
-   bottosson close in — edge-seeker (indexed) is the most balanced across cusp
+   fastest full-quality rows are bottosson-lightness (cached), oklch-cubic
+   (cached), and edge-seeker (indexed) — with bottosson-cached now leading
+   everywhere if bucketed-hue semantics are acceptable. For dark-skewed
+   content, the cached methods extend their leads; for bright-skewed content
+   edge-seeker (indexed) closes in — it is the most balanced across cusp
    sides. Raytrace's cost is flat but always at the top of the range.
 
 ## 9. How the numbers were produced
