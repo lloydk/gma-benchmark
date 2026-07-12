@@ -616,7 +616,147 @@ impl OklchCubicNoCache {
     }
 }
 
-// ── Method 4: Bottosson constant lightness ───────────────────────────────────
+// ── Method 4: oklch-halley ──────────────────────────────────────────────────
+
+// Bracketed Halley solve for the first Display-P3 channel boundary along a
+// constant-lightness, constant-hue chroma ray. Ported from color-js/apps#44.
+#[inline(always)]
+fn solve_halley(l_value: f64, q0: f64, q1: f64, q2: f64) -> f64 {
+    let rows = [[RL, RM, RS], [GL, GM, GS], [BL, BM, BS]];
+    let mut lo = 0.0;
+    let mut hi = 0.5;
+
+    let l3 = l_value * l_value * l_value;
+    let l2x3 = 3.0 * l_value * l_value;
+    let mut c = hi;
+    for row in rows {
+        let slope = l2x3 * (row[0] * q0 + row[1] * q1 + row[2] * q2);
+        let crossing = if slope > 0.0 {
+            (1.0 - l3) / slope
+        } else if slope < 0.0 {
+            -l3 / slope
+        } else {
+            f64::INFINITY
+        };
+        if crossing < c {
+            c = crossing;
+        }
+    }
+
+    let mut best = c;
+    let mut best_err = f64::INFINITY;
+
+    for _ in 0..16 {
+        let l = l_value + c * q0;
+        let m = l_value + c * q1;
+        let s = l_value + c * q2;
+        let l2 = l * l;
+        let m2 = m * m;
+        let s2 = s * s;
+        let l3 = l2 * l;
+        let m3 = m2 * m;
+        let s3 = s2 * s;
+
+        let mut g = f64::NEG_INFINITY;
+        let mut g1 = 0.0;
+        let mut g2 = 0.0;
+        for row in rows {
+            let v = row[0] * l3 + row[1] * m3 + row[2] * s3;
+            let d1 = 3.0 * (row[0] * q0 * l2 + row[1] * q1 * m2 + row[2] * q2 * s2);
+            let d2 = 6.0 * (row[0] * q0 * q0 * l + row[1] * q1 * q1 * m + row[2] * q2 * q2 * s);
+            if v - 1.0 > g {
+                g = v - 1.0;
+                g1 = d1;
+                g2 = d2;
+            }
+            if -v > g {
+                g = -v;
+                g1 = -d1;
+                g2 = -d2;
+            }
+        }
+
+        if g > 0.0 {
+            hi = c;
+        } else {
+            lo = c;
+        }
+
+        let err = if g1 != 0.0 { (g / g1).abs() } else { g.abs() };
+        if err < best_err {
+            best_err = err;
+            best = c;
+        }
+
+        let denom = 2.0 * g1 * g1 - g * g2;
+        let step = if denom != 0.0 {
+            (2.0 * g * g1) / denom
+        } else if g1 != 0.0 {
+            g / g1
+        } else {
+            0.0
+        };
+        if step > -1e-9 && step < 1e-9 {
+            return c;
+        }
+
+        let next = c - step;
+        c = if next > lo && next < hi {
+            next
+        } else {
+            (lo + hi) / 2.0
+        };
+    }
+
+    best
+}
+
+struct OklchHalley;
+
+impl OklchHalley {
+    fn new() -> Self {
+        OklchHalley
+    }
+
+    #[inline(always)]
+    fn map(&mut self, oklch: &[f64; 3], out: &mut [f64; 3]) {
+        self.map_impl(oklch, out, false);
+    }
+
+    #[inline(always)]
+    fn map_with_in_gamut_check(&mut self, oklch: &[f64; 3], out: &mut [f64; 3]) {
+        self.map_impl(oklch, out, true);
+    }
+
+    #[inline(always)]
+    fn map_impl(&mut self, oklch: &[f64; 3], out: &mut [f64; 3], check_in_gamut: bool) {
+        let (l, c, h) = (oklch[0], oklch[1], oklch[2]);
+        if l <= 0.0 || l >= 1.0 || c <= 0.0 {
+            let ll = if l <= 0.0 {
+                0.0
+            } else if l >= 1.0 {
+                1.0
+            } else {
+                l
+            };
+            oklch_to_clipped_p3(ll, 0.0, h, out);
+            return;
+        }
+        if check_in_gamut && oklch_to_p3_if_in_gamut(l, c, h, out) {
+            return;
+        }
+
+        let rad = h * PI / 180.0;
+        let (cos, sin) = (rad.cos(), rad.sin());
+        let q0 = KA0 * cos + KB0 * sin;
+        let q1 = KA1 * cos + KB1 * sin;
+        let q2 = KA2 * cos + KB2 * sin;
+        let mapped_c = c.min(solve_halley(l, q0, q1, q2));
+        lms_slopes_to_clipped_p3(l, mapped_c, q0, q1, q2, out);
+    }
+}
+
+// ── Method 5: Bottosson constant lightness ───────────────────────────────────
 
 #[inline(always)]
 fn compute_max_saturation_p3(a: f64, b: f64) -> f64 {
@@ -794,7 +934,7 @@ impl BottossonLightness {
     }
 }
 
-// ── Method 4b: Bottosson constant lightness, cached ─────────────────────────
+// ── Method 5b: Bottosson constant lightness, cached ─────────────────────────
 // The cusp and the LMS' hue slopes depend only on hue, so they are memoized in
 // 0.1° buckets (same bucketed-hue semantics as oklch-cubic's hue structure).
 // Each bucket stores [cusp_l, cusp_c, q0, q1, q2] where q_i is the LMS' slope
@@ -993,7 +1133,7 @@ impl BottossonLightnessCached {
     }
 }
 
-// ── Method 5: raytrace ───────────────────────────────────────────────────────
+// ── Method 6: raytrace ───────────────────────────────────────────────────────
 
 struct Raytrace;
 
@@ -1112,7 +1252,7 @@ impl Raytrace {
     }
 }
 
-// ── Method 6: edge-seeker ───────────────────────────────────────────────────
+// ── Method 7: edge-seeker ───────────────────────────────────────────────────
 // Reduce chroma to a precomputed LUT of the gamut edge. The lookup evaluates the
 // LUT at the exact normalized hue.
 
@@ -1478,6 +1618,15 @@ fn run_timings(label: &str, samples: &[[f64; 3]], warmup: usize, repeats: usize,
         time_method(warmup, repeats, samples, |s, o| cubic_no_cache.map(s, o))
     };
 
+    let mut halley = OklchHalley::new();
+    let halley_ns = if check {
+        time_method(warmup, repeats, samples, |s, o| {
+            halley.map_with_in_gamut_check(s, o)
+        })
+    } else {
+        time_method(warmup, repeats, samples, |s, o| halley.map(s, o))
+    };
+
     let mut bottosson = BottossonLightness::new();
     let bottosson_ns = if check {
         time_method(warmup, repeats, samples, |s, o| {
@@ -1527,6 +1676,7 @@ fn run_timings(label: &str, samples: &[[f64; 3]], warmup: usize, repeats: usize,
         ("clip", clip_ns),
         ("oklch-cubic (cached)", cubic_ns),
         ("oklch-cubic (no cache)", cubic_no_cache_ns),
+        ("oklch-halley", halley_ns),
         ("bottosson-lightness", bottosson_ns),
         ("bottosson-lightness (cached)", bottosson_cached_ns),
         ("edge-seeker", edge_ns),
@@ -1581,6 +1731,7 @@ fn main() {
     // Checksums on the grid (for parity with the JS port).
     let mut cubic_cs = OklchCubic::new();
     let mut cubic_no_cache_cs = OklchCubicNoCache::new();
+    let mut halley_cs = OklchHalley::new();
     let mut bottosson_cs = BottossonLightness::new();
     let mut bottosson_cached_cs = BottossonLightnessCached::new();
     let mut raytrace_cs = Raytrace::new();
@@ -1588,6 +1739,7 @@ fn main() {
     let cs_clip = checksum(&grid, |c, o| clip(c, o));
     let cs_cubic = checksum(&grid, |c, o| cubic_cs.map(c, o));
     let cs_cubic_no_cache = checksum(&grid, |c, o| cubic_no_cache_cs.map(c, o));
+    let cs_halley = checksum(&grid, |c, o| halley_cs.map(c, o));
     let cs_bottosson = checksum(&grid, |c, o| bottosson_cs.map(c, o));
     let cs_bottosson_cached = checksum(&grid, |c, o| bottosson_cached_cs.map(c, o));
     let cs_raytrace = checksum(&grid, |c, o| raytrace_cs.map(c, o));
@@ -1596,6 +1748,7 @@ fn main() {
     println!("  clip                 {:.10}", cs_clip);
     println!("  oklch-cubic-cached   {:.10}", cs_cubic);
     println!("  oklch-cubic-nocache  {:.10}", cs_cubic_no_cache);
+    println!("  oklch-halley         {:.10}", cs_halley);
     println!("  bottosson-lightness  {:.10}", cs_bottosson);
     println!("  bottosson-cached     {:.10}", cs_bottosson_cached);
     println!("  raytrace             {:.10}", cs_raytrace);
@@ -1618,6 +1771,13 @@ fn main() {
             samples,
             |c, o| cubic_no_cache_eq.map(c, o),
             |c, o| cubic_no_cache_checked_eq.map_with_in_gamut_check(c, o),
+        );
+        let mut halley_eq = OklchHalley::new();
+        let mut halley_checked_eq = OklchHalley::new();
+        let halley_check_diff = max_channel_diff(
+            samples,
+            |c, o| halley_eq.map(c, o),
+            |c, o| halley_checked_eq.map_with_in_gamut_check(c, o),
         );
         let mut bottosson_eq = BottossonLightness::new();
         let mut bottosson_checked_eq = BottossonLightness::new();
@@ -1657,6 +1817,7 @@ fn main() {
         max_diff = max_diff
             .max(cubic_check_diff)
             .max(cubic_no_cache_check_diff)
+            .max(halley_check_diff)
             .max(bottosson_check_diff)
             .max(bottosson_cached_check_diff)
             .max(raytrace_check_diff)
@@ -1687,6 +1848,24 @@ fn main() {
     println!(
         "equivalence: oklch-cubic cached/no-cache max channel diff {} (grid + random)\n",
         cubic_no_cache_max_diff
+    );
+
+    let mut halley_eq = OklchHalley::new();
+    let mut cubic_exact_eq = OklchCubicNoCache::new();
+    let halley_cubic_diff = max_channel_diff(
+        &grid,
+        |c, o| halley_eq.map(c, o),
+        |c, o| cubic_exact_eq.map(c, o),
+    );
+    if halley_cubic_diff > 2e-8 {
+        panic!(
+            "oklch-halley differs from the exact cubic boundary: max channel diff {}",
+            halley_cubic_diff
+        );
+    }
+    println!(
+        "equivalence: oklch-halley/cubic max channel diff {:.2e} (exact grid hues)\n",
+        halley_cubic_diff
     );
 
     // The cached bottosson variant evaluates the hue-dependent structure at the

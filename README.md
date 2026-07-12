@@ -26,6 +26,10 @@ bullet links to the original it was derived from.
   ([original](https://github.com/color-js/apps/blob/main/gamut-mapping/methods/oklch-cubic.js))
 - **oklch-cubic (no cache)** — same 0.1° bucket semantics as the cached cubic
   method, but recomputes the per-hue structure every call to isolate cache reuse.
+- **oklch-halley** — reduce chroma to the exact P3 boundary with a LUT-less,
+  bracketed Halley iteration over the linear-P3 channel cubics. Uses exact input
+  hues and avoids the cubic method's closed-form `acos`/`cbrt` roots.
+  ([original](https://github.com/color-js/apps/pull/44))
 - **bottosson-lightness** — Bjorn Ottosson's constant-lightness gamut clipping,
   specialized for OKLCh → Display-P3 with P3 cusp/intersection constants hoisted
   into the module.
