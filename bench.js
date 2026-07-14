@@ -11,6 +11,7 @@ import { clip } from "./src/clip.js";
 import { oklchCubic } from "./src/oklch-cubic.js";
 import { oklchCubicNoCache } from "./src/oklch-cubic-no-cache.js";
 import { oklchHalley } from "./src/oklch-halley.js";
+import { oklchOstrowski } from "./src/oklch-ostrowski.js";
 import { bottossonLightness, bottossonLightnessCached } from "./src/bottosson-lightness.js";
 import { edgeSeeker, edgeSeekerIndexed } from "./src/edge-seeker/index.js";
 import { raytrace } from "./src/raytrace.js";
@@ -79,6 +80,7 @@ console.log(`random:  ${randomSamples.length.toLocaleString()} OKLCh colors, C=$
 const oklchCubicChecked = (oklch, out) => oklchCubic(oklch, out, true);
 const oklchCubicNoCacheChecked = (oklch, out) => oklchCubicNoCache(oklch, out, true);
 const oklchHalleyChecked = (oklch, out) => oklchHalley(oklch, out, true);
+const oklchOstrowskiChecked = (oklch, out) => oklchOstrowski(oklch, out, true);
 const bottossonLightnessChecked = (oklch, out) => bottossonLightness(oklch, out, true);
 const bottossonLightnessCachedChecked = (oklch, out) => bottossonLightnessCached(oklch, out, true);
 const edgeSeekerChecked = (oklch, out) => edgeSeeker(oklch, out, true);
@@ -95,6 +97,7 @@ const methods = inGamutCheck ? [
 	["oklch-cubic (cached)", oklchCubicChecked],
 	["oklch-cubic (no cache)", oklchCubicNoCacheChecked],
 	["oklch-halley", oklchHalleyChecked],
+	["oklch-ostrowski", oklchOstrowskiChecked],
 	["bottosson-lightness", bottossonLightnessChecked],
 	["bottosson-lightness (cached)", bottossonLightnessCachedChecked],
 	["edge-seeker", edgeSeekerChecked],
@@ -105,6 +108,7 @@ const methods = inGamutCheck ? [
 	["oklch-cubic (cached)", oklchCubic],
 	["oklch-cubic (no cache)", oklchCubicNoCache],
 	["oklch-halley", oklchHalley],
+	["oklch-ostrowski", oklchOstrowski],
 	["bottosson-lightness", bottossonLightness],
 	["bottosson-lightness (cached)", bottossonLightnessCached],
 	["edge-seeker", edgeSeeker],
@@ -138,6 +142,7 @@ for (const [unchecked, checked] of [
 	[oklchCubic, oklchCubicChecked],
 	[oklchCubicNoCache, oklchCubicNoCacheChecked],
 	[oklchHalley, oklchHalleyChecked],
+	[oklchOstrowski, oklchOstrowskiChecked],
 	[bottossonLightness, bottossonLightnessChecked],
 	[bottossonLightnessCached, bottossonLightnessCachedChecked],
 	[edgeSeeker, edgeSeekerChecked],
@@ -186,26 +191,32 @@ if (maxCubicNoCacheDiff > 1e-12) {
 }
 console.log(`equivalence: oklch-cubic cached/no-cache max channel diff ${maxCubicNoCacheDiff} (grid + random)\n`);
 
-// Both methods find the exact constant-L/H P3 boundary. Halley's 1e-9 chroma
-// stopping threshold can be amplified slightly by the transfer function near
-// black, so compare encoded channels with the corresponding output tolerance.
-let maxHalleyCubicDiff = 0;
-let maxHalleyCubicSample = null;
-for (const s of samples) {
-	oklchHalley(s, uncheckedOut);
-	oklchCubicNoCache(s, checkedOut);
-	for (let i = 0; i < 3; i++) {
-		const diff = Math.abs(uncheckedOut[i] - checkedOut[i]);
-		if (diff > maxHalleyCubicDiff) {
-			maxHalleyCubicDiff = diff;
-			maxHalleyCubicSample = s;
+// These iterative methods find the exact constant-L/H P3 boundary. Their 1e-9
+// chroma stopping threshold can be amplified slightly by the transfer function
+// near black, so compare encoded channels with the corresponding tolerance.
+for (const [name, fn, tolerance] of [
+	["oklch-halley", oklchHalley, 2e-8],
+	["oklch-ostrowski", oklchOstrowski, 5e-8],
+]) {
+	let maxCubicDiff = 0;
+	let maxCubicSample = null;
+	for (const s of samples) {
+		fn(s, uncheckedOut);
+		oklchCubicNoCache(s, checkedOut);
+		for (let i = 0; i < 3; i++) {
+			const diff = Math.abs(uncheckedOut[i] - checkedOut[i]);
+			if (diff > maxCubicDiff) {
+				maxCubicDiff = diff;
+				maxCubicSample = s;
+			}
 		}
 	}
+	if (maxCubicDiff > tolerance) {
+		throw new Error(`${name} differs from the exact cubic boundary: max channel diff ${maxCubicDiff} at oklch(${maxCubicSample.join(" ")})`);
+	}
+	console.log(`equivalence: ${name}/cubic max channel diff ${maxCubicDiff.toExponential(2)} (exact grid hues)`);
 }
-if (maxHalleyCubicDiff > 2e-8) {
-	throw new Error(`oklch-halley differs from the exact cubic boundary: max channel diff ${maxHalleyCubicDiff} at oklch(${maxHalleyCubicSample.join(" ")})`);
-}
-console.log(`equivalence: oklch-halley/cubic max channel diff ${maxHalleyCubicDiff.toExponential(2)} (exact grid hues)\n`);
+console.log();
 
 // The cached bottosson variant evaluates the hue-dependent structure (cusp +
 // LMS' slopes) at the 0.1° bucket hue. On the grid the integer hues hit bucket

@@ -756,6 +756,177 @@ impl OklchHalley {
     }
 }
 
+// ── Method 4b: oklch-ostrowski ──────────────────────────────────────────────
+
+// Bracketed Ostrowski solve proposed in the color-js/apps#44 follow-up. This
+// replaces Halley's second-derivative step with a Newton step followed by the
+// fourth-order Ostrowski correction, while retaining the same bracket and seed.
+#[inline(always)]
+fn solve_ostrowski(l_value: f64, q0: f64, q1: f64, q2: f64) -> f64 {
+    let rows = [[RL, RM, RS], [GL, GM, GS], [BL, BM, BS]];
+    let mut lo = 0.0;
+    let mut hi = 0.5;
+
+    let l3 = l_value * l_value * l_value;
+    let l2x3 = 3.0 * l_value * l_value;
+    let mut c = hi;
+    for row in rows {
+        let d1 = l2x3 * (row[0] * q0 + row[1] * q1 + row[2] * q2);
+        let crossing = if d1 > 0.0 {
+            (1.0 - l3) / d1
+        } else if d1 < 0.0 {
+            -l3 / d1
+        } else {
+            f64::INFINITY
+        };
+        if crossing < c {
+            c = crossing;
+        }
+    }
+
+    let mut best = c;
+    let mut best_err = f64::INFINITY;
+
+    for _ in 0..16 {
+        let l = l_value + c * q0;
+        let m = l_value + c * q1;
+        let s = l_value + c * q2;
+        let l2 = l * l;
+        let m2 = m * m;
+        let s2 = s * s;
+        let l3 = l2 * l;
+        let m3 = m2 * m;
+        let s3 = s2 * s;
+
+        let mut g = f64::NEG_INFINITY;
+        let mut g1 = 0.0;
+        for row in rows {
+            let v = row[0] * l3 + row[1] * m3 + row[2] * s3;
+            let d1 = 3.0 * (row[0] * q0 * l2 + row[1] * q1 * m2 + row[2] * q2 * s2);
+            if v - 1.0 > g {
+                g = v - 1.0;
+                g1 = d1;
+            }
+            if -v > g {
+                g = -v;
+                g1 = -d1;
+            }
+        }
+
+        if g > 0.0 {
+            hi = c;
+        } else {
+            lo = c;
+        }
+
+        if g1 == 0.0 {
+            c = (lo + hi) / 2.0;
+            continue;
+        }
+
+        let mut step = g / g1;
+        if step.abs() < best_err {
+            best_err = step.abs();
+            best = c;
+        }
+
+        if step > -1e-9 && step < 1e-9 {
+            return c;
+        }
+
+        let mut next = c - step;
+        let l = l_value + next * q0;
+        let m = l_value + next * q1;
+        let s = l_value + next * q2;
+        let l2 = l * l;
+        let m2 = m * m;
+        let s2 = s * s;
+        let l3 = l2 * l;
+        let m3 = m2 * m;
+        let s3 = s2 * s;
+
+        let mut g_at_next = f64::NEG_INFINITY;
+        for row in rows {
+            let v = row[0] * l3 + row[1] * m3 + row[2] * s3;
+            if v - 1.0 > g_at_next {
+                g_at_next = v - 1.0;
+            }
+            if -v > g_at_next {
+                g_at_next = -v;
+            }
+        }
+
+        let twice_g_at_next = 2.0 * g_at_next;
+        if twice_g_at_next != g {
+            step = g / (g - twice_g_at_next) * (g_at_next / g1);
+
+            if step.abs() < best_err {
+                best_err = step.abs();
+                best = next;
+            }
+
+            if step > -1e-9 && step < 1e-9 {
+                return next;
+            }
+
+            next -= step;
+        }
+
+        c = if next > lo && next < hi {
+            next
+        } else {
+            (lo + hi) / 2.0
+        };
+    }
+
+    best
+}
+
+struct OklchOstrowski;
+
+impl OklchOstrowski {
+    fn new() -> Self {
+        OklchOstrowski
+    }
+
+    #[inline(always)]
+    fn map(&mut self, oklch: &[f64; 3], out: &mut [f64; 3]) {
+        self.map_impl(oklch, out, false);
+    }
+
+    #[inline(always)]
+    fn map_with_in_gamut_check(&mut self, oklch: &[f64; 3], out: &mut [f64; 3]) {
+        self.map_impl(oklch, out, true);
+    }
+
+    #[inline(always)]
+    fn map_impl(&mut self, oklch: &[f64; 3], out: &mut [f64; 3], check_in_gamut: bool) {
+        let (l, c, h) = (oklch[0], oklch[1], oklch[2]);
+        if l <= 0.0 || l >= 1.0 || c <= 0.0 {
+            let ll = if l <= 0.0 {
+                0.0
+            } else if l >= 1.0 {
+                1.0
+            } else {
+                l
+            };
+            oklch_to_clipped_p3(ll, 0.0, h, out);
+            return;
+        }
+        if check_in_gamut && oklch_to_p3_if_in_gamut(l, c, h, out) {
+            return;
+        }
+
+        let rad = h * PI / 180.0;
+        let (cos, sin) = (rad.cos(), rad.sin());
+        let q0 = KA0 * cos + KB0 * sin;
+        let q1 = KA1 * cos + KB1 * sin;
+        let q2 = KA2 * cos + KB2 * sin;
+        let mapped_c = c.min(solve_ostrowski(l, q0, q1, q2));
+        lms_slopes_to_clipped_p3(l, mapped_c, q0, q1, q2, out);
+    }
+}
+
 // ── Method 5: Bottosson constant lightness ───────────────────────────────────
 
 #[inline(always)]
@@ -1627,6 +1798,15 @@ fn run_timings(label: &str, samples: &[[f64; 3]], warmup: usize, repeats: usize,
         time_method(warmup, repeats, samples, |s, o| halley.map(s, o))
     };
 
+    let mut ostrowski = OklchOstrowski::new();
+    let ostrowski_ns = if check {
+        time_method(warmup, repeats, samples, |s, o| {
+            ostrowski.map_with_in_gamut_check(s, o)
+        })
+    } else {
+        time_method(warmup, repeats, samples, |s, o| ostrowski.map(s, o))
+    };
+
     let mut bottosson = BottossonLightness::new();
     let bottosson_ns = if check {
         time_method(warmup, repeats, samples, |s, o| {
@@ -1677,6 +1857,7 @@ fn run_timings(label: &str, samples: &[[f64; 3]], warmup: usize, repeats: usize,
         ("oklch-cubic (cached)", cubic_ns),
         ("oklch-cubic (no cache)", cubic_no_cache_ns),
         ("oklch-halley", halley_ns),
+        ("oklch-ostrowski", ostrowski_ns),
         ("bottosson-lightness", bottosson_ns),
         ("bottosson-lightness (cached)", bottosson_cached_ns),
         ("edge-seeker", edge_ns),
@@ -1732,6 +1913,7 @@ fn main() {
     let mut cubic_cs = OklchCubic::new();
     let mut cubic_no_cache_cs = OklchCubicNoCache::new();
     let mut halley_cs = OklchHalley::new();
+    let mut ostrowski_cs = OklchOstrowski::new();
     let mut bottosson_cs = BottossonLightness::new();
     let mut bottosson_cached_cs = BottossonLightnessCached::new();
     let mut raytrace_cs = Raytrace::new();
@@ -1740,6 +1922,7 @@ fn main() {
     let cs_cubic = checksum(&grid, |c, o| cubic_cs.map(c, o));
     let cs_cubic_no_cache = checksum(&grid, |c, o| cubic_no_cache_cs.map(c, o));
     let cs_halley = checksum(&grid, |c, o| halley_cs.map(c, o));
+    let cs_ostrowski = checksum(&grid, |c, o| ostrowski_cs.map(c, o));
     let cs_bottosson = checksum(&grid, |c, o| bottosson_cs.map(c, o));
     let cs_bottosson_cached = checksum(&grid, |c, o| bottosson_cached_cs.map(c, o));
     let cs_raytrace = checksum(&grid, |c, o| raytrace_cs.map(c, o));
@@ -1749,6 +1932,7 @@ fn main() {
     println!("  oklch-cubic-cached   {:.10}", cs_cubic);
     println!("  oklch-cubic-nocache  {:.10}", cs_cubic_no_cache);
     println!("  oklch-halley         {:.10}", cs_halley);
+    println!("  oklch-ostrowski      {:.10}", cs_ostrowski);
     println!("  bottosson-lightness  {:.10}", cs_bottosson);
     println!("  bottosson-cached     {:.10}", cs_bottosson_cached);
     println!("  raytrace             {:.10}", cs_raytrace);
@@ -1778,6 +1962,13 @@ fn main() {
             samples,
             |c, o| halley_eq.map(c, o),
             |c, o| halley_checked_eq.map_with_in_gamut_check(c, o),
+        );
+        let mut ostrowski_eq = OklchOstrowski::new();
+        let mut ostrowski_checked_eq = OklchOstrowski::new();
+        let ostrowski_check_diff = max_channel_diff(
+            samples,
+            |c, o| ostrowski_eq.map(c, o),
+            |c, o| ostrowski_checked_eq.map_with_in_gamut_check(c, o),
         );
         let mut bottosson_eq = BottossonLightness::new();
         let mut bottosson_checked_eq = BottossonLightness::new();
@@ -1818,6 +2009,7 @@ fn main() {
             .max(cubic_check_diff)
             .max(cubic_no_cache_check_diff)
             .max(halley_check_diff)
+            .max(ostrowski_check_diff)
             .max(bottosson_check_diff)
             .max(bottosson_cached_check_diff)
             .max(raytrace_check_diff)
@@ -1866,6 +2058,24 @@ fn main() {
     println!(
         "equivalence: oklch-halley/cubic max channel diff {:.2e} (exact grid hues)\n",
         halley_cubic_diff
+    );
+
+    let mut ostrowski_eq = OklchOstrowski::new();
+    let mut cubic_exact_eq = OklchCubicNoCache::new();
+    let ostrowski_cubic_diff = max_channel_diff(
+        &grid,
+        |c, o| ostrowski_eq.map(c, o),
+        |c, o| cubic_exact_eq.map(c, o),
+    );
+    if ostrowski_cubic_diff > 5e-8 {
+        panic!(
+            "oklch-ostrowski differs from the exact cubic boundary: max channel diff {}",
+            ostrowski_cubic_diff
+        );
+    }
+    println!(
+        "equivalence: oklch-ostrowski/cubic max channel diff {:.2e} (exact grid hues)\n",
+        ostrowski_cubic_diff
     );
 
     // The cached bottosson variant evaluates the hue-dependent structure at the

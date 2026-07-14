@@ -30,6 +30,10 @@ bullet links to the original it was derived from.
   bracketed Halley iteration over the linear-P3 channel cubics. Uses exact input
   hues and avoids the cubic method's closed-form `acos`/`cbrt` roots.
   ([original](https://github.com/color-js/apps/pull/44))
+- **oklch-ostrowski** — the same exact-hue, LUT-less boundary search as
+  `oklch-halley`, but replaces its solver with the fourth-order Ostrowski
+  iteration proposed in a follow-up to the pull request.
+  ([original](https://github.com/color-js/apps/pull/44#issuecomment-4964705945))
 - **bottosson-lightness** — Bjorn Ottosson's constant-lightness gamut clipping,
   specialized for OKLCh → Display-P3 with P3 cusp/intersection constants hoisted
   into the module.

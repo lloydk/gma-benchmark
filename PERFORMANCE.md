@@ -3,8 +3,9 @@
 A deep dive into where each gamut-mapping method spends its time, how the two
 sides of the gamut cusp differ, and how the three runtimes (Rust, Node/V8,
 Bun/JavaScriptCore) compare. All numbers were measured on the same machine;
-the original table was one session and the later Halley rows use a separate
-same-environment pass documented below. Treat them as relative indicators,
+the original table was one session and the later Halley/Ostrowski rows use
+separate same-environment passes documented below. Treat them as relative
+indicators,
 subject to the caveats in
 [README.md](README.md#caveats). In particular, these implementations are
 hand-specialized for OKLCh → Display-P3 (hoisted constants, fixed gamut,
@@ -23,9 +24,9 @@ Node v26.3.1 (V8), Bun 1.3.14 (JavaScriptCore), rustc 1.96.0
 
 **Methodology**: every number is a median of 25 passes over a 35,640-color
 workload (30 warmup passes), one call per color, reused output vector. The
-original measurements interleave methods; the later Halley measurement is the
-dedicated-pass exception described below. Four workloads, all at C = 0.4 (out
-of P3 gamut everywhere):
+original measurements interleave methods; the later Halley and Ostrowski
+measurements are the dedicated-pass exceptions described below. Four workloads,
+all at C = 0.4 (out of P3 gamut everywhere):
 
 - **grid** — the canonical benchmark grid: integer hues 0–359 repeated at 99
   fixed lightness steps. Hue-repetitive, cache- and branch-predictor-friendly.
@@ -47,13 +48,16 @@ do contain in-gamut colors, the checked variants can return early after a
 single conversion, which shrinks the differences between methods — mostly
 in-gamut traffic makes every method cost roughly clip plus the precheck.
 
-The `oklch-halley` rows were added in a later measurement pass on the same
-machine and toolchain. They use the same 30 warmup + 25 measured-pass median
-methodology; the dedicated Halley harness was run three times in Node and Bun,
-and the median result across those runs is reported. Rust uses the median from
-the release harness built with `-C target-cpu=native`. The other rows retain
-their original same-session measurements, avoiding an unrelated wholesale
-refresh of this document.
+The `oklch-halley` and `oklch-ostrowski` rows were added in later measurement
+passes on the same machine and toolchain. They use the same 30 warmup + 25
+measured-pass median methodology; each dedicated JS harness was run three times
+in Node and Bun, and the median result across those runs is reported. The
+Halley Rust row retains its earlier release-harness median; the new Ostrowski
+Rust row is the median from three release-harness runs built with
+`-C target-cpu=native`. The other rows retain their original same-session
+measurements, avoiding an unrelated wholesale refresh of this document. Direct
+Halley/Ostrowski ratios below come from a fresh paired pass rather than
+comparing measurements from different sessions.
 
 ## 1. Headline numbers (ns/call)
 
@@ -65,6 +69,7 @@ refresh of this document.
 | oklch-cubic (cached)          |  45.9 |  72.9 |  61.0 |     1.6×  |    1.3×  |
 | oklch-cubic (no cache)        | 177.4 | 234.6 | 230.6 |     1.3×  |    1.3×  |
 | oklch-halley                  |  87.4 | 105.7 |  91.9 |     1.2×  |    1.1×  |
+| oklch-ostrowski               |  87.8 | 113.4 | 102.9 |     1.3×  |    1.2×  |
 | bottosson-lightness           |  72.0 | 107.3 | 101.3 |     1.5×  |    1.4×  |
 | bottosson-lightness (cached)  |  17.6 |  57.0 |  49.3 |     3.2×  |    2.8×  |
 | edge-seeker                   |  30.6 | 100.6 |  98.3 |     3.3×  |    3.2×  |
@@ -79,6 +84,7 @@ refresh of this document.
 | oklch-cubic (cached)          |  60.9 |  99.6 |  82.8 |     1.6×  |    1.4×  |
 | oklch-cubic (no cache)        | 202.6 | 262.3 | 250.9 |     1.3×  |    1.2×  |
 | oklch-halley                  |  98.5 | 127.7 | 112.5 |     1.3×  |    1.1×  |
+| oklch-ostrowski               | 103.9 | 138.9 | 125.6 |     1.3×  |    1.2×  |
 | bottosson-lightness           |  82.8 | 125.1 | 116.7 |     1.5×  |    1.4×  |
 | bottosson-lightness (cached)  |  29.9 |  81.8 |  69.9 |     2.7×  |    2.3×  |
 | edge-seeker                   |  74.2 | 156.5 | 147.0 |     2.1×  |    2.0×  |
@@ -93,10 +99,11 @@ more after its cache was rewritten as a flat array — a JS-side win, ~1.16×
 on random hues; Rust was contiguous all along and is unchanged within noise.
 Other rows were spot-checked and left as-is.)
 
-Four facts stand out: **raytrace and Halley have the narrowest JavaScript/native
-Rust gaps** (explained in §2 and §5), after the `** 3` fix **Node and Bun are
-nearly at parity** (§2), **Halley is roughly twice as fast as the uncached
-closed-form cubic while retaining exact-hue semantics**, and
+Four facts stand out: **raytrace and the iterative Halley/Ostrowski methods have
+the narrowest JavaScript/native Rust gaps** (explained in §2 and §5), after the
+`** 3` fix **Node and Bun are nearly at parity** (§2), **both iterative methods
+are roughly twice as fast as the uncached closed-form cubic while retaining
+exact-hue semantics**, and
 **bottosson-lightness (cached) — the §8 cusp memoization, since applied — is
 the fastest real method everywhere**, tying clip outright in Rust because its
 per-call path does no trig at all (§3).
@@ -176,6 +183,7 @@ branch instead).
 | oklch-cubic (cached)          | 0.82 | 0.46 |    —    | 0.17| 0.06 | 1.99  |
 | oklch-cubic (no cache)        | 5.30 | 5.17 |    1    | 2.45| 0.82 | 1.99  |
 | oklch-halley                  |   —  |   —  |    1    |  —  |  —   | 1.99  |
+| oklch-ostrowski               |   —  |   —  |    1    |  —  |  —   | 1.99  |
 | bottosson-lightness           | 1.00 |   —  |    1    |  —  |  —   | 1.99  |
 | bottosson-lightness (cached)  |   —  |   —  |    —    |  —  |  —   | 1.99  |
 | edge-seeker (both)            |   —  | 1.01 |    1    |  —  |  —   | 1.99  |
@@ -200,6 +208,9 @@ table/cache lookups, branches, loads/stores, and engine overhead.
 | oklch-halley                  | Rust    |    98.5  |   22.5 (23%)   |      76.0       |
 |                               | Node    |   127.7  |   26.7 (21%)   |     101.0       |
 |                               | Bun     |   112.5  |   25.7 (23%)   |      86.8       |
+| oklch-ostrowski               | Rust    |   103.9  |   22.5 (22%)   |      81.4       |
+|                               | Node    |   138.9  |   26.7 (19%)   |     112.2       |
+|                               | Bun     |   125.6  |   25.7 (20%)   |      99.9       |
 | bottosson-lightness           | Rust    |    82.8  |   30.4 (37%)   |      52.4       |
 |                               | Node    |   125.1  |   30.4 (24%)   |      94.7       |
 |                               | Bun     |   116.7  |   33.5 (29%)   |      83.2       |
@@ -251,6 +262,31 @@ Per-method notes:
   `1.43e-8` per encoded P3 channel, the tolerance implied by Halley's `1e-9`
   chroma-step stopping rule; JS and Rust grid checksums both equal
   `39942.0222857627`.
+- **oklch-ostrowski** replaces Halley's second-derivative correction with a
+  Newton step followed by the fourth-order Ostrowski correction. Fourth-order
+  convergence does reduce the number of outer iterations, but it does not
+  reduce the work here as directly as the order suggests:
+
+  | workload | solver | outer iterations | constraint evaluations |
+  |----------|--------|-----------------:|-----------------------:|
+  | grid     | Halley | 3.076 | 3.076 |
+  | grid     | Ostrowski | 2.350 | 4.205 |
+  | random   | Halley | 3.076 | 3.076 |
+  | random   | Ostrowski | 2.356 | 4.217 |
+
+  Halley evaluates the channel cubics and both derivatives in one pass,
+  sharing the LMS values, squares, and cubes. Ostrowski avoids the second
+  derivative but normally evaluates all channel constraints again at the
+  Newton point, so it performs about 37% more constraint evaluations overall.
+  The second evaluation is also serially dependent on the Newton result. A
+  counter-enabled Node run shows the trade-off: Ostrowski retired about 7%
+  fewer instructions, but IPC fell from 3.47 to 3.27 on the grid and from 2.92
+  to 2.68 on random inputs, leaving total cycles within 1% of Halley. A
+  fresh paired timing pass consequently put Ostrowski between 1% faster and 9%
+  slower than Halley depending on runtime and workload: effectively the same
+  performance class, not a consistent win. Its exact-grid boundary difference
+  is `3.67e-8` per encoded channel; the JS/Rust grid checksum is
+  `39942.0222712323` (the full JS and Rust sums differ by only `4.7e-11`).
 - **bottosson-lightness** is one `cbrt` (in `findCusp`), one `sin`/`cos` pair,
   the γ-pows, and a large slab of straight-line polynomial arithmetic
   (saturation polynomial, cusp conversion, intersection). Its "everything
@@ -299,6 +335,7 @@ workload's 360 integer hues populate only 10% of the hue caches):
 | structure | JS | Rust |
 |---|---|---|
 | oklch-halley | **9-number fixed array**, no per-hue storage (72 B numeric payload plus JS array overhead) | **72 B fixed**, no per-hue storage (9 compile-time matrix coefficients) |
+| oklch-ostrowski | **9-number fixed array**, no per-hue storage (72 B numeric payload plus JS array overhead) | **72 B fixed**, no per-hue storage (9 compile-time matrix coefficients) |
 | oklch-cubic (cached) — 3,601 × [A₀..A₂, B₀..B₂, D₀..D₂, tLower, turn₀..turn₂] | **366 KiB** exact (one pre-allocated `Float64Array`, 13 doubles/bucket) | **366 KiB** (`Vec<HueData>`, 104 B/bucket, contiguous, `tLower` as fill sentinel) |
 | bottosson-lightness (cached) — 3,601 × [cuspL, cuspC, q0, q1, q2] | **141 KiB** exact (one pre-allocated `Float64Array`) | **141 KiB** exact (`Vec<[f64; 5]>`, contiguous) |
 | edge-seeker — gamut-edge LUT, 710 rows × 4 doubles | **~22 KiB** (four parallel plain arrays) | **~22 KiB** (static array in the binary) |
@@ -337,12 +374,13 @@ rankings — worth knowing before comparing these results to another codebase:
   (`src/oklch-cubic.js`) — no second trig, no LMS cubing, no 3×3 matrix. This
   is why its steady-state op counts show *zero* `sin`/`cos` (trig runs only
   when a hue bucket is first built).
-- **oklch-halley** reuses the exact-hue LMS′ slopes `q0..q2` calculated before
-  the solve. Once the mapped chroma is known, the final conversion starts at
-  `L + C·q` and performs only the cubes, matrix multiply, and γ encoding — no
-  second hue trig or OKLab→LMS′ multiply. This is a benchmark-port difference
-  from the pull request, where the method returns a modified OKLCh Color.js
-  object and the registry performs the subsequent target-space conversion.
+- **oklch-halley / oklch-ostrowski** reuse the exact-hue LMS′ slopes `q0..q2`
+  calculated before the solve. Once the mapped chroma is known, the final
+  conversion starts at `L + C·q` and performs only the cubes, matrix multiply,
+  and γ encoding — no second hue trig or OKLab→LMS′ multiply. This is a
+  benchmark-port difference from the pull request, where the method returns a
+  modified OKLCh Color.js object and the registry performs the subsequent
+  target-space conversion.
 - **raytrace** never leaves the output space: the iteration works in linear P3
   and the "final conversion" is just the three γ encodes of the last hit
   point. The hue `sin`/`cos` is computed once and reused by all three chroma
@@ -384,6 +422,7 @@ hue's cusp (ns/call, with above/below ratio):
 | oklch-cubic (cached)          |      42.4  |      99.1  | **2.34×** |   80.9  |     159.7  | **1.97×** |  63.7  |    126.2  | **1.98×** |
 | oklch-cubic (no cache)        |     184.9  |     229.6  | 1.24× |     243.2  |     304.8  | 1.25× |    233.0  |    292.8  | 1.26× |
 | oklch-halley                  |      98.5  |      96.4  | 0.98× |     122.6  |     129.0  | 1.05× |    106.8  |    115.6  | 1.08× |
+| oklch-ostrowski               |     103.1  |      92.8  | 0.90× |     132.4  |     130.9  | 0.99× |    119.4  |    117.1  | 0.98× |
 | bottosson-lightness           |      75.6  |      95.8  | 1.27× |     114.9  |     141.1  | 1.23× |    106.9  |    129.8  | 1.21× |
 | bottosson-lightness (cached)  |      23.0  |      40.8  | **1.78×** |   70.9  |     102.6  | 1.45× |     59.3  |     89.2  | 1.50× |
 | edge-seeker                   |      69.3  |      78.6  | 1.13× |     145.3  |     164.9  | 1.13× |    137.2  |    153.3  | 1.12× |
@@ -396,6 +435,7 @@ The instrumented op counts show exactly why (per call, below → above):
 |------------------------|------------------------------|
 | oklch-cubic (cached)   | cbrt 0.38 → 1.93, sqrt 0.19 → 1.26, acos 0.00 → 0.30, cos 0.00 → 0.90. Below the cusp the binding constraint is a channel hitting **0**, and that bound (`tLower`) is hue-only — precomputed and cached. The guard tests (`turn[i] > maxT`, `A[i] ≤ 0`, `P(maxT) < target`) then skip nearly every "channel hits **1**" solve. Above the cusp those guards stop helping: ~1.26 `firstRoot` solves run per call (0.96 via the sqrt+2·cbrt path, 0.30 via the acos+3·cos path). |
 | oklch-halley           | No cusp-specific branch: both sides use the same bracketed iteration over the most-violated channel bound. The small −2% to +8% differences are shared γ-branch/value effects plus minor convergence and measurement variation, so Halley is effectively cusp-flat. |
+| oklch-ostrowski        | No explicit cusp branch, but the above-cusp samples converge with less work: 2.06 outer iterations / 3.50 constraint evaluations on average, versus 2.44 / 4.43 below. Rust exposes that arithmetic difference most clearly (10% faster above); γ-transfer and JIT overhead largely offset it in Node and Bun, where the sides are within 2%. |
 | bottosson-lightness    | The gamut-intersection branch. With constant-lightness mapping the test reduces to exactly L ≤ L_cusp: below takes a one-division projective formula; above adds a full Halley refinement step (~60 flops + 3 divides). On the mixed workloads 74.5% of samples take the cheap lower branch. |
 | bottosson-lightness (cached) | Same branch as the exact variant, but with the fixed cusp phase gone the Halley step *is* most of what remains — the above/below ratio grows (1.45–1.78×) even though both absolute costs drop sharply. Below the cusp it is *faster than clip* in Rust (23.0 vs 27.3) and within ~10–30% of clip in JS. |
 | edge-seeker (both)     | sqrt 0 → 4, abs 0 → 1. Below the cusp the boundary is modeled as a straight line (one divide + multiply). Above, it is a circular-arc intersection: four sqrts plus extra divides per call. |
@@ -408,8 +448,9 @@ Summary: **oklch-cubic (cached) is the most cusp-sensitive method**
 speeding up the lookup-bound below side more than the solver-bound above
 side), bottosson-cached is next (1.45–1.78×, because the
 Halley step dominates once the fixed cusp phase is cached away), exact
-bottosson and the edge-seekers are mildly sensitive (≈1.1–1.36×), and
-Halley/raytrace/clip are flat. If an input distribution skews dark (below-cusp),
+bottosson and the edge-seekers are mildly sensitive (≈1.1–1.36×), Halley,
+raytrace, and clip are flat, and Ostrowski is mildly faster above the cusp due
+to its convergence distribution. If an input distribution skews dark (below-cusp),
 bottosson-cached and cubic-cached widen their leads; if it skews bright,
 edge-seeker (indexed) closes the gap.
 
@@ -417,17 +458,17 @@ edge-seeker (indexed) closes the gap.
 
 - For **arithmetic-heavy** code the gap is solid but not huge after the `** 3`
   fix: Rust is ~2× faster than JS on clip and the edge-seekers (random
-  workload), and 1.2–1.6× on the cubics, Halley, and bottosson
+  workload), and 1.2–1.6× on the cubics, Halley, Ostrowski, and bottosson
   (cubic-cached's JS gap narrowed to 1.4–1.6× once its cache went flat). The
   remaining JS overhead is spread across boxed array access, bounds checks,
   and less aggressive instruction scheduling. bottosson-cached stretches the
   gap again (2.3–2.7× random, up to 3.2× grid): once the libm calls are
   cached away, what's left — cache reads and straight arithmetic — is exactly
   what native code does best.
-- **Halley has one of the narrowest native gaps**: Node/Rust is 1.2–1.3× and
-  Bun/Rust 1.1×. Its hot path is fixed-size scalar polynomial arithmetic with
-  no heap lookup and no closed-form transcendental roots, a shape both JITs
-  compile efficiently.
+- **Halley and Ostrowski have narrow native gaps**: Node/Rust is 1.2–1.3× and
+  Bun/Rust 1.1–1.2×. Their hot paths are fixed-size scalar polynomial
+  arithmetic with no heap lookup and no closed-form transcendental roots, a
+  shape both JITs compile efficiently.
 - For **libm-bound** code the gap disappears: raytrace is 222 ns in Rust,
   221 ns in Node. Nine serial cbrts per call put both runtimes on their math
   library's latency, and V8's cbrt is twice as fast as glibc's. A faster cbrt
@@ -444,7 +485,8 @@ through `convert.js` (clip, edge-seeker, oklch-cubic) because JSC
 strength-reduces `** 3` and V8 does not. With the fix applied, the engines are
 close to parity (random workload, Node/Bun): clip 1.00×, cubic-cached 1.20×,
 cubic-no-cache 1.05×, bottosson 1.07×, bottosson-cached 1.17×, edge-seeker
-1.06×, edge-seeker-indexed 1.10×, Halley 1.13×, raytrace 0.96×.
+1.06×, edge-seeker-indexed 1.10×, Halley 1.13×, Ostrowski 1.11×,
+raytrace 0.96×.
 
 What remains of the gap:
 
@@ -454,8 +496,8 @@ What remains of the gap:
 2. **cubic-cached (1.20×) and bottosson-cached (1.17×)** are the largest
    remaining Bun edges; both hot loops are hue-cache lookups plus straight
    arithmetic, where JSC's codegen appears simply tighter on this workload.
-3. Halley is 1.13× faster in Bun; everything else is within ~10% — near noise
-   territory for cross-engine comparisons.
+3. Halley is 1.13× and Ostrowski 1.11× faster in Bun; everything else is
+   within ~10% — near noise territory for cross-engine comparisons.
 
 ## 7. Grid vs random: predictability effects
 
@@ -476,6 +518,10 @@ random fractional hues defeat both. The methods hurt most (random vs grid):
 - **oklch-halley**: Rust 87.4 → 98.5 ns, Node 105.7 → 127.7, Bun
   91.9 → 112.5 (1.13–1.22×). It has no hue cache; the penalty comes from
   randomized branch/value patterns in the bracketed solver and γ transfer.
+- **oklch-ostrowski**: Rust 87.8 → 103.9 ns, Node 113.4 → 138.9, Bun
+  102.9 → 125.6 (1.18–1.23×). Like Halley it has no hue cache; its second
+  constraint evaluation adds another dependent branch/value pattern for the
+  random workload to disrupt.
 - **clip / bottosson / raytrace**: +6–63% effects (largest on Rust clip,
   where there is little else to hide it), mostly the shared γ-branch and
   workload-value patterns.
@@ -515,18 +561,23 @@ any method with per-hue state.
    ~3–8% slowdown) and, using the same expressions, stays bitwise-identical.
    Only worth taking if memory matters more than nanoseconds; the flat
    13-double layout (366 KiB) already applied is the better default.
-6. **Halley is the fastest exact-hue, cache-free exact-boundary solver here.**
-   It is about twice as fast as oklch-cubic (no cache), uses no LUT or per-hue
-   storage, and is cusp-flat. Cached cubic remains faster when 0.1° bucketed
-   hue semantics and ~366 KiB of cache are acceptable.
+6. **Halley and Ostrowski are the fastest exact-hue, cache-free exact-boundary
+   solvers here.** Both are about twice as fast as oklch-cubic (no cache) and
+   use no LUT or per-hue storage. Ostrowski's fourth-order convergence does not
+   make it consistently faster: its second constraint evaluation offsets the
+   saved outer iterations, leaving it 1% faster to 9% slower than Halley in the
+   paired measurements. Halley is the simpler and more consistently flat
+   default; cached cubic remains faster when 0.1° bucketed-hue semantics and
+   ~366 KiB of cache are acceptable.
 7. **Method choice by input distribution**: across all three runtimes the
    fastest full-quality rows are bottosson-lightness (cached), oklch-cubic
    (cached), and edge-seeker (indexed) — with bottosson-cached now leading
    everywhere if bucketed-hue semantics are acceptable. For dark-skewed
    content, the cached methods extend their leads; for bright-skewed content
    edge-seeker (indexed) closes in — it is the most balanced across cusp
-   sides. Halley is the cache-free exact-hue option; its cost is flat across
-   cusp sides and sits between bottosson-lightness and cubic-no-cache.
+   sides. Halley and Ostrowski are the cache-free exact-hue options; both sit
+   between bottosson-lightness and cubic-no-cache, with Halley flatter and
+   Ostrowski somewhat cheaper above the cusp.
 
 ## 9. How the numbers were produced
 
@@ -553,6 +604,11 @@ techniques so the results can be reproduced):
   counts come from inspecting outputs (a channel above the transfer function's
   linear-branch threshold took the pow path); the bottosson branch split from
   its exact predicate L ≤ L_cusp(H).
+- **Iterative-solver counts (§3)** — temporary instrumented copies of the
+  production Halley and Ostrowski solvers counted outer iterations, complete
+  channel-constraint evaluations, derivative evaluations, and bisections over
+  the grid, random, below-cusp, and above-cusp workloads. The probes stayed
+  outside the repo.
 - **Attribution (§3)** — op counts × per-op costs, cross-checked against
   substitution probes (e.g. swapping `cbrt` for `sqrt` inside raytrace) which
   bound the effect of serial dependency chains.
