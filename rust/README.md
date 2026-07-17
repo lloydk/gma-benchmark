@@ -20,6 +20,6 @@ RUSTFLAGS="-C target-cpu=native" cargo build --release --bin gma-bench
 ```
 
 It prints checksums (sum of all output channels) that match the JS port:
-`clip` and `edge-seeker` bit-for-bit, `oklch-cubic` to ~3e-6 total (cbrt/acos
-last-ULP differences between V8's libm and Rust's).
-
+`clip` and `edge-seeker` bit-for-bit, and the cubic variants to a few last-place
+digits (from cbrt/acos libm differences). `oklch-cubic-direct` currently matches
+across JS and Rust to all 10 printed decimal places.

@@ -3,9 +3,9 @@
 A deep dive into where each gamut-mapping method spends its time, how the two
 sides of the gamut cusp differ, and how the three runtimes (Rust, Node/V8,
 Bun/JavaScriptCore) compare. All numbers were measured on the same machine;
-the original table was one session and the later Halley/Ostrowski rows use
-separate same-environment passes documented below. Treat them as relative
-indicators,
+the original table was one session and the later Halley/Ostrowski/direct-cubic
+rows use separate same-environment passes documented below. Treat them as
+relative indicators,
 subject to the caveats in
 [README.md](README.md#caveats). In particular, these implementations are
 hand-specialized for OKLCh → Display-P3 (hoisted constants, fixed gamut,
@@ -48,11 +48,13 @@ do contain in-gamut colors, the checked variants can return early after a
 single conversion, which shrinks the differences between methods — mostly
 in-gamut traffic makes every method cost roughly clip plus the precheck.
 
-The `oklch-halley` and `oklch-ostrowski` rows were added in later measurement
-passes on the same machine and toolchain. They use the same 30 warmup + 25
-measured-pass median methodology; each dedicated JS harness was run three times
-in Node and Bun, and the median result across those runs is reported. The
-Halley Rust row retains its earlier release-harness median; the new Ostrowski
+The `oklch-halley`, `oklch-ostrowski`, and `oklch-cubic-direct` rows were added
+in later measurement passes on the same machine and toolchain. They use the same
+30 warmup + 25 measured-pass median methodology. The Halley and Ostrowski
+dedicated JS harnesses were run three times in Node and Bun, and the median
+result across those runs is reported; the direct-cubic row is a fresh dedicated
+pass after its implementation. The Halley Rust row retains its earlier
+release-harness median; the new Ostrowski
 Rust row is the median from three release-harness runs built with
 `-C target-cpu=native`. The other rows retain their original same-session
 measurements, avoiding an unrelated wholesale refresh of this document. Direct
@@ -68,6 +70,7 @@ comparing measurements from different sessions.
 | clip                          |  17.6 |  42.6 |  42.8 |     2.4×  |    2.4×  |
 | oklch-cubic (cached)          |  45.9 |  72.9 |  61.0 |     1.6×  |    1.3×  |
 | oklch-cubic (no cache)        | 177.4 | 234.6 | 230.6 |     1.3×  |    1.3×  |
+| oklch-cubic-direct            | 181.6 | 200.1 | 220.4 |     1.1×  |    1.2×  |
 | oklch-halley                  |  87.4 | 105.7 |  91.9 |     1.2×  |    1.1×  |
 | oklch-ostrowski               |  87.8 | 113.4 | 102.9 |     1.3×  |    1.2×  |
 | bottosson-lightness           |  72.0 | 107.3 | 101.3 |     1.5×  |    1.4×  |
@@ -83,6 +86,7 @@ comparing measurements from different sessions.
 | clip                          |  28.6 |  57.6 |  57.7 |     2.0×  |    2.0×  |
 | oklch-cubic (cached)          |  60.9 |  99.6 |  82.8 |     1.6×  |    1.4×  |
 | oklch-cubic (no cache)        | 202.6 | 262.3 | 250.9 |     1.3×  |    1.2×  |
+| oklch-cubic-direct            | 211.7 | 222.7 | 248.5 |     1.1×  |    1.2×  |
 | oklch-halley                  |  98.5 | 127.7 | 112.5 |     1.3×  |    1.1×  |
 | oklch-ostrowski               | 103.9 | 138.9 | 125.6 |     1.3×  |    1.2×  |
 | bottosson-lightness           |  82.8 | 125.1 | 116.7 |     1.5×  |    1.4×  |
@@ -99,11 +103,10 @@ more after its cache was rewritten as a flat array — a JS-side win, ~1.16×
 on random hues; Rust was contiguous all along and is unchanged within noise.
 Other rows were spot-checked and left as-is.)
 
-Four facts stand out: **raytrace and the iterative Halley/Ostrowski methods have
+Four facts stand out: **raytrace and the cache-free root solvers have
 the narrowest JavaScript/native Rust gaps** (explained in §2 and §5), after the
-`** 3` fix **Node and Bun are nearly at parity** (§2), **both iterative methods
-are roughly twice as fast as the uncached closed-form cubic while retaining
-exact-hue semantics**, and
+`** 3` fix **Node and Bun are nearly at parity** (§2), **the direct cubic trims
+work from the old uncached cubic but remains slower than Halley/Ostrowski**, and
 **bottosson-lightness (cached) — the §8 cusp memoization, since applied — is
 the fastest real method everywhere**, tying clip outright in Rust because its
 per-call path does no trig at all (§3).
@@ -248,6 +251,24 @@ Per-method notes:
   rebuild the hue structure: the trig, the Q/A/B/D matrix products, and above
   all six `firstRoot`/`firstTurn` solves for `tLower` and the per-channel turn
   points. This is what the cache buys.
+- **oklch-cubic-direct** incorporates lightness into the channel coefficients
+  immediately, probes each channel at `C = 0.5` to choose its 0 or 1 boundary,
+  and runs exactly three Cardano solves. It uses exact input hue and no cache.
+  A scale-relative discriminant test is needed because the full coefficients
+  become very small near black; one Newton polish of each selected Cardano root
+  removes the remaining closed-form cancellation. Reusing the old solver's
+  fixed `1e-14` discriminant band failed at `oklch(0.01 0.4 264)`: a genuinely
+  positive `5.00e-15` discriminant was treated as a repeated-root case, which
+  selected a non-boundary root and mapped the color too far inside P3. The old
+  tolerance remains suitable for its hue-normalized `t = C/L` formulation; it
+  is the lightness-scaled coefficient range that requires different handling.
+  In the fresh integrated harness it was about 6–22% faster than the old
+  no-cache cubic, depending on runtime and workload, but still 1.3–2.1× slower
+  than Halley in the same build:
+  three closed-form roots retain `sqrt`/`cbrt`/`acos` costs that Halley's short
+  polynomial iteration avoids. Its integer-grid maximum difference from the
+  established cubic is `1.43e-8` per encoded channel; JS and Rust both produce
+  a grid checksum of `39942.0222672418` to the printed precision.
 - **oklch-halley** computes the exact input hue once, then evaluates the three
   channel cubics and their first two derivatives inside a bracketed Halley
   iteration. It has no `sqrt`, `cbrt`, or `acos`; beyond one hue `sin`/`cos`
@@ -334,6 +355,7 @@ workload's 360 integer hues populate only 10% of the hue caches):
 
 | structure | JS | Rust |
 |---|---|---|
+| oklch-cubic-direct | **9-number fixed array**, no per-hue storage (72 B numeric payload plus JS array overhead) | **72 B fixed**, no per-hue storage (9 compile-time matrix coefficients) |
 | oklch-halley | **9-number fixed array**, no per-hue storage (72 B numeric payload plus JS array overhead) | **72 B fixed**, no per-hue storage (9 compile-time matrix coefficients) |
 | oklch-ostrowski | **9-number fixed array**, no per-hue storage (72 B numeric payload plus JS array overhead) | **72 B fixed**, no per-hue storage (9 compile-time matrix coefficients) |
 | oklch-cubic (cached) — 3,601 × [A₀..A₂, B₀..B₂, D₀..D₂, tLower, turn₀..turn₂] | **366 KiB** exact (one pre-allocated `Float64Array`, 13 doubles/bucket) | **366 KiB** (`Vec<HueData>`, 104 B/bucket, contiguous, `tLower` as fill sentinel) |
@@ -374,7 +396,7 @@ rankings — worth knowing before comparing these results to another codebase:
   (`src/oklch-cubic.js`) — no second trig, no LMS cubing, no 3×3 matrix. This
   is why its steady-state op counts show *zero* `sin`/`cos` (trig runs only
   when a hue bucket is first built).
-- **oklch-halley / oklch-ostrowski** reuse the exact-hue LMS′ slopes `q0..q2`
+- **oklch-cubic-direct / oklch-halley / oklch-ostrowski** reuse the exact-hue LMS′ slopes `q0..q2`
   calculated before the solve. Once the mapped chroma is known, the final
   conversion starts at `L + C·q` and performs only the cubes, matrix multiply,
   and γ encoding — no second hue trig or OKLab→LMS′ multiply. This is a
@@ -561,13 +583,16 @@ any method with per-hue state.
    ~3–8% slowdown) and, using the same expressions, stays bitwise-identical.
    Only worth taking if memory matters more than nanoseconds; the flat
    13-double layout (366 KiB) already applied is the better default.
-6. **Halley and Ostrowski are the fastest exact-hue, cache-free exact-boundary
-   solvers here.** Both are about twice as fast as oklch-cubic (no cache) and
-   use no LUT or per-hue storage. Ostrowski's fourth-order convergence does not
-   make it consistently faster: its second constraint evaluation offsets the
-   saved outer iterations, leaving it 1% faster to 9% slower than Halley in the
-   paired measurements. Halley is the simpler and more consistently flat
-   default; cached cubic remains faster when 0.1° bucketed-hue semantics and
+6. **Halley and Ostrowski remain the fastest exact-hue, cache-free exact-boundary
+   solvers here.** The direct cubic confirms that folding lightness into the
+   polynomial is better than rebuilding the cache-oriented hue structure: it
+   is 6–22% faster than oklch-cubic (no cache). Its three Cardano solves still
+   leave it 1.3–2.1× slower than Halley in paired current-build measurements.
+   All three use no LUT or per-hue storage. Ostrowski's fourth-order convergence
+   does not make it consistently faster: its second constraint evaluation
+   offsets the saved outer iterations, leaving it 1% faster to 9% slower than
+   Halley in the paired measurements. Halley is the simpler and more
+   consistently flat default; cached cubic remains faster when 0.1° bucketed-hue semantics and
    ~366 KiB of cache are acceptable.
 7. **Method choice by input distribution**: across all three runtimes the
    fastest full-quality rows are bottosson-lightness (cached), oklch-cubic
@@ -575,9 +600,8 @@ any method with per-hue state.
    everywhere if bucketed-hue semantics are acceptable. For dark-skewed
    content, the cached methods extend their leads; for bright-skewed content
    edge-seeker (indexed) closes in — it is the most balanced across cusp
-   sides. Halley and Ostrowski are the cache-free exact-hue options; both sit
-   between bottosson-lightness and cubic-no-cache, with Halley flatter and
-   Ostrowski somewhat cheaper above the cusp.
+   sides. Halley and Ostrowski are the leading cache-free exact-hue options;
+   direct cubic sits between them and the older cubic-no-cache row.
 
 ## 9. How the numbers were produced
 

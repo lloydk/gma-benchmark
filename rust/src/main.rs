@@ -616,7 +616,168 @@ impl OklchCubicNoCache {
     }
 }
 
-// ── Method 4: oklch-halley ──────────────────────────────────────────────────
+// ── Method 4: oklch-cubic-direct ────────────────────────────────────────────
+// Solve each linear-P3 channel's complete cubic in chroma at the input
+// lightness and exact hue. At C = 0.5, choose whichever of the channel's 0 or 1
+// bounds is nearer, solve that one cubic, then take the earliest of the three
+// channel roots. Ported from color-js/apps#44 issuecomment-4998357355.
+
+#[inline(always)]
+fn max_chroma_cubic_direct(l: f64, q0: f64, q1: f64, q2: f64) -> f64 {
+    let rows = [[RL, RM, RS], [GL, GM, GS], [BL, BM, BS]];
+    let l2 = l * l;
+    let l3 = l * l2;
+    let lx3 = l * 3.0;
+    let l2x3 = l2 * 3.0;
+    let (q0b, q1b, q2b) = (q0 * q0, q1 * q1, q2 * q2);
+    let (q0c, q1c, q2c) = (q0b * q0, q1b * q1, q2b * q2);
+
+    let mut best = f64::INFINITY;
+    for [w0, w1, w2] in rows {
+        let c1 = q0c * w0 + q1c * w1 + q2c * w2;
+        let c2 = lx3 * (q0b * w0 + q1b * w1 + q2b * w2);
+        let c3 = l2x3 * (q0 * w0 + q1 * w1 + q2 * w2);
+        let c4 = l3 * (w0 + w1 + w2);
+
+        let at_half = ((c1 * 0.5 + c2) * 0.5 + c3) * 0.5 + c4;
+        let target = if (at_half - 1.0).abs() < at_half.abs() {
+            1.0
+        } else {
+            0.0
+        };
+        best = best.min(first_root_cubic_direct(c1, c2, c3, c4 - target, best));
+    }
+    best
+}
+
+#[inline(always)]
+fn first_root_cubic_direct(a: f64, mut b: f64, mut c: f64, mut d: f64, hi: f64) -> f64 {
+    let (aa, bb, cc, dd) = (a, b, c, d);
+    let mut r0 = f64::INFINITY;
+    let mut r1 = f64::INFINITY;
+    let mut r2 = f64::INFINITY;
+    if a.abs() < 1e-12 {
+        if b.abs() < 1e-12 {
+            if c.abs() >= 1e-12 {
+                r0 = -d / c;
+            }
+        } else {
+            let disc = c * c - 4.0 * b * d;
+            if disc >= 0.0 {
+                let s = disc.sqrt();
+                r0 = (-c + s) / (2.0 * b);
+                r1 = (-c - s) / (2.0 * b);
+            }
+        }
+    } else {
+        b /= a;
+        c /= a;
+        d /= a;
+        let p = c - b * b / 3.0;
+        let q = 2.0 * b * b * b / 27.0 - b * c / 3.0 + d;
+        let off = -b / 3.0;
+        let q_term = q * q / 4.0;
+        let p_term = p * p * p / 27.0;
+        let disc = q_term + p_term;
+        let disc_tolerance = f64::EPSILON * 32.0 * (q_term.abs() + p_term.abs());
+        if disc > disc_tolerance {
+            let s = disc.sqrt();
+            r0 = (-q / 2.0 + s).cbrt() + (-q / 2.0 - s).cbrt() + off;
+        } else if disc >= -disc_tolerance {
+            let u = (-q / 2.0).cbrt();
+            r0 = 2.0 * u + off;
+            r1 = -u + off;
+        } else {
+            let m = 2.0 * (-p / 3.0).sqrt();
+            let phi = (3.0 * q / (p * m)).clamp(-1.0, 1.0).acos();
+            r0 = m * (phi / 3.0).cos() + off;
+            r1 = m * ((phi - 2.0 * PI) / 3.0).cos() + off;
+            r2 = m * ((phi - 4.0 * PI) / 3.0).cos() + off;
+        }
+    }
+
+    let mut best = f64::INFINITY;
+    if r0 >= 0.0 && r0 <= hi {
+        best = r0;
+    }
+    if r1 >= 0.0 && r1 <= hi && r1 < best {
+        best = r1;
+    }
+    if r2 >= 0.0 && r2 <= hi && r2 < best {
+        best = r2;
+    }
+    for _ in 0..1 {
+        if !best.is_finite() {
+            break;
+        }
+        let derivative = (3.0 * aa * best + 2.0 * bb) * best + cc;
+        if derivative == 0.0 {
+            break;
+        }
+        let next = best - (((aa * best + bb) * best + cc) * best + dd) / derivative;
+        if next < 0.0 || next > hi {
+            break;
+        }
+        best = next;
+    }
+    best
+}
+
+struct OklchCubicDirect;
+
+impl OklchCubicDirect {
+    fn new() -> Self {
+        OklchCubicDirect
+    }
+
+    #[inline(always)]
+    fn map(&mut self, oklch: &[f64; 3], out: &mut [f64; 3]) {
+        self.map_impl(oklch, out, false);
+    }
+
+    #[inline(always)]
+    fn map_with_in_gamut_check(&mut self, oklch: &[f64; 3], out: &mut [f64; 3]) {
+        self.map_impl(oklch, out, true);
+    }
+
+    #[inline(always)]
+    fn map_impl(&mut self, oklch: &[f64; 3], out: &mut [f64; 3], check_in_gamut: bool) {
+        let (l, c, h) = (oklch[0], oklch[1], oklch[2]);
+        if l <= 0.0 || l >= 1.0 || c <= 0.0 {
+            let ll = if l <= 0.0 {
+                0.0
+            } else if l >= 1.0 {
+                1.0
+            } else {
+                l
+            };
+            oklch_to_clipped_p3(ll, 0.0, h, out);
+            return;
+        }
+        if check_in_gamut && oklch_to_p3_if_in_gamut(l, c, h, out) {
+            return;
+        }
+
+        let rad = h * PI / 180.0;
+        let (cos, sin) = (rad.cos(), rad.sin());
+        let q0 = KA0 * cos + KB0 * sin;
+        let q1 = KA1 * cos + KB1 * sin;
+        let q2 = KA2 * cos + KB2 * sin;
+        let mapped_c = c.min(max_chroma_cubic_direct(l, q0, q1, q2));
+
+        let l0 = l + mapped_c * q0;
+        let m0 = l + mapped_c * q1;
+        let s0 = l + mapped_c * q2;
+        let ll = l0 * l0 * l0;
+        let mm = m0 * m0 * m0;
+        let ss = s0 * s0 * s0;
+        out[0] = clamped_gamma(RL * ll + RM * mm + RS * ss);
+        out[1] = clamped_gamma(GL * ll + GM * mm + GS * ss);
+        out[2] = clamped_gamma(BL * ll + BM * mm + BS * ss);
+    }
+}
+
+// ── Method 5: oklch-halley ──────────────────────────────────────────────────
 
 // Bracketed Halley solve for the first Display-P3 channel boundary along a
 // constant-lightness, constant-hue chroma ray. Ported from color-js/apps#44.
@@ -756,7 +917,7 @@ impl OklchHalley {
     }
 }
 
-// ── Method 4b: oklch-ostrowski ──────────────────────────────────────────────
+// ── Method 6: oklch-ostrowski ───────────────────────────────────────────────
 
 // Bracketed Ostrowski solve proposed in the color-js/apps#44 follow-up. This
 // replaces Halley's second-derivative step with a Newton step followed by the
@@ -927,7 +1088,7 @@ impl OklchOstrowski {
     }
 }
 
-// ── Method 5: Bottosson constant lightness ───────────────────────────────────
+// ── Method 7: Bottosson constant lightness ──────────────────────────────────
 
 #[inline(always)]
 fn compute_max_saturation_p3(a: f64, b: f64) -> f64 {
@@ -1105,7 +1266,7 @@ impl BottossonLightness {
     }
 }
 
-// ── Method 5b: Bottosson constant lightness, cached ─────────────────────────
+// ── Method 7b: Bottosson constant lightness, cached ─────────────────────────
 // The cusp and the LMS' hue slopes depend only on hue, so they are memoized in
 // 0.1° buckets (same bucketed-hue semantics as oklch-cubic's hue structure).
 // Each bucket stores [cusp_l, cusp_c, q0, q1, q2] where q_i is the LMS' slope
@@ -1304,7 +1465,7 @@ impl BottossonLightnessCached {
     }
 }
 
-// ── Method 6: raytrace ───────────────────────────────────────────────────────
+// ── Method 8: raytrace ───────────────────────────────────────────────────────
 
 struct Raytrace;
 
@@ -1423,7 +1584,7 @@ impl Raytrace {
     }
 }
 
-// ── Method 7: edge-seeker ───────────────────────────────────────────────────
+// ── Method 9: edge-seeker ───────────────────────────────────────────────────
 // Reduce chroma to a precomputed LUT of the gamut edge. The lookup evaluates the
 // LUT at the exact normalized hue.
 
@@ -1789,6 +1950,15 @@ fn run_timings(label: &str, samples: &[[f64; 3]], warmup: usize, repeats: usize,
         time_method(warmup, repeats, samples, |s, o| cubic_no_cache.map(s, o))
     };
 
+    let mut cubic_direct = OklchCubicDirect::new();
+    let cubic_direct_ns = if check {
+        time_method(warmup, repeats, samples, |s, o| {
+            cubic_direct.map_with_in_gamut_check(s, o)
+        })
+    } else {
+        time_method(warmup, repeats, samples, |s, o| cubic_direct.map(s, o))
+    };
+
     let mut halley = OklchHalley::new();
     let halley_ns = if check {
         time_method(warmup, repeats, samples, |s, o| {
@@ -1856,6 +2026,7 @@ fn run_timings(label: &str, samples: &[[f64; 3]], warmup: usize, repeats: usize,
         ("clip", clip_ns),
         ("oklch-cubic (cached)", cubic_ns),
         ("oklch-cubic (no cache)", cubic_no_cache_ns),
+        ("oklch-cubic-direct", cubic_direct_ns),
         ("oklch-halley", halley_ns),
         ("oklch-ostrowski", ostrowski_ns),
         ("bottosson-lightness", bottosson_ns),
@@ -1912,6 +2083,7 @@ fn main() {
     // Checksums on the grid (for parity with the JS port).
     let mut cubic_cs = OklchCubic::new();
     let mut cubic_no_cache_cs = OklchCubicNoCache::new();
+    let mut cubic_direct_cs = OklchCubicDirect::new();
     let mut halley_cs = OklchHalley::new();
     let mut ostrowski_cs = OklchOstrowski::new();
     let mut bottosson_cs = BottossonLightness::new();
@@ -1921,6 +2093,7 @@ fn main() {
     let cs_clip = checksum(&grid, |c, o| clip(c, o));
     let cs_cubic = checksum(&grid, |c, o| cubic_cs.map(c, o));
     let cs_cubic_no_cache = checksum(&grid, |c, o| cubic_no_cache_cs.map(c, o));
+    let cs_cubic_direct = checksum(&grid, |c, o| cubic_direct_cs.map(c, o));
     let cs_halley = checksum(&grid, |c, o| halley_cs.map(c, o));
     let cs_ostrowski = checksum(&grid, |c, o| ostrowski_cs.map(c, o));
     let cs_bottosson = checksum(&grid, |c, o| bottosson_cs.map(c, o));
@@ -1931,6 +2104,7 @@ fn main() {
     println!("  clip                 {:.10}", cs_clip);
     println!("  oklch-cubic-cached   {:.10}", cs_cubic);
     println!("  oklch-cubic-nocache  {:.10}", cs_cubic_no_cache);
+    println!("  oklch-cubic-direct   {:.10}", cs_cubic_direct);
     println!("  oklch-halley         {:.10}", cs_halley);
     println!("  oklch-ostrowski      {:.10}", cs_ostrowski);
     println!("  bottosson-lightness  {:.10}", cs_bottosson);
@@ -1955,6 +2129,13 @@ fn main() {
             samples,
             |c, o| cubic_no_cache_eq.map(c, o),
             |c, o| cubic_no_cache_checked_eq.map_with_in_gamut_check(c, o),
+        );
+        let mut cubic_direct_eq = OklchCubicDirect::new();
+        let mut cubic_direct_checked_eq = OklchCubicDirect::new();
+        let cubic_direct_check_diff = max_channel_diff(
+            samples,
+            |c, o| cubic_direct_eq.map(c, o),
+            |c, o| cubic_direct_checked_eq.map_with_in_gamut_check(c, o),
         );
         let mut halley_eq = OklchHalley::new();
         let mut halley_checked_eq = OklchHalley::new();
@@ -2008,6 +2189,7 @@ fn main() {
         max_diff = max_diff
             .max(cubic_check_diff)
             .max(cubic_no_cache_check_diff)
+            .max(cubic_direct_check_diff)
             .max(halley_check_diff)
             .max(ostrowski_check_diff)
             .max(bottosson_check_diff)
@@ -2040,6 +2222,24 @@ fn main() {
     println!(
         "equivalence: oklch-cubic cached/no-cache max channel diff {} (grid + random)\n",
         cubic_no_cache_max_diff
+    );
+
+    let mut cubic_direct_eq = OklchCubicDirect::new();
+    let mut cubic_exact_eq = OklchCubicNoCache::new();
+    let cubic_direct_diff = max_channel_diff(
+        &grid,
+        |c, o| cubic_direct_eq.map(c, o),
+        |c, o| cubic_exact_eq.map(c, o),
+    );
+    if cubic_direct_diff > 5e-8 {
+        panic!(
+            "oklch-cubic-direct differs from the exact cubic boundary: max channel diff {}",
+            cubic_direct_diff
+        );
+    }
+    println!(
+        "equivalence: oklch-cubic-direct/cubic max channel diff {:.2e} (exact grid hues)\n",
+        cubic_direct_diff
     );
 
     let mut halley_eq = OklchHalley::new();
@@ -2076,6 +2276,24 @@ fn main() {
     println!(
         "equivalence: oklch-ostrowski/cubic max channel diff {:.2e} (exact grid hues)\n",
         ostrowski_cubic_diff
+    );
+
+    let mut cubic_direct_eq = OklchCubicDirect::new();
+    let mut halley_exact_eq = OklchHalley::new();
+    let direct_halley_diff = max_channel_diff(
+        &random,
+        |c, o| cubic_direct_eq.map(c, o),
+        |c, o| halley_exact_eq.map(c, o),
+    );
+    if direct_halley_diff > 5e-8 {
+        panic!(
+            "oklch-cubic-direct differs from Halley on random exact hues: max channel diff {}",
+            direct_halley_diff
+        );
+    }
+    println!(
+        "equivalence: oklch-cubic-direct/Halley max channel diff {:.2e} (random exact hues)\n",
+        direct_halley_diff
     );
 
     // The cached bottosson variant evaluates the hue-dependent structure at the

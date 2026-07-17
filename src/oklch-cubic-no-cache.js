@@ -10,6 +10,10 @@ import {
 
 const HUE_SCALE = 10;
 
+// Cardano solver for the hue-normalized t = C/L polynomials used below. Its
+// fixed discriminant band is part of the existing cubic's numerical behavior.
+// The direct cubic must not reuse it unchanged: once L, L², and L³ are folded
+// into the coefficients, valid discriminants can fall inside this fixed band.
 function firstRootNoCache (a, b, c, d, lo, hi) {
 	let r0 = Infinity, r1 = Infinity, r2 = Infinity;
 
