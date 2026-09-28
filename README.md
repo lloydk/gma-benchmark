@@ -74,6 +74,11 @@ and the clipped Display-P3 result is written into the reused 3-vector `out` — 
 the benchmark measures the algorithm and conversion with **zero per-call
 allocation**.
 
+Each timed loop consumes all three encoded output channels for every color.
+The JS harness prints its accumulated checksum after timing; Rust uses
+`black_box` on each pass's input slice and complete checksum. Consuming only
+red allowed Rust to eliminate green/blue output conversion and transfer functions.
+
 ## Running
 
 ```sh

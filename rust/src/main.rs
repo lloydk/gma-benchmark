@@ -1863,22 +1863,22 @@ fn build_random(n: usize) -> Vec<[f64; 3]> {
 }
 
 fn time_pass(warmup: usize, repeats: usize, n: usize, mut pass: impl FnMut() -> f64) -> f64 {
-    let mut s = 0.0;
     for _ in 0..warmup {
-        s += pass();
+        black_box(pass());
     }
     let mut times = Vec::with_capacity(repeats);
     for _ in 0..repeats {
         let t0 = Instant::now();
-        s += pass();
+        // Consume this pass before stopping the clock, not just after all passes.
+        black_box(pass());
         times.push(t0.elapsed().as_nanos() as f64 / n as f64);
     }
-    black_box(s);
     times.sort_by(|a, b| a.partial_cmp(b).unwrap());
     times[times.len() / 2]
 }
 
-// Checksum (sum of all output channels) for cross-validation against JS.
+// Shared by validation and timing: every channel of every color must be live.
+// A red-only sink lets LLVM remove the green/blue conversion and gamma encodes.
 fn checksum(samples: &[[f64; 3]], mut f: impl FnMut(&[f64; 3], &mut [f64; 3])) -> f64 {
     let mut out = [0.0; 3];
     let mut s = 0.0;
@@ -1917,13 +1917,7 @@ fn time_method(
     mut map: impl FnMut(&[f64; 3], &mut [f64; 3]),
 ) -> f64 {
     time_pass(warmup, repeats, samples.len(), || {
-        let mut out = [0.0; 3];
-        let mut sink = 0.0;
-        for s in samples {
-            map(s, &mut out);
-            sink += out[0];
-        }
-        sink
+        checksum(black_box(samples), &mut map)
     })
 }
 

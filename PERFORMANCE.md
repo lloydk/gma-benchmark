@@ -1,5 +1,14 @@
 # Performance analysis
 
+**Timing correction (2026-09-28):** the checked-in Rust timing loop consumed
+only the red output channel. Release assembly confirms that LLVM removed
+green/blue conversion and gamma encoding from the `clip` timing path. Both
+Rust and JS timing harnesses now consume all three channels. The historical
+measurements below predate this fix, and their one-off harnesses are not
+available here to audit. Treat their timings and runtime ratios as unverified
+until remeasured with complete output consumption; the tables have not been
+refreshed by this correction.
+
 A deep dive into where each gamut-mapping method spends its time, how the two
 sides of the gamut cusp differ, and how the three runtimes (Rust, Node/V8,
 Bun/JavaScriptCore) compare. All numbers were measured on the same machine;

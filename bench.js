@@ -121,6 +121,7 @@ const methods = inGamutCheck ? [
 ];
 
 const out = [0, 0, 0];
+// Keep every channel of every mapped color observable in the timed loops.
 let sink = 0;
 
 // Sanity: every method must yield an in-gamut Display-P3 color.
@@ -309,7 +310,7 @@ summary(() => {
 		bench(name, () => {
 			for (let i = 0; i < n; i++) {
 				fn(samples[i], out);
-				sink += out[0];
+				sink += out[0] + out[1] + out[2];
 			}
 		});
 	}
@@ -321,7 +322,7 @@ summary(() => {
 		bench(`${name} (random hues)`, () => {
 			for (let i = 0; i < randomSamples.length; i++) {
 				fn(randomSamples[i], out);
-				sink += out[0];
+				sink += out[0] + out[1] + out[2];
 			}
 		});
 	}
@@ -330,5 +331,6 @@ summary(() => {
 await run();
 
 if (!Number.isFinite(sink)) {
-	console.log("sink", sink);
+	throw new Error(`non-finite benchmark checksum: ${sink}`);
 }
+console.log(`benchmark checksum: ${sink}`);
