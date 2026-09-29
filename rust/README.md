@@ -6,10 +6,11 @@ hue/lightness workload (stratified/jittered, shuffled).
 
 ## `gma-bench` — scalar, apples-to-apples
 
-One color per call, same algorithms and same f64 conversion math as the JS
-methods. Anchors "how much of the JS cost is the language/JIT vs the work."
-The edge-seeker LUT is generated once by JS and embedded as `src/lut.rs`, so
-only the per-call runtime is ported (the LUT build is irrelevant to timing).
+One color per call, with native f64 and f32 implementations of all 11 methods.
+Every invocation prints validation, both precisions' checksums, then four
+sorted timing tables: f64 grid/random and f32 grid/random. No precision flag
+is needed. `--in-gamut-check` selects the prechecked path in both precisions.
+The f64 lane uses the same conversion math as the JS methods.
 
 ```sh
 RUSTFLAGS="-C target-cpu=native" cargo build --release --bin gma-bench
@@ -19,10 +20,58 @@ RUSTFLAGS="-C target-cpu=native" cargo build --release --bin gma-bench
 ./target/release/gma-bench --in-gamut-check
 ```
 
-It prints checksums (sum of all output channels) that match the JS port:
+The f64 checksums (sum of all output channels) match the JS port:
 `clip` and `edge-seeker` bit-for-bit, and the cubic variants to a few last-place
 digits (from cbrt/acos libm differences). `oklch-cubic-direct` currently matches
 across JS and Rust to all 10 printed decimal places.
+
+The f64 timing inputs retain their original values. The f32 inputs are rounded
+once before timing. Every mapper, intermediate, cache entry, LUT value, and
+transcendental in the f32 lane uses f32; there is no f64 solver fallback. Only
+the output checksum and timing statistics use f64. Widening all three f32
+output channels for the checksum is included in the timed region. Both lanes
+use 50 warmup passes and 25 measured passes over 35,640 colors per workload.
+
+`algorithms.rs` and `timings.rs` are compiled twice with concrete scalar aliases.
+The Edge Seeker LUT in `lut.rs` is likewise stored separately at each precision.
+`methods.rs` supplies one method list for both lanes and validation. This keeps
+the algorithms and benchmark coverage aligned without copying implementations
+or generating code by string replacement.
+
+`conditioning.rs` contains the f32 numerical adjustments, selected at compile
+time: stationary-interval validation and bisection recovery for Cardano roots,
+a rationalized Edge Seeker arc, sign-directed Raytrace intersections with a
+representable interior margin, and f32 convergence/stagnation checks. Hues
+outside one turn are reduced before f32 trigonometry to avoid overflow.
+The f64 lane retains its existing arithmetic and stopping thresholds.
+
+The direct-cubic wrapper evaluates its coefficient array before the candidate
+and leaves inlining to LLVM. Controlled native builds found both choices
+improve f32 timing; the uncached cubic wrapper benefits from forced inlining
+and retains it. These choices affect code generation without changing solver
+arithmetic, convergence thresholds, or recovery paths.
+
+Before timing, both mapper modes are compared on identical f32-rounded inputs
+(widened to f64 for the reference), and every output is checked for finiteness
+and gamut membership. The printed errors are maximum absolute encoded-channel
+differences. Regression limits are `1e-4` for clip, direct cubic, Halley,
+Ostrowski, and both Edge Seeker variants; `2e-4` for Raytrace; `1e-3` for
+Bottosson; and `2e-3` for the hue-quantized cubic/Bottosson variants. Rounding
+can choose adjacent 0.1-degree buckets, so these variants have a separate
+comparison budget. These are corpus regression limits, not universal accuracy
+guarantees or claims that f32 reproduces f64 bit for bit.
+
+Run the numerical tests with:
+
+```sh
+RUSTFLAGS="-C target-cpu=native" cargo test --release
+```
+
+Tests also cover mixed chroma, in-gamut colors, cache equivalence, native f32
+storage, extreme hues/endpoints, and known cancellation/stagnation regressions.
+An independent f64 stationary-interval/bisection oracle checks the exact-hue
+solvers near boundaries and the cached cubics at their selected bucket hue.
+Both precision lanes have regression tests for complete output consumption.
 
 The timed passes use the same all-channel checksum as validation. Each pass's
 input slice goes through `black_box`, and its checksum is consumed through
@@ -36,6 +85,8 @@ an AMD Ryzen 7 9800X3D: the old timed `clip` loop contains only the red matrix
 row and its gamma branch. The corrected pass contains all three matrix rows,
 three gamma branches, and an RGB sum feeding the consumed checksum. The
 checksum barrier appears before `Instant::elapsed` in the generated code.
+The native f32 timed `clip` pass was also inspected: it uses single-precision
+arithmetic, `sincosf`/`powf`, and retains all three gamma branches.
 This is a check of that build; [`black_box`](https://doc.rust-lang.org/std/hint/fn.black_box.html)
 is a best-effort compiler barrier. To emit assembly for inspection:
 

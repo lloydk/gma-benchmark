@@ -1,6 +1,7 @@
 // Auto-generated from the JS edge-seeker LUT build (makeLut, 400 slices).
 // Each row: [l, c, h, curvature], sorted ascending by hue.
-pub const LUT: [[f64; 4]; 710] = [
+// Float is the containing module's concrete f64 or f32 type.
+pub const LUT: [[Float; 4]; 710] = [
     [
         0.6704305142436303,
         0.30599006813471674,

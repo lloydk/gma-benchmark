@@ -88,7 +88,35 @@ npm run bench:bun
 
 # time the in-gamut-precheck variant of every method instead:
 npm run bench -- --in-gamut-check
+
+# correctness checks only (Node; also supported by bench:bun):
+npm run bench -- --validate-only
+
+# compare the default 50 warmup passes with a larger budget:
+npm run bench -- --warmup 100
 ```
+
+Both npm commands, `node bench.js`, and `bun bench.js` validate in one process
+and then launch a fresh process for timing. A validation failure stops the run.
+Node timing children use `--expose-gc`; Bun uses its native GC support.
+
+Before each method/workload measurement, the timing process runs **50 complete
+warmup passes** through the exact callback that Mitata will measure. These
+passes consume all three output channels and use the selected checked/unchecked
+mode and dataset. Warmup happens in Mitata's generator setup, outside the timer;
+the printed checksum includes warmup and measurement. This measures warmed
+throughput, including populated lookup caches, rather than startup or first-call
+latency. Correctness checks cannot alter the timing process's call history.
+
+`--warmup N` selects a positive integer number of complete passes. The diagnostic
+`--timing-only` option skips validation, but retains explicit warmup; use it only
+after separately validating the same sources. It cannot be combined with
+`--validate-only`. Direct Node timing-only invocations should include
+`--expose-gc`, as the npm command does. For comparisons, use identical warmup
+budgets, modes, method order, and runtime flags. Alternate fresh-process runs
+and report the median and spread. Recheck the warmup budget by doubling it when
+changing runtimes, workloads, or the harness. Earlier results collected with
+in-process validation or implicit warmup use a different preparation path.
 
 Uses [mitata](https://github.com/evanwashere/mitata) for benchmarking. Each method runs over
 two 35,640-color workloads. The first matches color.js-org's gamut-mapping
@@ -136,10 +164,12 @@ a guarantee of how a method will perform in your application.
 
 ## Rust benchmark
 
-A scalar Rust implementation lives in [`rust/`](rust/). It ports the same
-one-color-at-a-time algorithms and f64 conversion math over the same two
-35,640-color workloads, giving a native baseline for how much of the JS timing is
-runtime/JIT overhead versus the algorithmic work itself. See
+A scalar Rust implementation lives in [`rust/`](rust/). Every method has native
+f64 and f32 implementations. Running `gma-bench` prints both precisions over
+the same two 35,640-color workloads, with separate grid and random timing
+tables for each. The existing `--in-gamut-check` option applies to both.
+This gives a native baseline for how much of the JS timing is runtime/JIT
+overhead versus the algorithmic work itself. See
 [`rust/README.md`](rust/README.md) for build commands.
 
 ## Conversions

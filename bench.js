@@ -3,8 +3,12 @@
 // L = 0.99..0.01 step 0.01. Each method takes [L, C, H] and writes the clipped
 // Display-P3 result into a reused 3-vector (no allocation per call).
 //
-//   npm run bench   (or: node bench.js)
+//   npm run bench   (or: node bench.js / bun bench.js)
+//   Validation and timing run in separate processes by default.
 
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
 import { bench, run, summary } from "mitata";
 
 import { clip } from "./src/clip.js";
@@ -16,6 +20,45 @@ import { oklchOstrowski } from "./src/oklch-ostrowski.js";
 import { bottossonLightness, bottossonLightnessCached } from "./src/bottosson-lightness.js";
 import { edgeSeeker, edgeSeekerIndexed } from "./src/edge-seeker/index.js";
 import { raytrace } from "./src/raytrace.js";
+
+const { values } = parseArgs({ options: {
+	"in-gamut-check": { type: "boolean", default: false },
+	"validate-only": { type: "boolean", default: false },
+	"timing-only": { type: "boolean", default: false },
+	warmup: { type: "string", default: "50" },
+} });
+const validateOnly = values["validate-only"];
+const timingOnly = values["timing-only"];
+const inGamutCheck = values["in-gamut-check"];
+const warmup = Number(values.warmup);
+if (validateOnly && timingOnly) {
+	throw new Error("--validate-only and --timing-only are mutually exclusive");
+}
+if (!/^\d+$/.test(values.warmup) || !Number.isSafeInteger(warmup) || warmup < 1) {
+	throw new Error("--warmup must be a positive safe integer (complete workload passes)");
+}
+
+// Never let validation's checked/unchecked calls or rare probes prepare the
+// timing process. Direct invocations and npm scripts use the same entry point.
+if (!validateOnly && !timingOnly) {
+	const flags = process.versions.bun ? [] : ["--expose-gc"];
+	const script = fileURLToPath(import.meta.url);
+	const args = ["--warmup", String(warmup)];
+	if (inGamutCheck) args.push("--in-gamut-check");
+	for (const mode of ["--validate-only", "--timing-only"]) {
+		console.log(mode === "--validate-only"
+			? "Validating in a separate process..."
+			: "Validation passed; starting a fresh timing process...");
+		const result = spawnSync(process.execPath, [...flags, script, ...args, mode], { stdio: "inherit" });
+		if (result.error) throw result.error;
+		if (result.signal) {
+			process.kill(process.pid, result.signal);
+			process.exit(1);
+		}
+		if (result.status !== 0) process.exit(result.status ?? 1);
+	}
+	process.exit(0);
+}
 
 const CHROMA = 0.4;
 const HUE_STEP = 1;
@@ -91,7 +134,6 @@ const raytraceChecked = (oklch, out) => raytrace(oklch, out, true);
 
 // `--in-gamut-check` runs the in-gamut-precheck variant of every method instead
 // of the plain one, so a run shows one mode at a time rather than both mixed.
-const inGamutCheck = process.argv.slice(2).includes("--in-gamut-check");
 console.log(`in-gamut precheck: ${inGamutCheck ? "ENABLED (--in-gamut-check)" : "disabled (pass --in-gamut-check to enable)"}\n`);
 
 const methods = inGamutCheck ? [
@@ -124,211 +166,226 @@ const out = [0, 0, 0];
 // Keep every channel of every mapped color observable in the timed loops.
 let sink = 0;
 
-// Sanity: every method must yield an in-gamut Display-P3 color.
-const inGamut = v => v[0] >= -1e-6 && v[0] <= 1 + 1e-6 && v[1] >= -1e-6 && v[1] <= 1 + 1e-6 && v[2] >= -1e-6 && v[2] <= 1 + 1e-6;
-for (const [name, fn] of methods) {
-	for (const dataset of [samples, randomSamples]) {
-		for (const s of dataset) {
-			fn(s, out);
-			if (!inGamut(out)) {
-				throw new Error(`${name} produced out-of-gamut P3 at oklch(${s.join(" ")}) -> ${out.join(" ")}`);
-			}
-		}
-	}
-}
-console.log("sanity: all methods produce in-gamut Display-P3 ✓\n");
-
-const uncheckedOut = [0, 0, 0];
-const checkedOut = [0, 0, 0];
-let maxCheckedDiff = 0;
-let maxCheckedSample = null;
-let maxCheckedDataset = null;
-for (const [unchecked, checked] of [
-	[oklchCubic, oklchCubicChecked],
-	[oklchCubicNoCache, oklchCubicNoCacheChecked],
-	[oklchCubicDirect, oklchCubicDirectChecked],
-	[oklchHalley, oklchHalleyChecked],
-	[oklchOstrowski, oklchOstrowskiChecked],
-	[bottossonLightness, bottossonLightnessChecked],
-	[bottossonLightnessCached, bottossonLightnessCachedChecked],
-	[edgeSeeker, edgeSeekerChecked],
-	[edgeSeekerIndexed, edgeSeekerIndexedChecked],
-	[raytrace, raytraceChecked],
-]) {
-	for (const [label, dataset] of [["grid", samples], ["random", randomSamples]]) {
-		for (const s of dataset) {
-			unchecked(s, uncheckedOut);
-			checked(s, checkedOut);
-			for (let i = 0; i < 3; i++) {
-				const diff = Math.abs(uncheckedOut[i] - checkedOut[i]);
-				if (diff > maxCheckedDiff) {
-					maxCheckedDiff = diff;
-					maxCheckedSample = s;
-					maxCheckedDataset = label;
+if (validateOnly) {
+	// Sanity: every method must yield an in-gamut Display-P3 color.
+	const inGamut = v => v[0] >= -1e-6 && v[0] <= 1 + 1e-6 && v[1] >= -1e-6 && v[1] <= 1 + 1e-6 && v[2] >= -1e-6 && v[2] <= 1 + 1e-6;
+	for (const [name, fn] of methods) {
+		for (const dataset of [samples, randomSamples]) {
+			for (const s of dataset) {
+				fn(s, out);
+				if (!inGamut(out)) {
+					throw new Error(`${name} produced out-of-gamut P3 at oklch(${s.join(" ")}) -> ${out.join(" ")}`);
 				}
 			}
 		}
 	}
-}
-if (maxCheckedDiff > 1e-12) {
-	throw new Error(`in-gamut check variants differ on the ${maxCheckedDataset} workload: max channel diff ${maxCheckedDiff} at oklch(${maxCheckedSample.join(" ")})`);
-}
-console.log(`equivalence: unchecked/in-gamut-check max channel diff ${maxCheckedDiff} (grid + random)\n`);
+	console.log("sanity: all methods produce in-gamut Display-P3 ✓\n");
 
-let maxCubicNoCacheDiff = 0;
-let maxCubicNoCacheSample = null;
-let maxCubicNoCacheDataset = null;
-for (const [label, dataset] of [["grid", samples], ["random", randomSamples]]) {
-	for (const s of dataset) {
-		oklchCubic(s, uncheckedOut);
-		oklchCubicNoCache(s, checkedOut);
-		for (let i = 0; i < 3; i++) {
-			const diff = Math.abs(uncheckedOut[i] - checkedOut[i]);
-			if (diff > maxCubicNoCacheDiff) {
-				maxCubicNoCacheDiff = diff;
-				maxCubicNoCacheSample = s;
-				maxCubicNoCacheDataset = label;
+	const uncheckedOut = [0, 0, 0];
+	const checkedOut = [0, 0, 0];
+	let maxCheckedDiff = 0;
+	let maxCheckedSample = null;
+	let maxCheckedDataset = null;
+	for (const [unchecked, checked] of [
+		[oklchCubic, oklchCubicChecked],
+		[oklchCubicNoCache, oklchCubicNoCacheChecked],
+		[oklchCubicDirect, oklchCubicDirectChecked],
+		[oklchHalley, oklchHalleyChecked],
+		[oklchOstrowski, oklchOstrowskiChecked],
+		[bottossonLightness, bottossonLightnessChecked],
+		[bottossonLightnessCached, bottossonLightnessCachedChecked],
+		[edgeSeeker, edgeSeekerChecked],
+		[edgeSeekerIndexed, edgeSeekerIndexedChecked],
+		[raytrace, raytraceChecked],
+	]) {
+		for (const [label, dataset] of [["grid", samples], ["random", randomSamples]]) {
+			for (const s of dataset) {
+				unchecked(s, uncheckedOut);
+				checked(s, checkedOut);
+				for (let i = 0; i < 3; i++) {
+					const diff = Math.abs(uncheckedOut[i] - checkedOut[i]);
+					if (diff > maxCheckedDiff) {
+						maxCheckedDiff = diff;
+						maxCheckedSample = s;
+						maxCheckedDataset = label;
+					}
+				}
 			}
 		}
 	}
-}
-if (maxCubicNoCacheDiff > 1e-12) {
-	throw new Error(`oklch-cubic no-cache differs on the ${maxCubicNoCacheDataset} workload: max channel diff ${maxCubicNoCacheDiff} at oklch(${maxCubicNoCacheSample.join(" ")})`);
-}
-console.log(`equivalence: oklch-cubic cached/no-cache max channel diff ${maxCubicNoCacheDiff} (grid + random)\n`);
+	if (maxCheckedDiff > 1e-12) {
+		throw new Error(`in-gamut check variants differ on the ${maxCheckedDataset} workload: max channel diff ${maxCheckedDiff} at oklch(${maxCheckedSample.join(" ")})`);
+	}
+	console.log(`equivalence: unchecked/in-gamut-check max channel diff ${maxCheckedDiff} (grid + random)\n`);
 
-// The direct cubic and iterative methods find the exact constant-L/H P3
-// boundary. The grid uses exact bucket-center hues, so the existing no-cache
-// cubic is a closed-form reference. Iterative stopping thresholds can be
-// amplified slightly by the transfer function near black.
-for (const [name, fn, tolerance] of [
-	["oklch-cubic-direct", oklchCubicDirect, 5e-8],
-	["oklch-halley", oklchHalley, 2e-8],
-	["oklch-ostrowski", oklchOstrowski, 5e-8],
-]) {
-	let maxCubicDiff = 0;
-	let maxCubicSample = null;
+	let maxCubicNoCacheDiff = 0;
+	let maxCubicNoCacheSample = null;
+	let maxCubicNoCacheDataset = null;
+	for (const [label, dataset] of [["grid", samples], ["random", randomSamples]]) {
+		for (const s of dataset) {
+			oklchCubic(s, uncheckedOut);
+			oklchCubicNoCache(s, checkedOut);
+			for (let i = 0; i < 3; i++) {
+				const diff = Math.abs(uncheckedOut[i] - checkedOut[i]);
+				if (diff > maxCubicNoCacheDiff) {
+					maxCubicNoCacheDiff = diff;
+					maxCubicNoCacheSample = s;
+					maxCubicNoCacheDataset = label;
+				}
+			}
+		}
+	}
+	if (maxCubicNoCacheDiff > 1e-12) {
+		throw new Error(`oklch-cubic no-cache differs on the ${maxCubicNoCacheDataset} workload: max channel diff ${maxCubicNoCacheDiff} at oklch(${maxCubicNoCacheSample.join(" ")})`);
+	}
+	console.log(`equivalence: oklch-cubic cached/no-cache max channel diff ${maxCubicNoCacheDiff} (grid + random)\n`);
+
+	// The direct cubic and iterative methods find the exact constant-L/H P3
+	// boundary. The grid uses exact bucket-center hues, so the existing no-cache
+	// cubic is a closed-form reference. Iterative stopping thresholds can be
+	// amplified slightly by the transfer function near black.
+	for (const [name, fn, tolerance] of [
+		["oklch-cubic-direct", oklchCubicDirect, 5e-8],
+		["oklch-halley", oklchHalley, 2e-8],
+		["oklch-ostrowski", oklchOstrowski, 5e-8],
+	]) {
+		let maxCubicDiff = 0;
+		let maxCubicSample = null;
+		for (const s of samples) {
+			fn(s, uncheckedOut);
+			oklchCubicNoCache(s, checkedOut);
+			for (let i = 0; i < 3; i++) {
+				const diff = Math.abs(uncheckedOut[i] - checkedOut[i]);
+				if (diff > maxCubicDiff) {
+					maxCubicDiff = diff;
+					maxCubicSample = s;
+				}
+			}
+		}
+		if (maxCubicDiff > tolerance) {
+			throw new Error(`${name} differs from the exact cubic boundary: max channel diff ${maxCubicDiff} at oklch(${maxCubicSample.join(" ")})`);
+		}
+		console.log(`equivalence: ${name}/cubic max channel diff ${maxCubicDiff.toExponential(2)} (exact grid hues)`);
+	}
+	console.log();
+
+	let maxDirectHalleyDiff = 0;
+	let maxDirectHalleySample = null;
+	for (const s of randomSamples) {
+		oklchCubicDirect(s, uncheckedOut);
+		oklchHalley(s, checkedOut);
+		for (let i = 0; i < 3; i++) {
+			const diff = Math.abs(uncheckedOut[i] - checkedOut[i]);
+			if (diff > maxDirectHalleyDiff) {
+				maxDirectHalleyDiff = diff;
+				maxDirectHalleySample = s;
+			}
+		}
+	}
+	if (maxDirectHalleyDiff > 5e-8) {
+		throw new Error(`oklch-cubic-direct differs from Halley on random exact hues: max channel diff ${maxDirectHalleyDiff} at oklch(${maxDirectHalleySample.join(" ")})`);
+	}
+	console.log(`equivalence: oklch-cubic-direct/Halley max channel diff ${maxDirectHalleyDiff.toExponential(2)} (random exact hues)\n`);
+
+	// The cached bottosson variant evaluates the hue-dependent structure (cusp +
+	// LMS' slopes) at the 0.1° bucket hue. On the grid the integer hues hit bucket
+	// centers exactly, so it must match the exact method to float noise; on random
+	// fractional hues the difference is bounded by the hue quantization.
+	let maxBottossonCachedGridDiff = 0;
+	let maxBottossonCachedGridSample = null;
 	for (const s of samples) {
-		fn(s, uncheckedOut);
-		oklchCubicNoCache(s, checkedOut);
+		bottossonLightness(s, uncheckedOut);
+		bottossonLightnessCached(s, checkedOut);
 		for (let i = 0; i < 3; i++) {
 			const diff = Math.abs(uncheckedOut[i] - checkedOut[i]);
-			if (diff > maxCubicDiff) {
-				maxCubicDiff = diff;
-				maxCubicSample = s;
+			if (diff > maxBottossonCachedGridDiff) {
+				maxBottossonCachedGridDiff = diff;
+				maxBottossonCachedGridSample = s;
 			}
 		}
 	}
-	if (maxCubicDiff > tolerance) {
-		throw new Error(`${name} differs from the exact cubic boundary: max channel diff ${maxCubicDiff} at oklch(${maxCubicSample.join(" ")})`);
+	if (maxBottossonCachedGridDiff > 1e-12) {
+		throw new Error(`bottosson cached differs on bucket-exact grid hues: max channel diff ${maxBottossonCachedGridDiff} at oklch(${maxBottossonCachedGridSample.join(" ")})`);
 	}
-	console.log(`equivalence: ${name}/cubic max channel diff ${maxCubicDiff.toExponential(2)} (exact grid hues)`);
-}
-console.log();
-
-let maxDirectHalleyDiff = 0;
-let maxDirectHalleySample = null;
-for (const s of randomSamples) {
-	oklchCubicDirect(s, uncheckedOut);
-	oklchHalley(s, checkedOut);
-	for (let i = 0; i < 3; i++) {
-		const diff = Math.abs(uncheckedOut[i] - checkedOut[i]);
-		if (diff > maxDirectHalleyDiff) {
-			maxDirectHalleyDiff = diff;
-			maxDirectHalleySample = s;
-		}
-	}
-}
-if (maxDirectHalleyDiff > 5e-8) {
-	throw new Error(`oklch-cubic-direct differs from Halley on random exact hues: max channel diff ${maxDirectHalleyDiff} at oklch(${maxDirectHalleySample.join(" ")})`);
-}
-console.log(`equivalence: oklch-cubic-direct/Halley max channel diff ${maxDirectHalleyDiff.toExponential(2)} (random exact hues)\n`);
-
-// The cached bottosson variant evaluates the hue-dependent structure (cusp +
-// LMS' slopes) at the 0.1° bucket hue. On the grid the integer hues hit bucket
-// centers exactly, so it must match the exact method to float noise; on random
-// fractional hues the difference is bounded by the hue quantization.
-let maxBottossonCachedGridDiff = 0;
-let maxBottossonCachedGridSample = null;
-for (const s of samples) {
-	bottossonLightness(s, uncheckedOut);
-	bottossonLightnessCached(s, checkedOut);
-	for (let i = 0; i < 3; i++) {
-		const diff = Math.abs(uncheckedOut[i] - checkedOut[i]);
-		if (diff > maxBottossonCachedGridDiff) {
-			maxBottossonCachedGridDiff = diff;
-			maxBottossonCachedGridSample = s;
-		}
-	}
-}
-if (maxBottossonCachedGridDiff > 1e-12) {
-	throw new Error(`bottosson cached differs on bucket-exact grid hues: max channel diff ${maxBottossonCachedGridDiff} at oklch(${maxBottossonCachedGridSample.join(" ")})`);
-}
-let maxBottossonCachedRandomDiff = 0;
-let maxBottossonCachedRandomSample = null;
-for (const s of randomSamples) {
-	bottossonLightness(s, uncheckedOut);
-	bottossonLightnessCached(s, checkedOut);
-	for (let i = 0; i < 3; i++) {
-		const diff = Math.abs(uncheckedOut[i] - checkedOut[i]);
-		if (diff > maxBottossonCachedRandomDiff) {
-			maxBottossonCachedRandomDiff = diff;
-			maxBottossonCachedRandomSample = s;
-		}
-	}
-}
-if (maxBottossonCachedRandomDiff > 0.05) {
-	throw new Error(`bottosson cached exceeds the hue-quantization bound on random hues: max channel diff ${maxBottossonCachedRandomDiff} at oklch(${maxBottossonCachedRandomSample.join(" ")})`);
-}
-console.log(`equivalence: bottosson cached/exact max channel diff ${maxBottossonCachedGridDiff} (grid, bucket-exact hues), ${maxBottossonCachedRandomDiff.toExponential(2)} (random, 0.1° hue quantization)\n`);
-
-let maxIndexedDiff = 0;
-let maxIndexedSample = null;
-let maxIndexedDataset = null;
-for (const [label, dataset] of [["grid", samples], ["random", randomSamples]]) {
-	for (const s of dataset) {
-		edgeSeeker(s, uncheckedOut);
-		edgeSeekerIndexed(s, checkedOut);
+	let maxBottossonCachedRandomDiff = 0;
+	let maxBottossonCachedRandomSample = null;
+	for (const s of randomSamples) {
+		bottossonLightness(s, uncheckedOut);
+		bottossonLightnessCached(s, checkedOut);
 		for (let i = 0; i < 3; i++) {
 			const diff = Math.abs(uncheckedOut[i] - checkedOut[i]);
-			if (diff > maxIndexedDiff) {
-				maxIndexedDiff = diff;
-				maxIndexedSample = s;
-				maxIndexedDataset = label;
+			if (diff > maxBottossonCachedRandomDiff) {
+				maxBottossonCachedRandomDiff = diff;
+				maxBottossonCachedRandomSample = s;
 			}
 		}
 	}
+	if (maxBottossonCachedRandomDiff > 0.05) {
+		throw new Error(`bottosson cached exceeds the hue-quantization bound on random hues: max channel diff ${maxBottossonCachedRandomDiff} at oklch(${maxBottossonCachedRandomSample.join(" ")})`);
+	}
+	console.log(`equivalence: bottosson cached/exact max channel diff ${maxBottossonCachedGridDiff} (grid, bucket-exact hues), ${maxBottossonCachedRandomDiff.toExponential(2)} (random, 0.1° hue quantization)\n`);
+
+	let maxIndexedDiff = 0;
+	let maxIndexedSample = null;
+	let maxIndexedDataset = null;
+	for (const [label, dataset] of [["grid", samples], ["random", randomSamples]]) {
+		for (const s of dataset) {
+			edgeSeeker(s, uncheckedOut);
+			edgeSeekerIndexed(s, checkedOut);
+			for (let i = 0; i < 3; i++) {
+				const diff = Math.abs(uncheckedOut[i] - checkedOut[i]);
+				if (diff > maxIndexedDiff) {
+					maxIndexedDiff = diff;
+					maxIndexedSample = s;
+					maxIndexedDataset = label;
+				}
+			}
+		}
+	}
+	if (maxIndexedDiff !== 0) {
+		throw new Error(`edge-seeker indexed differs on the ${maxIndexedDataset} workload: max channel diff ${maxIndexedDiff} at oklch(${maxIndexedSample.join(" ")})`);
+	}
+	console.log("equivalence: edge-seeker indexed max channel diff 0 (grid + random)\n");
+	process.exit(0);
 }
-if (maxIndexedDiff !== 0) {
-	throw new Error(`edge-seeker indexed differs on the ${maxIndexedDataset} workload: max channel diff ${maxIndexedDiff} at oklch(${maxIndexedSample.join(" ")})`);
+
+console.log(`warmup: ${warmup} complete passes per method/workload, excluded from timing\n`);
+
+// Mitata executes the generator setup before measuring the yielded callback.
+// Warm the exact timed call site and input/mode, consuming every output channel.
+function* warmed (batch) {
+	for (let pass = 0; pass < warmup; pass++) batch();
+	if (!Number.isFinite(sink)) throw new Error(`non-finite warmup checksum: ${sink}`);
+	yield batch;
 }
-console.log("equivalence: edge-seeker indexed max channel diff 0 (grid + random)\n");
 
 // Grid workload: fixed integer hues 0..359, repeated at every lightness.
 summary(() => {
 	for (const [name, fn] of methods) {
-		bench(name, () => {
+		const batch = () => {
 			for (let i = 0; i < n; i++) {
 				fn(samples[i], out);
 				sink += out[0] + out[1] + out[2];
 			}
-		});
+		};
+		bench(name, function* () { yield* warmed(batch); });
 	}
 });
 
 // Random workload: stratified/jittered fractional hues, shuffled.
 summary(() => {
 	for (const [name, fn] of methods) {
-		bench(`${name} (random hues)`, () => {
+		const batch = () => {
 			for (let i = 0; i < randomSamples.length; i++) {
 				fn(randomSamples[i], out);
 				sink += out[0] + out[1] + out[2];
 			}
-		});
+		};
+		bench(`${name} (random hues)`, function* () { yield* warmed(batch); });
 	}
 });
 
-await run();
+await run({ throw: true });
 
 if (!Number.isFinite(sink)) {
 	throw new Error(`non-finite benchmark checksum: ${sink}`);
