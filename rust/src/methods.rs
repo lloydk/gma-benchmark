@@ -7,6 +7,7 @@ macro_rules! for_each_method {
         $visit!("oklch-cubic-direct", OklchCubicDirect);
         $visit!("oklch-halley", OklchHalley);
         $visit!("oklch-ostrowski", OklchOstrowski);
+        $visit!("dualray", Dualray);
         $visit!("bottosson-lightness", BottossonLightness);
         $visit!("bottosson-lightness (cached)", BottossonLightnessCached);
         $visit!("edge-seeker", EdgeSeeker);

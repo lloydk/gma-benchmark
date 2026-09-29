@@ -6,17 +6,18 @@ hue/lightness workload (stratified/jittered, shuffled).
 
 ## `gma-bench` — scalar, apples-to-apples
 
-One color per call, with native f64 and f32 implementations of all 11 methods.
+One color per call, with native f64 and f32 implementations of all 12 methods.
 Every invocation prints validation, both precisions' checksums, then four
 sorted timing tables: f64 grid/random and f32 grid/random. No precision flag
-is needed. `--in-gamut-check` selects the prechecked path in both precisions.
+is needed. `--in-gamut-check` selects the prechecked path in both precisions;
+`dualray` retains its intrinsic boundary checks in either mode.
 The f64 lane uses the same conversion math as the JS methods.
 
 ```sh
 RUSTFLAGS="-C target-cpu=native" cargo build --release --bin gma-bench
 ./target/release/gma-bench
 
-# time the in-gamut-precheck variant of every method instead:
+# time the in-gamut-precheck variants (dualray keeps its intrinsic checks):
 ./target/release/gma-bench --in-gamut-check
 ```
 
@@ -37,6 +38,13 @@ The Edge Seeker LUT in `lut.rs` is likewise stored separately at each precision.
 `methods.rs` supplies one method list for both lanes and validation. This keeps
 the algorithms and benchmark coverage aligned without copying implementations
 or generating code by string replacement.
+
+`dualray.rs` is compiled in both precision modules. It uses fitted seeds, a
+guarded upper-first path, competing-face retry, first-root fallback, and
+intrinsic in-gamut handling. Its f32 policy uses constants for the
+residual/containment tolerance `8 * f32::EPSILON` and hue
+reduction outside `(-360, 360)`. The f64 tolerance remains `1e-12`, with hue
+reduction outside `(-1e9, 1e9)`.
 
 `conditioning.rs` contains the f32 numerical adjustments, selected at compile
 time: stationary-interval validation and bisection recovery for Cardano roots,
@@ -61,7 +69,7 @@ Before timing, both mapper modes are compared on identical f32-rounded inputs
 (widened to f64 for the reference), and every output is checked for finiteness
 and gamut membership. The printed errors are maximum absolute encoded-channel
 differences. Regression limits are `1e-4` for clip, direct cubic, Halley,
-Ostrowski, and both Edge Seeker variants; `2e-4` for Raytrace; `1e-3` for
+Ostrowski, Dualray, and both Edge Seeker variants; `2e-4` for Raytrace; `1e-3` for
 Bottosson; and `2e-3` for the hue-quantized cubic/Bottosson variants. Rounding
 can choose adjacent 0.1-degree buckets, so these variants have a separate
 comparison budget. These are corpus regression limits, not universal accuracy
@@ -77,6 +85,10 @@ Tests also cover mixed chroma, in-gamut colors, cache equivalence, native f32
 storage, extreme hues/endpoints, and known cancellation/stagnation regressions.
 An independent f64 stationary-interval/bisection oracle checks the exact-hue
 solvers near boundaries and the cached cubics at their selected bucket hue.
+Dualray is checked against this independent oracle in both precisions, with
+mixed chroma, boundary neighbours, upper-face handoffs, and upper-first gate
+neighbours. The encoded-channel regression budgets are `1e-8` for f64 and
+`1e-4` for f32 over these corpora.
 Both precision lanes have regression tests for complete output consumption.
 Edge Seeker tests compare both lookup variants with an independent circle
 residual/bisection oracle at 576,016 near-cusp/near-white inputs per precision,

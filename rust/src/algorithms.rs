@@ -7,6 +7,11 @@ mod lut {
 use lut::LUT;
 include!("conditioning.rs");
 
+mod dualray {
+    include!("dualray.rs");
+}
+pub(crate) use dualray::Dualray;
+
 const PI: Float = std::f64::consts::PI as Float;
 
 // ── OKLab → LMS' (a,b columns; the L column is all 1s) ──

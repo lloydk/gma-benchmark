@@ -11,10 +11,10 @@ Node, and Bun compare.
 
 ## Methods
 
-The methods are optimized ports of the implementations in the color.js
+Most methods are optimized ports of the implementations in the color.js
 [gamut-mapping app](https://github.com/color-js/apps/tree/main/gamut-mapping),
 with the color-library conversions replaced by the hand-rolled ones here. Each
-bullet links to the original it was derived from.
+such method links to the original it was derived from.
 
 - **clip** — convert OKLCh straight to Display-P3 and clamp into gamut. This is the
   floor: the cost of the conversion every method must do anyway.
@@ -39,6 +39,11 @@ bullet links to the original it was derived from.
   `oklch-halley`, but replaces its solver with the fourth-order Ostrowski
   iteration proposed in a follow-up to the pull request.
   ([original](https://github.com/color-js/apps/pull/44#issuecomment-4964705945))
+- **dualray** — a Display-P3 dual-ray solver, with direction
+  fits, one lower Halley step, two upper Householder steps, a guarded
+  upper-first shortcut, a competing upper-face retry, and stationary-interval
+  first-root recovery. Uses exact input hues without a LUT or per-hue cache.
+  The implementation is in [`src/dualray.js`](src/dualray.js).
 - **bottosson-lightness** — Bjorn Ottosson's constant-lightness gamut clipping,
   specialized for OKLCh → Display-P3 with P3 cusp/intersection constants hoisted
   into the module.
@@ -64,10 +69,14 @@ bullet links to the original it was derived from.
   the general tnear/tfar bookkeeping.
   ([original](https://github.com/color-js/apps/blob/main/gamut-mapping/methods/raytrace.js))
 
-Every method except `clip` also has an **in-gamut precheck** variant that first
-checks whether the input already lies inside Display-P3 and skips the chroma
+Every method except `clip` and `dualray` also has an **in-gamut precheck**
+variant that first checks whether the input already lies inside Display-P3 and skips the chroma
 reduction if so. Pass `--in-gamut-check` to time those variants instead — a run
 reports one mode at a time rather than mixing checked and unchecked rows.
+Dualray uses intrinsic boundary comparisons in both modes:
+it evaluates the input through its normalized cubics when it lies below the
+computed boundary. Its checked row calls the same solver, so the flag adds
+no separate RGB precheck to that method.
 
 Both Edge Seeker variants use a rationalized arc intersection in JavaScript
 and both Rust precisions. This avoids cancellation near zero curvature and
@@ -91,7 +100,7 @@ npm install
 npm run bench
 npm run bench:bun
 
-# time the in-gamut-precheck variant of every method instead:
+# time the in-gamut-precheck variants (dualray keeps its intrinsic checks):
 npm run bench -- --in-gamut-check
 
 # correctness checks only (Node; also supported by bench:bun):
@@ -132,9 +141,10 @@ benchmark grid: `oklch(L 0.4 H)`, `H = 0..359` step 1, `L = 0.99..0.01` step 0.0
 The second uses random fractional hue and lightness (stratified/jittered for even
 coverage, then shuffled) to model arbitrary input rather than a repeating grid.
 All colors are out of P3 gamut at C=0.4, so the precheck never short-circuits
-here — under `--in-gamut-check` it is pure overhead, which is exactly what that
-mode measures. Each `bench` iteration maps a whole workload, so per-call time is
-the reported time divided by 35,640.
+here — under `--in-gamut-check` it is pure overhead for methods with a separate
+precheck. Dualray uses the same intrinsic checks in both modes. Each `bench`
+iteration maps a whole workload, so per-call time is the reported time divided
+by 35,640.
 
 ## Caveats
 

@@ -2,6 +2,10 @@
 
 ## 2026-09-28
 
+- Added `dualray` to Node, Bun, and Rust f64/f32 benchmarks, with direction
+  fits, a guarded upper-first shortcut, upper-face retry, first-root recovery,
+  and intrinsic in-gamut handling in both benchmark modes. Added independent
+  boundary-oracle tests and precision-specific guards for Rust f32.
 - Fixed Edge Seeker's arc intersection in JavaScript and Rust f64: rounding
   near a cusp could select the opposite circle intersection, producing large
   negative chroma and turning yellow into magenta. Both lookup variants now

@@ -20,6 +20,7 @@ import { oklchOstrowski } from "./src/oklch-ostrowski.js";
 import { bottossonLightness, bottossonLightnessCached } from "./src/bottosson-lightness.js";
 import { edgeSeeker, edgeSeekerIndexed } from "./src/edge-seeker/index.js";
 import { raytrace } from "./src/raytrace.js";
+import { dualray } from "./src/dualray.js";
 
 const { values } = parseArgs({ options: {
 	"in-gamut-check": { type: "boolean", default: false },
@@ -143,6 +144,8 @@ const methods = inGamutCheck ? [
 	["oklch-cubic-direct", oklchCubicDirectChecked],
 	["oklch-halley", oklchHalleyChecked],
 	["oklch-ostrowski", oklchOstrowskiChecked],
+	// Dualray uses intrinsic boundary checks in both modes.
+	["dualray", dualray],
 	["bottosson-lightness", bottossonLightnessChecked],
 	["bottosson-lightness (cached)", bottossonLightnessCachedChecked],
 	["edge-seeker", edgeSeekerChecked],
@@ -155,6 +158,7 @@ const methods = inGamutCheck ? [
 	["oklch-cubic-direct", oklchCubicDirect],
 	["oklch-halley", oklchHalley],
 	["oklch-ostrowski", oklchOstrowski],
+	["dualray", dualray],
 	["bottosson-lightness", bottossonLightness],
 	["bottosson-lightness (cached)", bottossonLightnessCached],
 	["edge-seeker", edgeSeeker],
@@ -286,6 +290,21 @@ if (validateOnly) {
 		throw new Error(`oklch-cubic-direct differs from Halley on random exact hues: max channel diff ${maxDirectHalleyDiff} at oklch(${maxDirectHalleySample.join(" ")})`);
 	}
 	console.log(`equivalence: oklch-cubic-direct/Halley max channel diff ${maxDirectHalleyDiff.toExponential(2)} (random exact hues)\n`);
+
+	let maxDualrayDiff = 0;
+	for (const dataset of [samples, randomSamples]) {
+		for (const s of dataset) {
+			dualray(s, uncheckedOut);
+			oklchCubicDirect(s, checkedOut);
+			for (let i = 0; i < 3; i++) {
+				maxDualrayDiff = Math.max(maxDualrayDiff, Math.abs(uncheckedOut[i] - checkedOut[i]));
+			}
+		}
+	}
+	if (!(maxDualrayDiff <= 5e-8)) {
+		throw new Error(`dualray differs from cubic-direct: max channel diff ${maxDualrayDiff}`);
+	}
+	console.log(`equivalence: dualray/cubic-direct max channel diff ${maxDualrayDiff.toExponential(2)} (grid + random)\n`);
 
 	// The cached bottosson variant evaluates the hue-dependent structure (cusp +
 	// LMS' slopes) at the 0.1° bucket hue. On the grid the integer hues hit bucket

@@ -23,6 +23,8 @@ mod float32 {
     }
 }
 use float64::*;
+#[cfg(test)]
+mod test_oracle;
 mod validation;
 
 // ── Benchmark harness ───────────────────────────────────────────────────────
@@ -143,6 +145,25 @@ fn main() {
     let repeats = 25;
 
     float64::print_checksums(&grid);
+
+    // Dualray uses intrinsic boundary checks in both modes.
+    let mut dualray_diff: f64 = 0.0;
+    for samples in [&grid, &random] {
+        let mut solver = Dualray::new();
+        let mut reference = OklchCubicDirect::new();
+        dualray_diff = dualray_diff.max(max_channel_diff(
+            samples,
+            |c, o| solver.map(c, o),
+            |c, o| reference.map(c, o),
+        ));
+    }
+    assert!(
+        dualray_diff <= 5e-8,
+        "dualray/cubic-direct difference: {dualray_diff}"
+    );
+    println!(
+        "equivalence: dualray/cubic-direct max channel diff {dualray_diff:.2e} (grid + random)\n"
+    );
 
     // Equivalence across both workloads: the in-gamut-check fast path must match
     // the unchecked path for both methods.
