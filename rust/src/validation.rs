@@ -6,6 +6,9 @@ fn budget(name: &str) -> f64 {
         "oklch-cubic (cached)" | "oklch-cubic (no cache)" | "bottosson-lightness (cached)" => 0.002,
         "bottosson-lightness" => 0.001,
         "raytrace" => 0.0002,
+        // Local MINDE's JND/epsilon comparisons can stop at different chromas
+        // after f32 rounding. Spec-vector tests also bound the Oklab difference.
+        "css-minde" => 0.004,
         _ => 0.0001,
     }
 }

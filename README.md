@@ -19,6 +19,15 @@ such method links to the original it was derived from.
 - **clip** — convert OKLCh straight to Display-P3 and clamp into gamut. This is the
   floor: the cost of the conversion every method must do anyway.
   ([original](https://github.com/color-js/apps/blob/main/gamut-mapping/methods/clip.js))
+- **css-minde** — CSS Color 4 binary search with Local MINDE, specialized to
+  Display-P3. Preserves in-gamut colors, tries clipping the original color first,
+  then reduces OKLCh chroma while measuring the Oklab difference from clipping.
+  Uses the specified `JND = 0.02` and `epsilon = 0.0001`. Final clipping can
+  change lightness and hue, so its output intentionally differs from the exact
+  constant-lightness/hue boundary methods. The spec returns the last clipped
+  candidate when the search interval reaches epsilon; this need not have an
+  error below the JND.
+  ([specification](https://www.w3.org/TR/css-color-4/#binsearch))
 - **oklch-cubic (cached)** — reduce chroma to the *exact* P3 boundary by solving,
   in closed form, the cubic each linear-P3 channel traces vs chroma. The per-hue
   structure is memoized in 0.1° buckets, stored as one flat pre-allocated
@@ -69,7 +78,7 @@ such method links to the original it was derived from.
   the general tnear/tfar bookkeeping.
   ([original](https://github.com/color-js/apps/blob/main/gamut-mapping/methods/raytrace.js))
 
-Every method except `clip` and `dualray` also has an **in-gamut precheck**
+Every method except `clip`, `css-minde`, and `dualray` also has an **in-gamut precheck**
 variant that first checks whether the input already lies inside Display-P3 and skips the chroma
 reduction if so. Pass `--in-gamut-check` to time those variants instead — a run
 reports one mode at a time rather than mixing checked and unchecked rows.
@@ -77,6 +86,8 @@ Dualray uses intrinsic boundary comparisons in both modes:
 it evaluates the input through its normalized cubics when it lies below the
 computed boundary. Its checked row calls the same solver, so the flag adds
 no separate RGB precheck to that method.
+CSS MINDE includes its required RGB in-gamut check in both modes, so its
+checked row also calls the same function.
 
 Both Edge Seeker variants use a rationalized arc intersection in JavaScript
 and both Rust precisions. This avoids cancellation near zero curvature and
@@ -100,7 +111,7 @@ npm install
 npm run bench
 npm run bench:bun
 
-# time the in-gamut-precheck variants (dualray keeps its intrinsic checks):
+# time the in-gamut-precheck variants (css-minde and dualray retain their checks):
 npm run bench -- --in-gamut-check
 
 # correctness checks only (Node; also supported by bench:bun):
@@ -142,9 +153,9 @@ The second uses random fractional hue and lightness (stratified/jittered for eve
 coverage, then shuffled) to model arbitrary input rather than a repeating grid.
 All colors are out of P3 gamut at C=0.4, so the precheck never short-circuits
 here — under `--in-gamut-check` it is pure overhead for methods with a separate
-precheck. Dualray uses the same intrinsic checks in both modes. Each `bench`
-iteration maps a whole workload, so per-call time is the reported time divided
-by 35,640.
+optional precheck. CSS MINDE and Dualray retain their intrinsic checks in both
+modes. Each `bench` iteration maps a whole workload, so per-call time is the
+reported time divided by 35,640.
 
 ## Caveats
 
@@ -199,3 +210,11 @@ gamut by clamping linear-P3 to `[0, 1]` before the transfer function.
 The edge-seeker LUT-building code under `src/edge-seeker/` is adapted from
 color.js-org (pure math); only its `rgbToOklch` input is swapped for the
 hand-rolled `p3ToOklch`.
+
+CSS MINDE clips in linear Display-P3 and converts those channels directly to
+Oklab for deltaEOK, applying the transfer function only to its final output.
+This avoids repeated encoding/decoding without changing the mapping policy:
+clipping commutes with the monotonic transfer function. Tests compare against
+a literal spec reference with separate XYZ
+matrix stages and encoded-P3 clipping, including both search termination paths,
+the initial clipping shortcut, and exact canonical in-gamut preservation.

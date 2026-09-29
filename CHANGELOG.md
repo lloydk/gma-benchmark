@@ -2,6 +2,11 @@
 
 ## 2026-09-28
 
+- Added CSS Color 4 Local MINDE as `css-minde` in Node, Bun, and Rust f64/f32
+  benchmarks. Uses the spec's JND, search tolerance, initial clipping shortcut,
+  and last-clip return policy, with the mandatory in-gamut check in both modes.
+  Added an independent spec reference, shared numerical fixtures, exact
+  in-gamut preservation tests, and native-f32 threshold regressions.
 - Added `dualray` to Node, Bun, and Rust f64/f32 benchmarks, with direction
   fits, a guarded upper-first shortcut, upper-face retry, first-root recovery,
   and intrinsic in-gamut handling in both benchmark modes. Added independent

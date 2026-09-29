@@ -12,6 +12,7 @@ import { parseArgs } from "node:util";
 import { bench, run, summary } from "mitata";
 
 import { clip } from "./src/clip.js";
+import { cssMinde } from "./src/css-minde.js";
 import { oklchCubic } from "./src/oklch-cubic.js";
 import { oklchCubicNoCache } from "./src/oklch-cubic-no-cache.js";
 import { oklchCubicDirect } from "./src/oklch-cubic-direct.js";
@@ -139,6 +140,8 @@ console.log(`in-gamut precheck: ${inGamutCheck ? "ENABLED (--in-gamut-check)" : 
 
 const methods = inGamutCheck ? [
 	["clip", clip],
+	// CSS MINDE includes the spec's in-gamut check in both modes.
+	["css-minde", cssMinde],
 	["oklch-cubic (cached)", oklchCubicChecked],
 	["oklch-cubic (no cache)", oklchCubicNoCacheChecked],
 	["oklch-cubic-direct", oklchCubicDirectChecked],
@@ -153,6 +156,7 @@ const methods = inGamutCheck ? [
 	["raytrace", raytraceChecked],
 ] : [
 	["clip", clip],
+	["css-minde", cssMinde],
 	["oklch-cubic (cached)", oklchCubic],
 	["oklch-cubic (no cache)", oklchCubicNoCache],
 	["oklch-cubic-direct", oklchCubicDirect],

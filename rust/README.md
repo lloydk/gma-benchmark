@@ -6,18 +6,19 @@ hue/lightness workload (stratified/jittered, shuffled).
 
 ## `gma-bench` — scalar, apples-to-apples
 
-One color per call, with native f64 and f32 implementations of all 12 methods.
+One color per call, with native f64 and f32 implementations of all 13 methods.
 Every invocation prints validation, both precisions' checksums, then four
 sorted timing tables: f64 grid/random and f32 grid/random. No precision flag
 is needed. `--in-gamut-check` selects the prechecked path in both precisions;
-`dualray` retains its intrinsic boundary checks in either mode.
+`dualray` retains its intrinsic boundary checks in either mode, and `css-minde`
+retains the in-gamut check required by CSS Color 4 in either mode.
 The f64 lane uses the same conversion math as the JS methods.
 
 ```sh
 RUSTFLAGS="-C target-cpu=native" cargo build --release --bin gma-bench
 ./target/release/gma-bench
 
-# time the in-gamut-precheck variants (dualray keeps its intrinsic checks):
+# time the in-gamut-precheck variants (css-minde and dualray retain their checks):
 ./target/release/gma-bench --in-gamut-check
 ```
 
@@ -38,6 +39,12 @@ The Edge Seeker LUT in `lut.rs` is likewise stored separately at each precision.
 `methods.rs` supplies one method list for both lanes and validation. This keeps
 the algorithms and benchmark coverage aligned without copying implementations
 or generating code by string replacement.
+
+`css_minde.rs` implements the [CSS Color 4 Local MINDE search](https://www.w3.org/TR/css-color-4/#binsearch)
+with native arithmetic in both lanes, `JND = 0.02`, and `epsilon = 0.0001`.
+It preserves the canonical conversion for in-gamut inputs and returns the
+last clipped candidate on interval exhaustion, as specified. Clipped linear
+P3 converts directly to Oklab for deltaEOK; gamma encoding is deferred until return.
 
 `dualray.rs` is compiled in both precision modules. It uses fitted seeds, a
 guarded upper-first path, competing-face retry, first-root fallback, and
@@ -70,7 +77,14 @@ Before timing, both mapper modes are compared on identical f32-rounded inputs
 and gamut membership. The printed errors are maximum absolute encoded-channel
 differences. Regression limits are `1e-4` for clip, direct cubic, Halley,
 Ostrowski, Dualray, and both Edge Seeker variants; `2e-4` for Raytrace; `1e-3` for
-Bottosson; and `2e-3` for the hue-quantized cubic/Bottosson variants. Rounding
+Bottosson; `2e-3` for the hue-quantized cubic/Bottosson variants; and `4e-3` for
+CSS MINDE. Its threshold comparisons can choose a different stopping iteration
+in f32: for example, at f32-rounded `oklch(0.68 0.4 143)`, an error just across
+`JND - epsilon` changes the final chroma and produces a `4.75e-4` encoded-channel
+difference. Shared spec-reference vectors, including threshold regressions,
+also require a deltaEOK difference no greater than `2e-4` for f32 (`2e-12` for
+f64). The wider channel limit accounts for amplification near dark RGB
+channels; it does not change the algorithm's JND or epsilon. Rounding
 can choose adjacent 0.1-degree buckets, so these variants have a separate
 comparison budget. These are corpus regression limits, not universal accuracy
 guarantees or claims that f32 reproduces f64 bit for bit.
@@ -90,6 +104,9 @@ mixed chroma, boundary neighbours, upper-face handoffs, and upper-first gate
 neighbours. The encoded-channel regression budgets are `1e-8` for f64 and
 `1e-4` for f32 over these corpora.
 Both precision lanes have regression tests for complete output consumption.
+CSS MINDE has shared reference vectors generated from the spec's pseudocode
+and uncomposed XYZ conversions, plus tests for exact in-gamut preservation,
+black/white endpoints, achromatic inputs, and extreme finite hues.
 Edge Seeker tests compare both lookup variants with an independent circle
 residual/bisection oracle at 576,016 near-cusp/near-white inputs per precision,
 plus small-curvature cases and the yellow-to-magenta regression in both modes.

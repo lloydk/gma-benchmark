@@ -2,6 +2,7 @@
 macro_rules! for_each_method {
     ($visit:ident) => {
         $visit!("clip", Clip);
+        $visit!("css-minde", CssMinde);
         $visit!("oklch-cubic (cached)", OklchCubic);
         $visit!("oklch-cubic (no cache)", OklchCubicNoCache);
         $visit!("oklch-cubic-direct", OklchCubicDirect);

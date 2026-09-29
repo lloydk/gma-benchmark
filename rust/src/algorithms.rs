@@ -12,6 +12,11 @@ mod dualray {
 }
 pub(crate) use dualray::Dualray;
 
+mod css_minde {
+    include!("css_minde.rs");
+}
+pub(crate) use css_minde::CssMinde;
+
 const PI: Float = std::f64::consts::PI as Float;
 
 // ── OKLab → LMS' (a,b columns; the L column is all 1s) ──
