@@ -135,25 +135,6 @@ fn checked_cardano(p: [Float; 4], lo: Float, hi: Float, candidate: Float) -> Flo
     Float::INFINITY
 }
 
-// Same circle as Edge Seeker's radius/center construction, solved without
-// subtracting two values of order 1/curvature to obtain a value in [0,1].
-// Multiplying the circle equation by curvature gives
-// k*y² + (sqrt(2-k²)-k)*y - x*(sqrt(2-k²)+k*(1-x)) = 0.
-#[inline(always)]
-fn stable_arc(x: Float, k: Float) -> Float {
-    if k == 0.0 {
-        return x;
-    }
-    let t = (2.0 - k * k).sqrt();
-    let b = t - k;
-    let d = x * (t + k * (1.0 - x));
-    let disc = b * b + 4.0 * k * d;
-    if disc < 0.0 {
-        return 0.0;
-    }
-    2.0 * d / (b + disc.sqrt())
-}
-
 // Flushing a small, nonzero axis to zero can ignore the nearest face near
 // black/white. Direct division also avoids overflowing 1/d before multiplying
 // by the distance to the face. Exactly parallel axes have no intersection.

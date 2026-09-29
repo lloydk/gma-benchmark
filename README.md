@@ -69,6 +69,11 @@ checks whether the input already lies inside Display-P3 and skips the chroma
 reduction if so. Pass `--in-gamut-check` to time those variants instead — a run
 reports one mode at a time rather than mixing checked and unchecked rows.
 
+Both Edge Seeker variants use a rationalized arc intersection in JavaScript
+and both Rust precisions. This avoids cancellation near zero curvature and
+the original formula's wrong-root selection near the cusp or white. The
+normalized arc result is clamped to `[0, 1]` for endpoint roundoff.
+
 Each method has the signature `method(oklch, out)`, where `oklch` is `[L, C, H]`
 and the clipped Display-P3 result is written into the reused 3-vector `out` — so
 the benchmark measures the algorithm and conversion with **zero per-call
@@ -91,6 +96,9 @@ npm run bench -- --in-gamut-check
 
 # correctness checks only (Node; also supported by bench:bun):
 npm run bench -- --validate-only
+
+# targeted numerical regressions (Node; also supported by bun test):
+npm test
 
 # compare the default 50 warmup passes with a larger budget:
 npm run bench -- --warmup 100

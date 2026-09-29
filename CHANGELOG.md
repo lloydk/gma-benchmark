@@ -2,6 +2,12 @@
 
 ## 2026-09-28
 
+- Fixed Edge Seeker's arc intersection in JavaScript and Rust f64: rounding
+  near a cusp could select the opposite circle intersection, producing large
+  negative chroma and turning yellow into magenta. Both lookup variants now
+  use the rationalized quadratic already used by Rust f32. All precisions
+  retain the exact zero-curvature identity and clamp endpoint roundoff to
+  `[0, 1]`. Added independent arc-oracle and near-cusp/near-white regressions.
 - Standardized Node and Bun benchmarks on separate validation and timing
   processes, with 50 explicit warmup passes per method/workload through the
   exact timed callback. Warmup consumes all output channels and is excluded

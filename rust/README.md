@@ -40,10 +40,16 @@ or generating code by string replacement.
 
 `conditioning.rs` contains the f32 numerical adjustments, selected at compile
 time: stationary-interval validation and bisection recovery for Cardano roots,
-a rationalized Edge Seeker arc, sign-directed Raytrace intersections with a
-representable interior margin, and f32 convergence/stagnation checks. Hues
+sign-directed Raytrace intersections with a representable interior margin,
+and f32 convergence/stagnation checks. Hues
 outside one turn are reduced before f32 trigonometry to avoid overflow.
-The f64 lane retains its existing arithmetic and stopping thresholds.
+These precision-specific adjustments leave the f64 path unchanged.
+
+Both precisions share a rationalized Edge Seeker arc in `algorithms.rs`.
+The former f64 radius/center formula could select the opposite circle root
+after endpoint rounding and return large negative chroma. The shared formula
+avoids that root switch and cancellation near zero curvature, preserves the
+exact straight-line identity, and clamps normalized endpoint roundoff to `[0, 1]`.
 
 The direct-cubic wrapper evaluates its coefficient array before the candidate
 and leaves inlining to LLVM. Controlled native builds found both choices
@@ -72,6 +78,9 @@ storage, extreme hues/endpoints, and known cancellation/stagnation regressions.
 An independent f64 stationary-interval/bisection oracle checks the exact-hue
 solvers near boundaries and the cached cubics at their selected bucket hue.
 Both precision lanes have regression tests for complete output consumption.
+Edge Seeker tests compare both lookup variants with an independent circle
+residual/bisection oracle at 576,016 near-cusp/near-white inputs per precision,
+plus small-curvature cases and the yellow-to-magenta regression in both modes.
 
 The timed passes use the same all-channel checksum as validation. Each pass's
 input slice goes through `black_box`, and its checksum is consumed through

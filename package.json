@@ -4,6 +4,7 @@
   "description": "Benchmark of OKLCh→Display-P3 gamut-mapping methods (clip, oklch-cubic cached, edge-seeker cached) with hand-rolled conversions and no color library.",
   "type": "module",
   "scripts": {
+    "test": "node --test",
     "bench": "node --expose-gc bench.js",
     "bench:bun": "bun bench.js"
   },

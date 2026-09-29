@@ -1726,29 +1726,17 @@ fn normalized_hue(h: Float) -> Float {
 
 #[inline(always)]
 fn intersection_with_arc(x: Float, curvature: Float) -> Float {
-    if SINGLE {
-        return stable_arc(x, curvature);
-    }
     if curvature == 0.0 {
         return x;
     }
-    let radius = (1.0 / curvature).abs();
-    let half_diagonal = (0.5 as Float).sqrt(); // sqrt(0.5^2 + 0.5^2)
-    let distance_to_center = (radius * radius - half_diagonal * half_diagonal).sqrt();
-    let offset = distance_to_center / (2.0 as Float).sqrt();
-    let center_x = (if curvature > 0.0 { offset } else { -offset }) + 0.5;
-    let center_y = (if curvature > 0.0 { -offset } else { offset }) + 0.5;
-    let under_root = radius * radius - (x - center_x) * (x - center_x);
-    if under_root < 0.0 {
-        return 0.0;
-    }
-    let sqrt_val = under_root.sqrt();
-    let res1 = center_y + sqrt_val;
-    if res1 >= 0.0 && res1 <= 1.0 {
-        res1
-    } else {
-        center_y - sqrt_val
-    }
+    // Solve k*y² + (t-k)*y - x*(t+k*(1-x)) = 0, t = sqrt(2-k²).
+    // The rationalized root avoids cancellation near k=0 and never switches
+    // to the other circle intersection because of endpoint rounding.
+    let t = (2.0 - curvature * curvature).sqrt();
+    let b = t - curvature;
+    let d = x * (t + curvature * (1.0 - x));
+    let disc = (b * b + 4.0 * curvature * d).max(0.0);
+    (2.0 * d / (b + disc.sqrt())).clamp(0.0, 1.0)
 }
 
 #[inline(always)]
@@ -1865,4 +1853,9 @@ impl Clip {
     pub(crate) fn map_with_in_gamut_check(&mut self, input: &[Float; 3], out: &mut [Float; 3]) {
         clip(input, out);
     }
+}
+
+#[cfg(test)]
+mod edge_seeker_tests {
+    include!("edge_seeker_tests.rs");
 }

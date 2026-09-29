@@ -143,42 +143,17 @@ function maxChromaFromLutItem (l, itemL, itemC, itemCurvature) {
 }
 
 /** Finds the intersection of a line and an arc */
-function intersectionWithArc (x, curvature) {
+export function intersectionWithArc (x, curvature) {
 	if (curvature === 0) {
 		return x;
 	} // straight line
 
-	const radius = Math.abs(1 / curvature);
-	// Midpoint of the line segment from (0,0) to (1,1)
-	const midpointX = 0.5;
-	const midpointY = 0.5;
-
-	// Distance from midpoint to any of the points (0,0) or (1,1)
-	const halfDiagonal = Math.sqrt(midpointX ** 2 + midpointY ** 2);
-
-	// Distance from midpoint to the center (using Pythagorean theorem)
-	const distanceToCenter = Math.sqrt(radius ** 2 - halfDiagonal ** 2);
-
-	// Since the bisector's slope is -1, the line is at 45 degrees, so the offsets for h and k are equal
-	const offset = distanceToCenter / Math.sqrt(2);
-
-	// Position of the center of the circle. Sign helps to determine the correct center
-	const centerX = (curvature > 0 ? offset : -offset) + midpointX;
-	const centerY = (curvature > 0 ? -offset : offset) + midpointY;
-
-	// Calculate y for given x
-	const underRoot = radius ** 2 - (x - centerX) ** 2;
-
-	// If the value under the square root is negative, no solution exists for this center
-	if (underRoot < 0) {
-		return 0;
-	}
-	const sqrtVal = Math.sqrt(underRoot);
-	const res1 = centerY + sqrtVal;
-	if (res1 >= 0 && res1 <= 1) {
-		return res1;
-	}
-	else {
-		return centerY - sqrtVal;
-	}
+	// Solve k*y² + (t-k)*y - x*(t+k*(1-x)) = 0, t = sqrt(2-k²).
+	// Rationalization avoids cancellation near k=0 and selects the intended
+	// arc without switching roots when endpoint rounding leaves [0,1].
+	const t = Math.sqrt(2 - curvature * curvature);
+	const b = t - curvature;
+	const d = x * (t + curvature * (1 - x));
+	const disc = Math.max(0, b * b + 4 * curvature * d);
+	return Math.max(0, Math.min(1, 2 * d / (b + Math.sqrt(disc))));
 }
