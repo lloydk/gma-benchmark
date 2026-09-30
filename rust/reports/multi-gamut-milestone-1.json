@@ -1,0 +1,1060 @@
+{
+  "date": "2026-09-29",
+  "baseline_commit": "58355290e3abfd12dab2757cb99e33ed1d157a4b",
+  "branch": "feat/rust-multi-gamut",
+  "scope": "Rust clip and CSS MINDE for sRGB, Display-P3 and CSS Rec.2020; other mappers remain P3-only.",
+  "rec2020_definition": "https://www.w3.org/TR/2026/CRD-css-color-4-20260926/#predefined-rec2020 (display-referred gamma 2.4)",
+  "environment": {
+    "cpu": "AMD Ryzen 7 9800X3D 8-Core Processor",
+    "os": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.43",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8",
+    "rustflags": "-C target-cpu=native",
+    "profile": "release: opt-level=3, lto=true, codegen-units=1, panic=abort"
+  },
+  "source_sha256": {
+    "rust/Cargo.lock": "accde60f0156269f53969398ea3d879f37eb0d204e6bc08c9479c8b6b8cc1eb2",
+    "rust/Cargo.toml": "31859fa1b0232ca3aac1d2e0ffb865e07069fb45c4e8540a9eb63167d3bdb190",
+    "rust/src/algorithms.rs": "6e81de5b84f2aabeb0d927975c42669cfa561e52052c7ad03151c87f804624e2",
+    "rust/src/cli.rs": "3a341e4273cb15c8e92afa8f920c796fb749cbfaea740a0ac369c82a9b194c41",
+    "rust/src/clip.rs": "c887f2277a6c136138b2fd67dd4f61df5c4241d9735c4311bc6f7158e26b74a4",
+    "rust/src/color.rs": "0b976abadff8d4ade250c9a14dd294123308967c9c25942dac91c3b90bfdc589",
+    "rust/src/conditioning.rs": "c502fea74b807397bb16129c9a6a8325e4efe0eb36c082851cb368718073c0cd",
+    "rust/src/css_minde.rs": "4c929054ca386c72c1cdd50b9e6d5dde2d1881ca89bb30a17af9d04ad1900046",
+    "rust/src/css_minde_tests.rs": "fae1f34642333a3cb2876aad57c5e655f4e248e11c12a90147c683606f08db44",
+    "rust/src/dualray.rs": "e98a4f1422bfb4698a2bc8240685ce211c87ff8487a0e744b5c450f8a13582a5",
+    "rust/src/dualray_tests.rs": "c1891d75b92a663ab4174dc28d30b24ff8697d2c9d396278f274c3dcd50c8609",
+    "rust/src/edge_seeker_tests.rs": "55113973953d18be30f87d57eb23226d851c5898d3fc6d1b5b7eac363ce570a3",
+    "rust/src/float32_tests.rs": "0718b2eaf89eb274303b1987af6b68edf3b3915ea089ba35cdb0bcd46e9c5bb3",
+    "rust/src/gamut.rs": "553238ba99efa8ef038959b1d99f9ed59cc1a93a8b611190e98a4e47fc249fee",
+    "rust/src/lut.rs": "6ee0a46129aa7203ea07e1a00d6400c29e9bbd7b509afb6bf9468e56b515eb0c",
+    "rust/src/main.rs": "f0e0b83048630b1881fad3511f8381a36b61ce38e626334fa272083ddd1dacd1",
+    "rust/src/methods.rs": "1c1e545bf316df28d4ec27debeebca6d2e690ca367f2bc9ce31a4f19cd31cb66",
+    "rust/src/p3_compat.rs": "a0c09c36b76dc10b4f26dd3b2ee5f60b9e6974777b78171a3900ea3421538292",
+    "rust/src/p3_fits.rs": "87347a64b5c685f11f0095b1224d0b7bdaba3ef9f811b944d065d8c84cfcef02",
+    "rust/src/rgb_reference.rs": "b0aea2b14e5191185f8473519fab324156e2ec52b723ff8f4e8e48ea8b2c132e",
+    "rust/src/rgb_spaces.rs": "a9d7d5c36197ad6d9ac39c08e45616bdee0cc4400f5823da595b4f7e294362a4",
+    "rust/src/rgb_tests.rs": "2b7606a7c08926366bd9d822a6f2fa418d924b0f32bf1f521b55a3777712a48e",
+    "rust/src/test_oracle.rs": "244d54c56c475b1370ed3083217fd41f5051f39ebaed84e1b824be390a21b162",
+    "rust/src/timings.rs": "f7f08476522a60954c54fd979e405cd71c802e1b24d0a5ccabcc57fe977410cb",
+    "rust/src/transfer.rs": "21656816eee27a4bce7210582f6b197e927d55b37a6572161e16e8270dca6027",
+    "rust/src/validation.rs": "07ae7e2e692a56381d6fde4147092abb05d246866377dfcd117772df31616fce"
+  },
+  "binary_sha256": {
+    "baseline": "4a5a7e024ddae96d79dd7676b32026a965762e13f4714bd0ccc8674f2276e248",
+    "candidate": "f69e3c3c2ebef79f2bed53637404d9c9f0c0bba013838b8faf063a914f0945c0"
+  },
+  "tests": {
+    "debug_passed": 45,
+    "native_release_passed": 45,
+    "commands": [
+      "cargo test --manifest-path rust/Cargo.toml",
+      "RUSTFLAGS='-C target-cpu=native' cargo test --release --manifest-path rust/Cargo.toml -- --nocapture"
+    ],
+    "cli": "All three targets in both modes with --validate-only; help, unknown argument, missing and unsupported gamut checks passed.",
+    "reference": "RGB matrices independently derived from primary chromaticities; uncomposed f64 XYZ conversions and literal CSS Local MINDE policy.",
+    "independent_corpus_inputs_per_gamut_per_precision": 19718,
+    "independent_measurements": [
+      "srgb 24-bit canonical preservation: 13313 accepted inputs",
+      "srgb 24-bit conversion: relative/absolute linear 1.7665664012883372e-6, encoded 9.369434981927605e-6, reverse deltaEOK 3.713317515448081e-7",
+      "display-p3 24-bit conversion: relative/absolute linear 1.6957029077628095e-6, encoded 7.859349520210335e-6, reverse deltaEOK 3.440919972703709e-7",
+      "display-p3 24-bit canonical preservation: 13908 accepted inputs",
+      "srgb 53-bit conversion: relative/absolute linear 2.3314683517128287e-15, encoded 1.5057399771478686e-14, reverse deltaEOK 7.550332863779066e-16",
+      "rec2020 24-bit conversion: relative/absolute linear 1.666066439451857e-6, encoded 1.0511421025729412e-5, reverse deltaEOK 3.6359845315834524e-7",
+      "rec2020 24-bit canonical preservation: 14426 accepted inputs",
+      "display-p3 53-bit conversion: relative/absolute linear 2.6645352591003757e-15, encoded 2.079759975348594e-14, reverse deltaEOK 8.95090418262362e-16",
+      "rec2020 53-bit conversion: relative/absolute linear 1.2212453270876722e-15, encoded 1.3560333411710701e-14, reverse deltaEOK 9.42055475210265e-16",
+      "srgb 53-bit canonical preservation: 12322 accepted inputs",
+      "display-p3 53-bit canonical preservation: 13020 accepted inputs",
+      "rec2020 53-bit canonical preservation: 14124 accepted inputs",
+      "srgb 24-bit CSS MINDE: channel 7.264180320971092e-4 at [0.89735246, 0.28783888, 83.45898], deltaEOK 1.6522751764512067e-4, exits [2, 2, 7189, 3077, 9423, 25]",
+      "srgb 53-bit CSS MINDE: channel 5.738465258531278e-15 at [0.9, 0.4, 204.375], deltaEOK 9.42055475210265e-16, exits [2, 2, 7189, 3077, 9423, 25]",
+      "display-p3 24-bit CSS MINDE: channel 5.702756643577646e-3 at [0.84679353, 0.39739943, 209.40465], deltaEOK 2.0021194460987824e-4, exits [2, 2, 7536, 3030, 9126, 22]",
+      "display-p3 53-bit CSS MINDE: channel 1.326716514427062e-14 at [0.9126484137177467, 0.28463834803551435, 193.50815470330417], deltaEOK 1.066334393690002e-15, exits [2, 2, 7536, 3030, 9126, 22]",
+      "rec2020 24-bit CSS MINDE: channel 9.290584165599344e-2 at [0.98, 0.4, 104.0], deltaEOK 1.3664886893861553e-3, exits [2, 2, 7964, 3021, 8701, 28]",
+      "rec2020 53-bit CSS MINDE: channel 1.3560333411710701e-14 at [0.727735598988831, 0.39994541318155824, 348.97107319906354], deltaEOK 9.945640348601413e-16, exits [2, 2, 7964, 3021, 8701, 28]"
+    ]
+  },
+  "p3_preservation": {
+    "inputs": 136960,
+    "methods": 13,
+    "modes": [
+      "plain",
+      "prechecked"
+    ],
+    "precisions": [
+      "f64",
+      "native f32"
+    ],
+    "mapping_results": 7121920,
+    "comparison": "cmp of raw little-endian to_bits() for all three output channels, f64 followed by f32 for each input; no tolerance",
+    "byte_count": 128194560,
+    "before_sha256": "c61132812d78e0d345ba99deefcdb5ccb0ed50ac3bdef93404cb6f46b185926e",
+    "after_sha256": "c61132812d78e0d345ba99deefcdb5ccb0ed50ac3bdef93404cb6f46b185926e",
+    "corpus": "Existing 35,640-color grid and same-sized random workload; 32,768 mixed and 32,768 low-chroma samples from mulberry32 seed 0x6d756c74; 144 endpoint/extreme-hue samples. Inputs to f32 rounded before mapping."
+  },
+  "assembly_audit": {
+    "build": "rustc --edition 2021 --crate-type lib -O -C target-cpu=native --emit=asm; standalone wrappers for Clip and CssMinde, all three f32 targets",
+    "observed": "Static target constants, all three output channels, sincosf/cbrtf/powf. No f64 arithmetic or dynamic gamut dispatch. This is a check of this build, not a cross-platform guarantee."
+  },
+  "benchmark": {
+    "mode": "plain (default; CSS MINDE retains intrinsic precheck)",
+    "inputs": "Existing grid and stratified/jittered random; 35,640 OKLCh inputs each. Native f32 inputs rounded before timing.",
+    "warmup_passes": 50,
+    "measured_passes_per_process": 25,
+    "process_pairs": 3,
+    "process_order": [
+      "before",
+      "after",
+      "after",
+      "before",
+      "before",
+      "after"
+    ],
+    "statistic": "Median of three process medians; each process median covers 25 output-consuming passes. All three output channels contribute to a checksum consumed before timing stops.",
+    "source_results": "All 52 rows from every completed process retained below. Printed ns values have two decimal places.",
+    "rows": [
+      {
+        "precision": "f32",
+        "workload": "grid",
+        "method": "bottosson-lightness",
+        "before_ns": [
+          69.64,
+          69.58,
+          70.05
+        ],
+        "after_ns": [
+          69.87,
+          70.08,
+          69.81
+        ],
+        "before_median_ns": 69.64,
+        "after_median_ns": 69.87,
+        "change_percent": 0.33026995979323903
+      },
+      {
+        "precision": "f32",
+        "workload": "grid",
+        "method": "bottosson-lightness (cached)",
+        "before_ns": [
+          24.68,
+          24.67,
+          25.42
+        ],
+        "after_ns": [
+          24.64,
+          24.59,
+          24.88
+        ],
+        "before_median_ns": 24.68,
+        "after_median_ns": 24.64,
+        "change_percent": -0.16207455429497752
+      },
+      {
+        "precision": "f32",
+        "workload": "grid",
+        "method": "clip",
+        "before_ns": [
+          20.34,
+          20.24,
+          20.81
+        ],
+        "after_ns": [
+          20.15,
+          20.26,
+          20.16
+        ],
+        "before_median_ns": 20.34,
+        "after_median_ns": 20.16,
+        "change_percent": -0.8849557522123908
+      },
+      {
+        "precision": "f32",
+        "workload": "grid",
+        "method": "css-minde",
+        "before_ns": [
+          337.48,
+          338.63,
+          337.53
+        ],
+        "after_ns": [
+          352.02,
+          351.93,
+          353.39
+        ],
+        "before_median_ns": 337.53,
+        "after_median_ns": 352.02,
+        "change_percent": 4.292951737623318
+      },
+      {
+        "precision": "f32",
+        "workload": "grid",
+        "method": "dualray",
+        "before_ns": [
+          41.11,
+          40.96,
+          40.95
+        ],
+        "after_ns": [
+          41.65,
+          40.85,
+          40.95
+        ],
+        "before_median_ns": 40.96,
+        "after_median_ns": 40.95,
+        "change_percent": -0.0244140625
+      },
+      {
+        "precision": "f32",
+        "workload": "grid",
+        "method": "edge-seeker",
+        "before_ns": [
+          37.19,
+          35.7,
+          35.83
+        ],
+        "after_ns": [
+          34.7,
+          34.49,
+          34.95
+        ],
+        "before_median_ns": 35.83,
+        "after_median_ns": 34.7,
+        "change_percent": -3.1537817471392615
+      },
+      {
+        "precision": "f32",
+        "workload": "grid",
+        "method": "edge-seeker (indexed)",
+        "before_ns": [
+          32.03,
+          31.74,
+          31.57
+        ],
+        "after_ns": [
+          31.62,
+          31.9,
+          31.67
+        ],
+        "before_median_ns": 31.74,
+        "after_median_ns": 31.67,
+        "change_percent": -0.2205419029615574
+      },
+      {
+        "precision": "f32",
+        "workload": "grid",
+        "method": "oklch-cubic (cached)",
+        "before_ns": [
+          45.55,
+          44.88,
+          45.4
+        ],
+        "after_ns": [
+          44.87,
+          44.8,
+          45.53
+        ],
+        "before_median_ns": 45.4,
+        "after_median_ns": 44.87,
+        "change_percent": -1.1674008810572678
+      },
+      {
+        "precision": "f32",
+        "workload": "grid",
+        "method": "oklch-cubic (no cache)",
+        "before_ns": [
+          215.05,
+          215.19,
+          215.55
+        ],
+        "after_ns": [
+          214.99,
+          215.17,
+          218.36
+        ],
+        "before_median_ns": 215.19,
+        "after_median_ns": 215.17,
+        "change_percent": -0.009294112179936143
+      },
+      {
+        "precision": "f32",
+        "workload": "grid",
+        "method": "oklch-cubic-direct",
+        "before_ns": [
+          164.57,
+          162.93,
+          164.12
+        ],
+        "after_ns": [
+          164.05,
+          162.73,
+          168.94
+        ],
+        "before_median_ns": 164.12,
+        "after_median_ns": 164.05,
+        "change_percent": -0.04265171825492686
+      },
+      {
+        "precision": "f32",
+        "workload": "grid",
+        "method": "oklch-halley",
+        "before_ns": [
+          83.95,
+          84.83,
+          83.47
+        ],
+        "after_ns": [
+          85.51,
+          86.24,
+          83.87
+        ],
+        "before_median_ns": 83.95,
+        "after_median_ns": 85.51,
+        "change_percent": 1.858248957712938
+      },
+      {
+        "precision": "f32",
+        "workload": "grid",
+        "method": "oklch-ostrowski",
+        "before_ns": [
+          86.38,
+          78.09,
+          78.69
+        ],
+        "after_ns": [
+          77.86,
+          77.87,
+          78.86
+        ],
+        "before_median_ns": 78.69,
+        "after_median_ns": 77.87,
+        "change_percent": -1.0420637946371714
+      },
+      {
+        "precision": "f32",
+        "workload": "grid",
+        "method": "raytrace",
+        "before_ns": [
+          147.71,
+          148.28,
+          147.78
+        ],
+        "after_ns": [
+          149.12,
+          147.72,
+          147.59
+        ],
+        "before_median_ns": 147.78,
+        "after_median_ns": 147.72,
+        "change_percent": -0.04060089321965554
+      },
+      {
+        "precision": "f32",
+        "workload": "random",
+        "method": "bottosson-lightness",
+        "before_ns": [
+          80.23,
+          80.53,
+          83.76
+        ],
+        "after_ns": [
+          80.01,
+          80.75,
+          79.87
+        ],
+        "before_median_ns": 80.53,
+        "after_median_ns": 80.01,
+        "change_percent": -0.6457220911461503
+      },
+      {
+        "precision": "f32",
+        "workload": "random",
+        "method": "bottosson-lightness (cached)",
+        "before_ns": [
+          38.19,
+          38.15,
+          38.56
+        ],
+        "after_ns": [
+          39.41,
+          38.49,
+          39.02
+        ],
+        "before_median_ns": 38.19,
+        "after_median_ns": 39.02,
+        "change_percent": 2.1733438072794042
+      },
+      {
+        "precision": "f32",
+        "workload": "random",
+        "method": "clip",
+        "before_ns": [
+          36.02,
+          36.09,
+          36.43
+        ],
+        "after_ns": [
+          36.0,
+          36.84,
+          35.67
+        ],
+        "before_median_ns": 36.09,
+        "after_median_ns": 36.0,
+        "change_percent": -0.24937655860349794
+      },
+      {
+        "precision": "f32",
+        "workload": "random",
+        "method": "css-minde",
+        "before_ns": [
+          397.27,
+          381.97,
+          383.66
+        ],
+        "after_ns": [
+          391.56,
+          392.77,
+          395.54
+        ],
+        "before_median_ns": 383.66,
+        "after_median_ns": 392.77,
+        "change_percent": 2.374498253662094
+      },
+      {
+        "precision": "f32",
+        "workload": "random",
+        "method": "dualray",
+        "before_ns": [
+          51.95,
+          51.62,
+          51.79
+        ],
+        "after_ns": [
+          51.71,
+          51.85,
+          51.78
+        ],
+        "before_median_ns": 51.79,
+        "after_median_ns": 51.78,
+        "change_percent": -0.0193087468623232
+      },
+      {
+        "precision": "f32",
+        "workload": "random",
+        "method": "edge-seeker",
+        "before_ns": [
+          81.25,
+          80.29,
+          81.11
+        ],
+        "after_ns": [
+          80.27,
+          82.39,
+          80.19
+        ],
+        "before_median_ns": 81.11,
+        "after_median_ns": 80.27,
+        "change_percent": -1.0356306250770553
+      },
+      {
+        "precision": "f32",
+        "workload": "random",
+        "method": "edge-seeker (indexed)",
+        "before_ns": [
+          46.12,
+          46.1,
+          45.91
+        ],
+        "after_ns": [
+          45.52,
+          45.58,
+          45.76
+        ],
+        "before_median_ns": 46.1,
+        "after_median_ns": 45.58,
+        "change_percent": -1.1279826464208331
+      },
+      {
+        "precision": "f32",
+        "workload": "random",
+        "method": "oklch-cubic (cached)",
+        "before_ns": [
+          63.18,
+          62.93,
+          64.47
+        ],
+        "after_ns": [
+          63.1,
+          69.02,
+          63.46
+        ],
+        "before_median_ns": 63.18,
+        "after_median_ns": 63.46,
+        "change_percent": 0.4431782209560087
+      },
+      {
+        "precision": "f32",
+        "workload": "random",
+        "method": "oklch-cubic (no cache)",
+        "before_ns": [
+          248.02,
+          233.42,
+          234.94
+        ],
+        "after_ns": [
+          232.48,
+          238.74,
+          232.92
+        ],
+        "before_median_ns": 234.94,
+        "after_median_ns": 232.92,
+        "change_percent": -0.8597939899548823
+      },
+      {
+        "precision": "f32",
+        "workload": "random",
+        "method": "oklch-cubic-direct",
+        "before_ns": [
+          186.77,
+          187.9,
+          186.26
+        ],
+        "after_ns": [
+          187.25,
+          189.33,
+          185.29
+        ],
+        "before_median_ns": 186.77,
+        "after_median_ns": 187.25,
+        "change_percent": 0.25700058895967715
+      },
+      {
+        "precision": "f32",
+        "workload": "random",
+        "method": "oklch-halley",
+        "before_ns": [
+          98.76,
+          98.31,
+          98.88
+        ],
+        "after_ns": [
+          97.97,
+          98.15,
+          98.0
+        ],
+        "before_median_ns": 98.76,
+        "after_median_ns": 98.0,
+        "change_percent": -0.7695423248278654
+      },
+      {
+        "precision": "f32",
+        "workload": "random",
+        "method": "oklch-ostrowski",
+        "before_ns": [
+          96.26,
+          96.1,
+          95.59
+        ],
+        "after_ns": [
+          95.36,
+          101.98,
+          95.92
+        ],
+        "before_median_ns": 96.1,
+        "after_median_ns": 95.92,
+        "change_percent": -0.1873048907388042
+      },
+      {
+        "precision": "f32",
+        "workload": "random",
+        "method": "raytrace",
+        "before_ns": [
+          166.69,
+          164.56,
+          164.9
+        ],
+        "after_ns": [
+          165.5,
+          165.3,
+          166.28
+        ],
+        "before_median_ns": 164.9,
+        "after_median_ns": 165.5,
+        "change_percent": 0.363856882959368
+      },
+      {
+        "precision": "f64",
+        "workload": "grid",
+        "method": "bottosson-lightness",
+        "before_ns": [
+          88.52,
+          88.1,
+          87.65
+        ],
+        "after_ns": [
+          88.48,
+          88.98,
+          87.71
+        ],
+        "before_median_ns": 88.1,
+        "after_median_ns": 88.48,
+        "change_percent": 0.43132803632237593
+      },
+      {
+        "precision": "f64",
+        "workload": "grid",
+        "method": "bottosson-lightness (cached)",
+        "before_ns": [
+          31.49,
+          31.51,
+          31.45
+        ],
+        "after_ns": [
+          32.07,
+          31.42,
+          31.38
+        ],
+        "before_median_ns": 31.49,
+        "after_median_ns": 31.42,
+        "change_percent": -0.22229279136232183
+      },
+      {
+        "precision": "f64",
+        "workload": "grid",
+        "method": "clip",
+        "before_ns": [
+          29.95,
+          30.17,
+          30.53
+        ],
+        "after_ns": [
+          30.2,
+          30.14,
+          30.32
+        ],
+        "before_median_ns": 30.17,
+        "after_median_ns": 30.2,
+        "change_percent": 0.09943652635067135
+      },
+      {
+        "precision": "f64",
+        "workload": "grid",
+        "method": "css-minde",
+        "before_ns": [
+          528.22,
+          531.88,
+          523.06
+        ],
+        "after_ns": [
+          541.66,
+          526.77,
+          525.58
+        ],
+        "before_median_ns": 528.22,
+        "after_median_ns": 526.77,
+        "change_percent": -0.27450683427360234
+      },
+      {
+        "precision": "f64",
+        "workload": "grid",
+        "method": "dualray",
+        "before_ns": [
+          52.53,
+          53.25,
+          52.81
+        ],
+        "after_ns": [
+          53.8,
+          52.37,
+          52.53
+        ],
+        "before_median_ns": 52.81,
+        "after_median_ns": 52.53,
+        "change_percent": -0.5302026131414506
+      },
+      {
+        "precision": "f64",
+        "workload": "grid",
+        "method": "edge-seeker",
+        "before_ns": [
+          49.58,
+          50.07,
+          49.97
+        ],
+        "after_ns": [
+          48.94,
+          49.05,
+          47.81
+        ],
+        "before_median_ns": 49.97,
+        "after_median_ns": 48.94,
+        "change_percent": -2.061236742045225
+      },
+      {
+        "precision": "f64",
+        "workload": "grid",
+        "method": "edge-seeker (indexed)",
+        "before_ns": [
+          41.86,
+          42.04,
+          41.8
+        ],
+        "after_ns": [
+          42.4,
+          41.7,
+          42.25
+        ],
+        "before_median_ns": 41.86,
+        "after_median_ns": 42.25,
+        "change_percent": 0.9316770186335477
+      },
+      {
+        "precision": "f64",
+        "workload": "grid",
+        "method": "oklch-cubic (cached)",
+        "before_ns": [
+          54.14,
+          52.24,
+          59.09
+        ],
+        "after_ns": [
+          59.09,
+          60.91,
+          52.38
+        ],
+        "before_median_ns": 54.14,
+        "after_median_ns": 59.09,
+        "change_percent": 9.142962689323975
+      },
+      {
+        "precision": "f64",
+        "workload": "grid",
+        "method": "oklch-cubic (no cache)",
+        "before_ns": [
+          198.27,
+          201.56,
+          207.69
+        ],
+        "after_ns": [
+          212.13,
+          197.57,
+          200.02
+        ],
+        "before_median_ns": 201.56,
+        "after_median_ns": 200.02,
+        "change_percent": -0.7640404842230608
+      },
+      {
+        "precision": "f64",
+        "workload": "grid",
+        "method": "oklch-cubic-direct",
+        "before_ns": [
+          170.17,
+          171.5,
+          170.24
+        ],
+        "after_ns": [
+          184.81,
+          172.42,
+          172.09
+        ],
+        "before_median_ns": 170.24,
+        "after_median_ns": 172.42,
+        "change_percent": 1.28054511278195
+      },
+      {
+        "precision": "f64",
+        "workload": "grid",
+        "method": "oklch-halley",
+        "before_ns": [
+          98.34,
+          99.31,
+          98.96
+        ],
+        "after_ns": [
+          98.87,
+          98.71,
+          98.32
+        ],
+        "before_median_ns": 98.96,
+        "after_median_ns": 98.71,
+        "change_percent": -0.2526273241713839
+      },
+      {
+        "precision": "f64",
+        "workload": "grid",
+        "method": "oklch-ostrowski",
+        "before_ns": [
+          97.45,
+          97.65,
+          98.67
+        ],
+        "after_ns": [
+          100.87,
+          97.88,
+          97.51
+        ],
+        "before_median_ns": 97.65,
+        "after_median_ns": 97.88,
+        "change_percent": 0.23553507424474152
+      },
+      {
+        "precision": "f64",
+        "workload": "grid",
+        "method": "raytrace",
+        "before_ns": [
+          217.05,
+          221.19,
+          216.7
+        ],
+        "after_ns": [
+          221.05,
+          218.57,
+          224.62
+        ],
+        "before_median_ns": 217.05,
+        "after_median_ns": 221.05,
+        "change_percent": 1.8428933425477911
+      },
+      {
+        "precision": "f64",
+        "workload": "random",
+        "method": "bottosson-lightness",
+        "before_ns": [
+          100.05,
+          100.4,
+          100.31
+        ],
+        "after_ns": [
+          100.29,
+          100.19,
+          100.41
+        ],
+        "before_median_ns": 100.31,
+        "after_median_ns": 100.29,
+        "change_percent": -0.019938191606017064
+      },
+      {
+        "precision": "f64",
+        "workload": "random",
+        "method": "bottosson-lightness (cached)",
+        "before_ns": [
+          45.19,
+          45.45,
+          45.8
+        ],
+        "after_ns": [
+          45.62,
+          45.1,
+          45.28
+        ],
+        "before_median_ns": 45.45,
+        "after_median_ns": 45.28,
+        "change_percent": -0.3740374037403793
+      },
+      {
+        "precision": "f64",
+        "workload": "random",
+        "method": "clip",
+        "before_ns": [
+          43.52,
+          43.46,
+          43.07
+        ],
+        "after_ns": [
+          44.45,
+          43.78,
+          43.61
+        ],
+        "before_median_ns": 43.46,
+        "after_median_ns": 43.78,
+        "change_percent": 0.7363092498849477
+      },
+      {
+        "precision": "f64",
+        "workload": "random",
+        "method": "css-minde",
+        "before_ns": [
+          585.47,
+          588.97,
+          586.32
+        ],
+        "after_ns": [
+          572.55,
+          571.39,
+          575.7
+        ],
+        "before_median_ns": 586.32,
+        "after_median_ns": 572.55,
+        "change_percent": -2.3485468686041955
+      },
+      {
+        "precision": "f64",
+        "workload": "random",
+        "method": "dualray",
+        "before_ns": [
+          66.06,
+          65.8,
+          66.78
+        ],
+        "after_ns": [
+          66.57,
+          65.58,
+          65.68
+        ],
+        "before_median_ns": 66.06,
+        "after_median_ns": 65.68,
+        "change_percent": -0.575234635180133
+      },
+      {
+        "precision": "f64",
+        "workload": "random",
+        "method": "edge-seeker",
+        "before_ns": [
+          90.85,
+          91.02,
+          90.26
+        ],
+        "after_ns": [
+          90.14,
+          89.7,
+          90.51
+        ],
+        "before_median_ns": 90.85,
+        "after_median_ns": 90.14,
+        "change_percent": -0.7815079801871128
+      },
+      {
+        "precision": "f64",
+        "workload": "random",
+        "method": "edge-seeker (indexed)",
+        "before_ns": [
+          56.99,
+          56.65,
+          63.47
+        ],
+        "after_ns": [
+          58.75,
+          56.69,
+          56.93
+        ],
+        "before_median_ns": 56.99,
+        "after_median_ns": 56.93,
+        "change_percent": -0.10528162835585775
+      },
+      {
+        "precision": "f64",
+        "workload": "random",
+        "method": "oklch-cubic (cached)",
+        "before_ns": [
+          74.57,
+          75.65,
+          75.49
+        ],
+        "after_ns": [
+          76.53,
+          75.91,
+          75.96
+        ],
+        "before_median_ns": 75.49,
+        "after_median_ns": 75.96,
+        "change_percent": 0.6225990197377129
+      },
+      {
+        "precision": "f64",
+        "workload": "random",
+        "method": "oklch-cubic (no cache)",
+        "before_ns": [
+          224.59,
+          226.67,
+          223.97
+        ],
+        "after_ns": [
+          225.18,
+          222.51,
+          223.9
+        ],
+        "before_median_ns": 224.59,
+        "after_median_ns": 223.9,
+        "change_percent": -0.3072265016251796
+      },
+      {
+        "precision": "f64",
+        "workload": "random",
+        "method": "oklch-cubic-direct",
+        "before_ns": [
+          192.5,
+          193.11,
+          202.66
+        ],
+        "after_ns": [
+          194.31,
+          196.46,
+          196.03
+        ],
+        "before_median_ns": 193.11,
+        "after_median_ns": 196.03,
+        "change_percent": 1.5120915540365543
+      },
+      {
+        "precision": "f64",
+        "workload": "random",
+        "method": "oklch-halley",
+        "before_ns": [
+          111.97,
+          113.0,
+          113.76
+        ],
+        "after_ns": [
+          112.29,
+          111.95,
+          112.81
+        ],
+        "before_median_ns": 113.0,
+        "after_median_ns": 112.29,
+        "change_percent": -0.6283185840707861
+      },
+      {
+        "precision": "f64",
+        "workload": "random",
+        "method": "oklch-ostrowski",
+        "before_ns": [
+          124.2,
+          115.92,
+          115.79
+        ],
+        "after_ns": [
+          114.78,
+          118.35,
+          115.23
+        ],
+        "before_median_ns": 115.92,
+        "after_median_ns": 115.23,
+        "change_percent": -0.5952380952380931
+      },
+      {
+        "precision": "f64",
+        "workload": "random",
+        "method": "raytrace",
+        "before_ns": [
+          232.24,
+          234.78,
+          233.42
+        ],
+        "after_ns": [
+          234.18,
+          234.14,
+          236.78
+        ],
+        "before_median_ns": 233.42,
+        "after_median_ns": 234.18,
+        "change_percent": 0.3255933510410536
+      }
+    ]
+  },
+  "limitations": [
+    "Native f32 MINDE comparisons at JND can choose different stopping candidates. Rec.2020 at f32-rounded [0.98,0.4,104] differs from f64 by 0.092905842 encoded channel and 0.00136649 deltaEOK; documented and independently regression-tested. No wider-arithmetic fallback or JND adjustment.",
+    "Independent corpus and benchmark regression budgets are empirical, not full-domain error bounds.",
+    "P3 clip within 1% of baseline; measured f32 CSS MINDE grid/random regressions 4.3%/2.4%, and cached f64 cubic grid regression 9.1%. Other results depend on workload and build.",
+    "JavaScript implementations are unchanged."
+  ]
+}

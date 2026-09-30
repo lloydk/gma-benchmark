@@ -12,168 +12,43 @@ mod dualray {
 }
 pub(crate) use dualray::Dualray;
 
-mod css_minde {
+pub(crate) mod css_minde {
     include!("css_minde.rs");
 }
-pub(crate) use css_minde::CssMinde;
+pub(crate) mod gamut {
+    include!("gamut.rs");
+}
+mod transfer {
+    include!("transfer.rs");
+}
+mod color {
+    include!("color.rs");
+}
+pub(crate) mod clip {
+    include!("clip.rs");
+}
+mod p3_compat {
+    include!("p3_compat.rs");
+}
+mod p3_fits {
+    include!("p3_fits.rs");
+}
+use color::{KA0, KA1, KA2, KB0, KB1, KB2};
+use p3_compat::*;
+use p3_fits::*;
+use transfer::clamp01;
+
+#[cfg(test)]
+pub(crate) mod rgb_tests {
+    include!("rgb_tests.rs");
+}
 
 const PI: Float = std::f64::consts::PI as Float;
-
-// ── OKLab → LMS' (a,b columns; the L column is all 1s) ──
-const KA0: Float = 0.3963377773761749;
-const KB0: Float = 0.2158037573099136;
-const KA1: Float = -0.1055613458156586;
-const KB1: Float = -0.0638541728258133;
-const KA2: Float = -0.0894841775298119;
-const KB2: Float = -1.2914855480194092;
-
-// ── LMS (cubed) → linear Display-P3 ──
-const RL: Float = 3.127768971361874;
-const RM: Float = -2.2571357625916395;
-const RS: Float = 0.12936679122976516;
-const GL: Float = -1.0910090184377979;
-const GM: Float = 2.413331710306922;
-const GS: Float = -0.32232269186912466;
-const BL: Float = -0.02601080193857028;
-const BM: Float = -0.508041331704167;
-const BS: Float = 1.5340521336427373;
-
-// ── Bottosson Display-P3 cusp approximation constants ──
-const BOTTOSSON_EPSILON: Float = 1e-12;
-const P3_RED1: Float = -1.772343927512981;
-const P3_RED2: Float = -0.8207587433674072;
-const P3_GREEN1: Float = 1.8031987175305495;
-const P3_GREEN2: Float = -1.1932813966558915;
-
-const P3_RED_K0: Float = 1.1941401817282744;
-const P3_RED_K1: Float = 1.7629811997119493;
-const P3_RED_K2: Float = 0.5958599382477117;
-const P3_RED_K3: Float = 0.7575999740542505;
-const P3_RED_K4: Float = 0.5681684967813678;
-const P3_GREEN_K0: Float = 0.7395668192259771;
-const P3_GREEN_K1: Float = -0.45954279991477065;
-const P3_GREEN_K2: Float = 0.08285308768965816;
-const P3_GREEN_K3: Float = 0.1254116495192955;
-const P3_GREEN_K4: Float = -0.14503290744357106;
-const P3_BLUE_K0: Float = 1.3650944117698118;
-const P3_BLUE_K1: Float = -0.013962295571040945;
-const P3_BLUE_K2: Float = -1.1452305089885595;
-const P3_BLUE_K3: Float = -0.5025987876721942;
-const P3_BLUE_K4: Float = 0.003174713114731378;
 
 // ── Raytrace constants ──
 const RAYTRACE_EPSILON: Float = 1e-12;
 const RAYTRACE_LOW: Float = if SINGLE { 8.0 * Float::EPSILON } else { 1e-12 };
 const RAYTRACE_HIGH: Float = 1.0 - RAYTRACE_LOW;
-
-// ── sRGB / Display-P3 transfer function, clamped to [0,1] ──
-#[inline(always)]
-fn clamped_gamma(x: Float) -> Float {
-    let x = if x < 0.0 {
-        0.0
-    } else if x > 1.0 {
-        1.0
-    } else {
-        x
-    };
-    if x <= 0.0031308 {
-        x * 12.92
-    } else {
-        1.055 * x.powf(1.0 / 2.4) - 0.055
-    }
-}
-
-#[inline(always)]
-fn oklab_to_clipped_p3(l: Float, a: Float, b: Float, out: &mut [Float; 3]) {
-    let l_ = (l + KA0 * a + KB0 * b).powi(3);
-    let m_ = (l + KA1 * a + KB1 * b).powi(3);
-    let s_ = (l + KA2 * a + KB2 * b).powi(3);
-    out[0] = clamped_gamma(RL * l_ + RM * m_ + RS * s_);
-    out[1] = clamped_gamma(GL * l_ + GM * m_ + GS * s_);
-    out[2] = clamped_gamma(BL * l_ + BM * m_ + BS * s_);
-}
-
-#[inline(always)]
-fn oklch_to_clipped_p3(l: Float, c: Float, h: Float, out: &mut [Float; 3]) {
-    let hr = hue_radians(h);
-    oklab_to_clipped_p3(l, c * hr.cos(), c * hr.sin(), out);
-}
-
-#[inline(always)]
-fn oklch_to_p3_if_in_gamut(l: Float, c: Float, h: Float, out: &mut [Float; 3]) -> bool {
-    let hr = hue_radians(h);
-    let a = c * hr.cos();
-    let b = c * hr.sin();
-    let l_ = (l + KA0 * a + KB0 * b).powi(3);
-    let m_ = (l + KA1 * a + KB1 * b).powi(3);
-    let s_ = (l + KA2 * a + KB2 * b).powi(3);
-    let r = RL * l_ + RM * m_ + RS * s_;
-    let g = GL * l_ + GM * m_ + GS * s_;
-    let bl = BL * l_ + BM * m_ + BS * s_;
-    if r < 0.0 || r > 1.0 || g < 0.0 || g > 1.0 || bl < 0.0 || bl > 1.0 {
-        return false;
-    }
-    out[0] = clamped_gamma(r);
-    out[1] = clamped_gamma(g);
-    out[2] = clamped_gamma(bl);
-    true
-}
-
-#[inline(always)]
-fn clamp01(x: Float) -> Float {
-    if x < 0.0 {
-        0.0
-    } else if x > 1.0 {
-        1.0
-    } else {
-        x
-    }
-}
-
-#[inline(always)]
-fn oklab_to_linear_p3_components(l: Float, a: Float, b: Float) -> (Float, Float, Float) {
-    let l_ = l + KA0 * a + KB0 * b;
-    let m_ = l + KA1 * a + KB1 * b;
-    let s_ = l + KA2 * a + KB2 * b;
-    let l3 = l_ * l_ * l_;
-    let m3 = m_ * m_ * m_;
-    let s3 = s_ * s_ * s_;
-    (
-        RL * l3 + RM * m3 + RS * s3,
-        GL * l3 + GM * m3 + GS * s3,
-        BL * l3 + BM * m3 + BS * s3,
-    )
-}
-
-#[inline(always)]
-fn oklab_to_clipped_p3_fast(l: Float, a: Float, b: Float, out: &mut [Float; 3]) {
-    let (r, g, bl) = oklab_to_linear_p3_components(l, a, b);
-    out[0] = clamped_gamma(r);
-    out[1] = clamped_gamma(g);
-    out[2] = clamped_gamma(bl);
-}
-
-#[inline(always)]
-fn oklab_to_p3_if_in_gamut(l: Float, a: Float, b: Float, out: &mut [Float; 3]) -> bool {
-    let (r, g, bl) = oklab_to_linear_p3_components(l, a, b);
-    if r < 0.0 || r > 1.0 || g < 0.0 || g > 1.0 || bl < 0.0 || bl > 1.0 {
-        return false;
-    }
-    out[0] = clamped_gamma(r);
-    out[1] = clamped_gamma(g);
-    out[2] = clamped_gamma(bl);
-    true
-}
-
-#[inline(always)]
-fn linear_p3_to_oklab_chroma(r: Float, g: Float, b: Float) -> Float {
-    let l = (0.4813798527499543 * r + 0.4621183710113182 * g + 0.05650177623872754 * b).cbrt();
-    let m = (0.2288319418112447 * r + 0.6532168193835677 * g + 0.11795123880518772 * b).cbrt();
-    let s = (0.08394575232299314 * r + 0.22416527097756647 * g + 0.6918889766994405 * b).cbrt();
-    let a = 1.9779985324311684 * l - 2.4285922420485799 * m + 0.4505937096174110 * s;
-    let lab_b = 0.0259040424655478 * l + 0.7827717124575296 * m - 0.8086757549230774 * s;
-    (a * a + lab_b * lab_b).sqrt()
-}
 
 // Exit distance of a ray from a point strictly inside the unit box:
 // min over axes of max((1 - a) / d, -a / d). The raytrace anchor always
@@ -210,12 +85,6 @@ fn exit_t(ar: Float, ag: Float, ab: Float, dr: Float, dg: Float, db: Float) -> F
     let tg = ((1.0 - ag) * ig).max(-ag * ig);
     let tb = ((1.0 - ab) * ib).max(-ab * ib);
     tr.min(tg).min(tb)
-}
-
-// ── Method 1: clip ──
-#[inline(always)]
-pub(crate) fn clip(oklch: &[Float; 3], out: &mut [Float; 3]) {
-    oklch_to_clipped_p3(oklch[0], oklch[1], oklch[2], out);
 }
 
 // ── Method 2: oklch-cubic (cached) ──────────────────────────────────────────
@@ -1847,21 +1716,6 @@ impl EdgeSeekerIndexed {
         }
         let mc = self.max_chroma(oklch[0], oklch[2]);
         map_edge_seeker(oklch, mc, out);
-    }
-}
-
-pub(crate) struct Clip;
-impl Clip {
-    pub(crate) fn new() -> Self {
-        Self
-    }
-    #[inline(always)]
-    pub(crate) fn map(&mut self, input: &[Float; 3], out: &mut [Float; 3]) {
-        clip(input, out);
-    }
-    #[inline(always)]
-    pub(crate) fn map_with_in_gamut_check(&mut self, input: &[Float; 3], out: &mut [Float; 3]) {
-        clip(input, out);
     }
 }
 

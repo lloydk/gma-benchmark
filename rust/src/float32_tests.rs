@@ -1,6 +1,38 @@
 use super::*;
+type CssMinde = css_minde::CssMinde<gamut::DisplayP3>;
+type Clip = clip::Clip<gamut::DisplayP3>;
 
 use crate::test_oracle::{boundary, encoded};
+
+#[test]
+fn rec2020_minde_jnd_neighbour_has_bounded_perceptual_error() {
+    use crate::rgb_reference::{distance, lab, Reference};
+    let reference = Reference::new(crate::rgb_spaces::SpaceId::Rec2020);
+    let input = [0.98f32, 0.4, 104.0];
+    // The third native-f32 midpoint is exactly 0.25. The independent real-
+    // valued conversion puts its clipping error within 1e-6 of the JND.
+    let candidate = [input[0], 0.25, input[2]];
+    let candidate64 = candidate.map(f64::from);
+    let rgb = reference
+        .linear_rgb(candidate64)
+        .map(|x| reference.encode(x.clamp(0.0, 1.0)));
+    let error = distance(reference.encoded_to_lab(rgb), lab(candidate64));
+    assert!((error - 0.02).abs() < 1e-6, "{error:e}");
+    // Either stopping decision is valid at native precision. Do not require
+    // a particular libm's rounding or a nonzero disagreement with f64.
+    let mut actual = [0.0; 3];
+    css_minde::CssMinde::<gamut::Rec2020>::new().map(&input, &mut actual);
+    assert!(actual
+        .iter()
+        .all(|v| v.is_finite() && (0.0..=1.0).contains(v)));
+    let (wide, _) = reference.css_minde(input.map(f64::from));
+    assert!(
+        distance(
+            reference.encoded_to_lab(actual.map(f64::from)),
+            reference.encoded_to_lab(wide)
+        ) < 0.0015
+    );
+}
 
 #[test]
 fn exact_hue_methods_match_independent_boundary_oracle() {

@@ -1,9 +1,11 @@
-// Scalar OKLCh -> Display-P3 benchmarks in native f64 and f32.
+// Scalar OKLCh -> RGB benchmarks in native f64 and f32.
 use std::hint::black_box;
 use std::time::Instant;
 
 #[macro_use]
 mod methods;
+mod cli;
+mod rgb_spaces;
 mod float64 {
     type Float = f64;
     const SINGLE: bool = false;
@@ -23,6 +25,7 @@ mod float32 {
     }
 }
 use float64::*;
+mod rgb_reference;
 #[cfg(test)]
 mod test_oracle;
 mod validation;
@@ -121,31 +124,104 @@ fn max_channel_diff(
 }
 
 fn main() {
-    let grid = build_grid();
-    let random = build_random(grid.len());
-    let grid32: Vec<_> = grid.iter().map(|c| c.map(|v| v as f32)).collect();
-    let random32: Vec<_> = random.iter().map(|c| c.map(|v| v as f32)).collect();
-    let n = grid.len();
-    println!("dataset: {} OKLCh colors per workload (grid + random)\n", n);
-    println!("precisions: f64 and native f32 (inputs rounded before timing)\n");
+    let options = match cli::Options::parse() {
+        Ok(Some(options)) => options,
+        Ok(None) => {
+            println!("{}", cli::HELP);
+            return;
+        }
+        Err(error) => {
+            eprintln!("{error}\n{}", cli::HELP);
+            std::process::exit(2);
+        }
+    };
+    let workloads = Workloads::new();
+    match options.gamut {
+        cli::Gamut::DisplayP3 => run_gamut::<rgb_spaces::DisplayP3>(&options, &workloads),
+        cli::Gamut::Srgb => run_gamut::<rgb_spaces::Srgb>(&options, &workloads),
+        cli::Gamut::Rec2020 => run_gamut::<rgb_spaces::Rec2020>(&options, &workloads),
+        cli::Gamut::All => {
+            run_gamut::<rgb_spaces::DisplayP3>(&options, &workloads);
+            run_gamut::<rgb_spaces::Srgb>(&options, &workloads);
+            run_gamut::<rgb_spaces::Rec2020>(&options, &workloads);
+        }
+    }
+}
 
-    // `--in-gamut-check` times the in-gamut-precheck variant of every method
-    // instead of the plain one, so a run shows one mode rather than both mixed.
-    let check = std::env::args().any(|a| a == "--in-gamut-check");
+struct Workloads {
+    grid: Vec<[f64; 3]>,
+    random: Vec<[f64; 3]>,
+    grid32: Vec<[f32; 3]>,
+    random32: Vec<[f32; 3]>,
+}
+impl Workloads {
+    fn new() -> Self {
+        let grid = build_grid();
+        let random = build_random(grid.len());
+        let grid32 = grid.iter().map(|c| c.map(|v| v as f32)).collect();
+        let random32 = random.iter().map(|c| c.map(|v| v as f32)).collect();
+        Self {
+            grid,
+            random,
+            grid32,
+            random32,
+        }
+    }
+}
+
+fn run_gamut<G>(options: &cli::Options, workloads: &Workloads)
+where
+    G: float64::gamut::RgbGamut + float32::gamut::RgbGamut + validation::ValidationProfile,
+{
+    let Workloads {
+        grid,
+        random,
+        grid32,
+        random32,
+    } = workloads;
+    let is_p3 = G::ID == rgb_spaces::SpaceId::DisplayP3;
+    println!(
+        "target: {} ({})",
+        G::DEFINITION.name,
+        if is_p3 {
+            "all 13 methods"
+        } else {
+            "clip and css-minde"
+        }
+    );
+    println!(
+        "dataset: {} OKLCh colors per workload (grid + random)\n",
+        grid.len()
+    );
+    println!("precisions: f64 and native f32 (inputs rounded before timing)\n");
     println!(
         "in-gamut precheck: {}\n",
-        if check {
+        if options.check {
             "ENABLED (--in-gamut-check)"
         } else {
             "disabled (pass --in-gamut-check to enable)"
         }
     );
+    float64::print_checksums::<G>(grid);
+    if is_p3 {
+        validate_p3_solvers(grid, random);
+    }
+    validation::validate_gamut::<G>(grid32, random32);
+    float32::print_checksums::<G>(grid32);
+    if options.validate_only {
+        return;
+    }
 
-    let warmup = 50;
-    let repeats = 25;
+    // Use the historical P3 order for every target: all f64, then all f32.
+    const GRID: &str = "grid (H = 0..359 step 1, repeated per L)";
+    const RANDOM: &str = "random (stratified/jittered fractional H + L)";
+    float64::run_timings::<G>(GRID, grid, 50, 25, options.check);
+    float64::run_timings::<G>(RANDOM, random, 50, 25, options.check);
+    float32::run_timings::<G>(GRID, grid32, 50, 25, options.check);
+    float32::run_timings::<G>(RANDOM, random32, 50, 25, options.check);
+}
 
-    float64::print_checksums(&grid);
-
+fn validate_p3_solvers(grid: &[[f64; 3]], random: &[[f64; 3]]) {
     // Dualray uses intrinsic boundary checks in both modes.
     let mut dualray_diff: f64 = 0.0;
     for samples in [&grid, &random] {
@@ -390,36 +466,4 @@ fn main() {
         );
     }
     println!("equivalence: edge-seeker indexed max channel diff 0 (grid + random)\n");
-
-    validation::validate_workloads(&grid32, &random32);
-    float32::print_checksums(&grid32);
-
-    run_timings(
-        "grid (H = 0..359 step 1, repeated per L)",
-        &grid,
-        warmup,
-        repeats,
-        check,
-    );
-    run_timings(
-        "random (stratified/jittered fractional H + L)",
-        &random,
-        warmup,
-        repeats,
-        check,
-    );
-    float32::run_timings(
-        "grid (H = 0..359 step 1, repeated per L)",
-        &grid32,
-        warmup,
-        repeats,
-        check,
-    );
-    float32::run_timings(
-        "random (stratified/jittered fractional H + L)",
-        &random32,
-        warmup,
-        repeats,
-        check,
-    );
 }

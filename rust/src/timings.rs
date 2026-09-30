@@ -24,20 +24,36 @@ fn time_method(
     })
 }
 
-pub(crate) fn print_checksums(samples: &[[Float; 3]]) {
-    println!("{PRECISION} checksums on grid (sum of all P3 channels):");
+pub(crate) fn print_checksums<G: gamut::RgbGamut>(samples: &[[Float; 3]]) {
+    println!(
+        "{} / {PRECISION} checksums on grid (sum of all RGB channels):",
+        G::DEFINITION.name
+    );
     macro_rules! print_method {
-        ($name:literal, $method:ident) => {{
-            let mut mapper = $method::new();
+        ($name:literal, $method:ty) => {{
+            let mut mapper = <$method>::new();
             let sum = checksum(samples, |input, out| mapper.map(input, out));
             println!("  {:<28} {:.10}", $name, sum);
         }};
     }
-    for_each_method!(print_method);
+    macro_rules! core {
+        ($name:literal, $module:ident, $method:ident, $policy:ident) => {
+            print_method!($name, $module::$method<G>);
+        };
+    }
+    macro_rules! extra {
+        ($name:literal, $method:ident, $limit:literal) => {
+            print_method!($name, $method);
+        };
+    }
+    for_each_rgb_method!(core);
+    if G::ID == crate::rgb_spaces::SpaceId::DisplayP3 {
+        for_each_p3_extra!(extra);
+    }
     println!();
 }
 
-pub(crate) fn run_timings(
+pub(crate) fn run_timings<G: gamut::RgbGamut>(
     label: &str,
     samples: &[[Float; 3]],
     warmup: usize,
@@ -46,9 +62,9 @@ pub(crate) fn run_timings(
 ) {
     let mut timings = Vec::new();
     macro_rules! time_mapper {
-        ($name:literal, $method:ident) => {{
-            let mut mapper = $method::new();
-            // Mode selection and allocation occur outside the timed loops.
+        ($name:literal, $method:ty) => {{
+            let mut mapper = <$method>::new();
+            // Mode selection, allocation and gamut dispatch stay outside timing.
             let ns = if check {
                 time_method(warmup, repeats, samples, |input, out| {
                     mapper.map_with_in_gamut_check(input, out)
@@ -61,12 +77,29 @@ pub(crate) fn run_timings(
             timings.push(($name, ns));
         }};
     }
-    for_each_method!(time_mapper);
+    macro_rules! core {
+        ($name:literal, $module:ident, $method:ident, $policy:ident) => {
+            time_mapper!($name, $module::$method<G>);
+        };
+    }
+    macro_rules! extra {
+        ($name:literal, $method:ident, $limit:literal) => {
+            time_mapper!($name, $method);
+        };
+    }
+    for_each_rgb_method!(core);
+    if G::ID == crate::rgb_spaces::SpaceId::DisplayP3 {
+        for_each_p3_extra!(extra);
+    }
+    print_timings(G::DEFINITION.name, label, repeats, timings);
+}
+
+fn print_timings(gamut: &str, label: &str, repeats: usize, mut timings: Vec<(&str, f64)>) {
     timings.sort_by(|a, b| a.1.total_cmp(&b.1));
     let fastest = timings[0].1;
     let width = timings.iter().map(|(name, _)| name.len()).max().unwrap();
     println!(
-        "── {PRECISION} / {label} ── (median ns/call over {repeats} passes, fastest to slowest):"
+        "── {gamut} / {PRECISION} / {label} ── (median ns/call over {repeats} passes, fastest to slowest):"
     );
     for (name, ns) in timings {
         println!(

@@ -1,57 +1,14 @@
+use super::super::gamut::DisplayP3;
 use super::super::{oklch_to_clipped_p3, oklch_to_p3_if_in_gamut, SINGLE};
 use super::*;
 
-// Test-only independent P3 → XYZ → Oklab conversion, using the CSS sample
-// matrices rather than the production precomposed linear-P3 conversion.
 fn reference_lab(rgb: [f64; 3]) -> [f64; 3] {
-    let multiply = |matrix: [[f64; 3]; 3], vector: [f64; 3]| {
-        matrix.map(|row| row.iter().zip(vector).map(|(a, b)| a * b).sum::<f64>())
-    };
-    let linear = rgb.map(|x| {
-        if x <= 0.04045 {
-            x / 12.92
-        } else {
-            ((x + 0.055) / 1.055).powf(2.4)
-        }
-    });
-    let xyz = multiply(
-        [
-            [
-                608311.0 / 1250200.0,
-                189793.0 / 714400.0,
-                198249.0 / 1000160.0,
-            ],
-            [
-                35783.0 / 156275.0,
-                247089.0 / 357200.0,
-                198249.0 / 2500400.0,
-            ],
-            [0.0, 32229.0 / 714400.0, 5220557.0 / 5000800.0],
-        ],
-        linear,
-    );
-    let lms = multiply(
-        [
-            [0.8190224379967030, 0.3619062600528904, -0.1288737815209879],
-            [0.0329836539323885, 0.9292868615863434, 0.0361446663506424],
-            [0.0481771893596242, 0.2642395317527308, 0.6335478284694309],
-        ],
-        xyz,
-    )
-    .map(f64::cbrt);
-    multiply(
-        [
-            [0.2104542683093140, 0.7936177747023054, -0.0040720430116193],
-            [1.9779985324311684, -2.4285922420485799, 0.4505937096174110],
-            [0.0259040424655478, 0.7827717124575296, -0.8086757549230774],
-        ],
-        lms,
-    )
+    crate::rgb_reference::Reference::new(crate::rgb_spaces::SpaceId::DisplayP3).encoded_to_lab(rgb)
 }
 
 #[test]
 fn matches_independent_spec_vectors_in_both_modes() {
-    let mut mapper = CssMinde::new();
+    let mut mapper = CssMinde::<DisplayP3>::new();
     let mut max_channel: f64 = 0.0;
     let mut max_delta: f64 = 0.0;
     for line in include_str!("../../tests/fixtures/css-minde.csv")
@@ -103,7 +60,7 @@ fn matches_independent_spec_vectors_in_both_modes() {
 #[test]
 fn in_gamut_inputs_preserve_canonical_conversion_bits() {
     let mut accepted = 0;
-    let mut mapper = CssMinde::new();
+    let mut mapper = CssMinde::<DisplayP3>::new();
     for l in [0.01, 0.1, 0.5, 0.9, 0.99] {
         for c in [0.0, 0.001, 0.02, 0.1] {
             for hi in -360..720 {
@@ -126,7 +83,7 @@ fn in_gamut_inputs_preserve_canonical_conversion_bits() {
 
 #[test]
 fn endpoints_achromatic_and_extreme_hues() {
-    let mut mapper = CssMinde::new();
+    let mut mapper = CssMinde::<DisplayP3>::new();
     let (mut actual, mut expected) = ([0.0; 3], [0.0; 3]);
     for l in [-1.0, 0.0, 1.0, 2.0] {
         mapper.map(&[l, 0.4, 20.0], &mut actual);
