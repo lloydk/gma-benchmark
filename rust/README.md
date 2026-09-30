@@ -7,16 +7,16 @@ hue/lightness workload (stratified/jittered, shuffled).
 Display-P3 remains the default target with all 13 methods. Milestone two adds
 sRGB and Rec.2020 versions of the matrix-driven solvers in native f64 and f32:
 clip, CSS MINDE, cached/uncached cubic, direct cubic, Halley, Ostrowski and Raytrace.
-Milestone three adds both Edge Seeker variants and both constant-lightness
-Bottosson variants in all three targets, with generated tables and cusp fits.
-Only Dualray remains P3-only. See the
+Milestone three adds both Edge Seeker variants, both constant-lightness
+Bottosson variants and Dualray in all three targets, with generated tables,
+cusp fits and lower-root seeds. See the
 [milestone-three progress](MILESTONE-3.md) for scope and validation.
 
 | Target | Methods |
 | --- | --- |
 | `display-p3` (default) | All 13 |
-| `srgb` | 12: matrix solvers, both Edge Seeker and both Bottosson variants |
-| `rec2020` | 12: matrix solvers, both Edge Seeker and both Bottosson variants |
+| `srgb` | All 13 |
+| `rec2020` | All 13 |
 
 ```sh
 ./target/release/gma-bench --gamut srgb
@@ -56,16 +56,27 @@ other implementations must use the same encoding.
   RGB gamut markers have no storage. Construction preserves the coordinates;
   conversion, clipping and encoding are explicit operations.
 - `clip::Clip<G>`, `css_minde::CssMinde<G>` and the six `rgb_solvers` types use
-  static gamut dispatch. The single ordered method registry combines these
-  core methods with P3-only extras. A cubic cache belongs to its gamut type;
-  buckets retain 13 native scalars with no runtime gamut tag.
+  static gamut dispatch. The single ordered method registry contains all
+  thirteen generic methods. A cubic cache belongs to its gamut type;
+  buckets retain 13 native scalars with no runtime gamut tag. Cached cubic
+  borrows its hue entry after lazy initialization, avoiding the full-record
+  stack copy whose native f64 timing depended on caller stack alignment.
+  See the [investigation](reports/cached-cubic-stack-investigation.md).
 - `polynomial.rs` holds shared polynomial candidates and targeted conditioning
   for cancellation-prone roots and ill-conditioned Newton refinements. The existing
   native f32 Cardano conditioning remains in `conditioning.rs`. There is no
   per-mapping, all-face first-exit guard. No fitted constants are used by these
   six ports; the iterative solvers retain upstream's gamut-specific fold windows.
-- `p3_compat.rs` retains Dualray's encoding helper and test-only historical
-  conversion routines. Dualray's fits remain algorithm-owned P3 data.
+- `p3_compat.rs` retains test-only historical P3 conversion routines.
+- `compensated.rs` shares product residuals and accurate multiply-adds across
+  Dualray, Bottosson and the iterative fold solver. FMA-enabled targets use
+  hardware FMA; other targets use native two-product/two-sum arithmetic.
+  The portable multiply-add is a compensated approximation, not a general
+  correctly-rounded FMA emulator. Both builds retain the same error budgets.
+- `dualray::DualrayData` owns the normalized channel basis and fitted seeds.
+  `dualray_config.rs` supplies the root limit and exports the shared
+  `rgb_spaces::blue_fold_window` to the generator. The f32 fold solver uses native two-component
+  arithmetic; ordinary calls keep the fitted shortcut/retry path.
 - `bottosson::BottossonData` owns primary-hue sectors and saturation fits.
   sRGB/Rec.2020 fits are generated; the same generator retains the pinned P3
   coefficients. All three targets use the same generated data layout.
@@ -143,7 +154,11 @@ Validation separates conversion arithmetic from MINDE stopping decisions:
   Near blue, native f32 uses a small-angle rotation and compensated residual
   for the same single Halley step; it does not widen to f64. Dense primary-hue
   sweeps cover every f32 value within 0.1 degrees and a shifted wider grid.
-- **Dualray (P3-only):** retains its `1e-4` encoded-channel workload budget.
+- **Dualray:** `2e-5` linear RGB and `5e-6` DeltaEOK f32/f64 limits.
+  The historical P3 `1e-4` encoded-channel gate is also retained. sRGB and
+  Rec.2020 are checked against an independent geometric first-exit oracle,
+  including fold tangencies, primaries, handoffs and near-white scales.
+  Both modes retain intrinsic first-exit handling and must be bit-identical.
 
 | Native f32 CSS MINDE target | ΔEOK limit |
 | --- | ---: |
@@ -157,7 +172,8 @@ accuracy guarantees. A new target must provide its own validation policy.
 Non-finite outputs and individual error metrics fail explicitly. Cross-method
 CLI checks run for every target, comparing only matching policies: bucketed
 cubics on grid hues, direct/Halley outside folds, Halley/Ostrowski everywhere, and the two
-Edge Seeker lookups bit-for-bit.
+Edge Seeker lookups bit-for-bit. Dualray/direct comparisons use the same
+first-exit policy in every target, including folds.
 
 Linear budgets imply finite encoded bounds even for Rec.2020: a linear error
 `e` permits at most `e^(1/2.4)` encoded error there. That global bound is loose
@@ -323,7 +339,7 @@ The generator exports the Rust gamut profiles, then reuses the existing JS
 Rust benchmark does not require Node. Recorded generation uses Node 26.10.0;
 platform math-library differences can change the final bits of generated data.
 
-`methods.rs` supplies one ordered registry of core and P3-only methods for both
+`methods.rs` supplies one ordered registry of all thirteen generic methods for both
 lanes and validation. This keeps algorithm and benchmark coverage aligned.
 
 `css_minde.rs` implements the [CSS Color 4 Local MINDE search](https://www.w3.org/TR/css-color-4/#binsearch)
@@ -338,6 +354,36 @@ intrinsic in-gamut handling. Its f32 policy uses constants for the
 residual/containment tolerance `8 * f32::EPSILON` and hue
 reduction outside `(-360, 360)`. The f64 tolerance remains `1e-12`, with hue
 reduction outside `(-1e9, 1e9)`.
+
+`node scripts/generate-dualray.mjs` regenerates the target basis and seeds;
+add `--check` to verify freshness. Both modes also run the actual Rust f32
+window-edge regression; the Cargo build uses the caller's target flags.
+P3's incumbent coefficients remain pinned.
+The shared sRGB `[264.03,264.23]` and Rec.2020 `[245.04,245.31]` degree windows
+(with f32-rounded endpoints in both lanes) bypass fitted lower roots and isolate
+the first exit. The generator requires at least 0.02 degrees between either
+window edge and the sector switch/fold; compile-time checks bound the
+small-angle series domain. The Rust regression visits every f32 hue within
+0.02 degrees of each edge, including negative and wrapped hues.
+Native f32 uses split constants, polynomial trigonometry and compensated
+evaluation inside those windows to prevent tangent-root errors. Products use
+the shared hardware-FMA/native-split helper, without software `fmaf` or f64
+widening. The fold direction consumes the already-reduced hue.
+Newton steps stay inside the first monotone crossing bracket, with bisection
+as a fallback. Searches stop at the input chroma or the nearest exit already
+found, and the selected exit channel is set to exactly zero or one. Interior
+inputs do not snap to a face. The f64 fold path skips the seed. For inside endpoints, it bounds all
+six face searches by the input chroma and nearest root found so far; this still
+finds an earlier exit before an in-gamut outer island. Outside endpoints retain
+the faster upper-face refinement. Recovery ignores stationary face touches that
+do not exit gamut. See the
+[second review follow-up](reports/dualray-review-followup.md) for accuracy and timings.
+
+Dualray preserves its existing normalized-cubic policy for inputs below the
+first exit. It does not promise canonical conversion bits or preserve an outer
+in-gamut island beyond the first exit. Its checked entry point is the same
+algorithm; it does not add the canonical precheck used by the other exact-hue
+mappers. This distinction is tested and remains visible in the benchmark.
 
 `conditioning.rs` contains the f32 numerical adjustments, selected at compile
 time: stationary-interval validation and bisection recovery for Cardano roots,
@@ -362,12 +408,12 @@ Before timing, both mapper modes are compared on identical f32-rounded inputs
 (widened to f64 for the reference), and every output is checked for finiteness
 and gamut membership. The table labels each acceptance metric and also prints
 the maximum encoded-channel difference. Clip and CSS MINDE use the policies
-above. Dualray's P3-only encoded-channel limit remains `1e-4` for its existing
-workloads. Bottosson now uses the separate linear/perceptual limits above;
+above. Dualray retains P3's historical `1e-4` encoded-channel gate alongside
+its new linear/perceptual gates for all targets. Bottosson now uses the separate linear/perceptual limits above;
 its cache's hue quantization is kept separate from arithmetic error.
 
 The independent tests separately check conversion and transfer arithmetic,
-MINDE output error, and exact canonical pass-through. All twelve core methods are
+MINDE output error, and exact canonical pass-through. All thirteen methods are
 validated on mixed chroma and RGB boundary neighbours in all three gamuts.
 
 Run the numerical tests with:
@@ -382,8 +428,9 @@ An independent f64 stationary-interval/bisection oracle checks the exact-hue
 solvers near boundaries and the cached cubics at their selected bucket hue.
 Dualray is checked against this independent oracle in both precisions, with
 mixed chroma, boundary neighbours, upper-face handoffs, and upper-first gate
-neighbours. The encoded-channel regression budgets are `1e-8` for f64 and
-`1e-4` for f32 over these corpora.
+neighbours. The historical P3 encoded-channel regression budgets are `1e-8` for f64 and
+`1e-4` for f32. New all-target tests use `2e-11` linear/DeltaEOK limits for
+f64, and `2e-5` linear / `5e-6` DeltaEOK for f32 over their documented corpus.
 Both precision lanes have regression tests for complete output consumption.
 CSS MINDE has shared reference vectors generated from the spec's pseudocode
 and uncomposed XYZ conversions, plus tests for exact in-gamut preservation,

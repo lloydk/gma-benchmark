@@ -1,3 +1,4 @@
+type Dualray = dualray::Dualray<gamut::DisplayP3>;
 type BottossonLightness = bottosson::BottossonLightness<crate::rgb_spaces::DisplayP3>;
 type BottossonLightnessCached = bottosson::BottossonLightnessCached<crate::rgb_spaces::DisplayP3>;
 type EdgeSeeker = edge_seeker::EdgeSeeker<gamut::DisplayP3>;
@@ -13,6 +14,77 @@ type CssMinde = css_minde::CssMinde<gamut::DisplayP3>;
 type Clip = clip::Clip<gamut::DisplayP3>;
 
 use crate::test_oracle::{boundary, encoded};
+
+#[test]
+fn dualray_fold_window_edges_cover_every_neighbouring_f32_hue() {
+    fn check<G: dualray::DualrayData>() {
+        let [lo, hi] = crate::rgb_spaces::blue_fold_window(G::ID).unwrap();
+        let oracle = crate::test_oracle::BoundaryOracle::new(G::ID);
+        let mut mapper = dualray::Dualray::<G>::new();
+        let mut maximum = [0.0f64; 2];
+        let mut count = 0;
+        // Exercise the fitted path outside each edge, as well as isolation
+        // inside. Actual binary32 steps catch gaps a fixed hue grid misses.
+        for edge in [lo, hi] {
+            let mut h = edge - 0.02;
+            while h <= edge + 0.02 {
+                for h in [h, h - 360.0, h + 360.0] {
+                    for l in [
+                        0.01f32,
+                        0.1,
+                        0.414,
+                        0.45,
+                        0.49,
+                        0.7,
+                        0.9,
+                        0.99,
+                        1.0f32.next_down(),
+                    ] {
+                        let boundary = oracle.boundary(f64::from(l), f64::from(h));
+                        for c in [0.001, boundary as f32, 0.4] {
+                            let input = [l, c, h];
+                            let expected_lch =
+                                [f64::from(l), f64::from(c).min(boundary), f64::from(h)];
+                            let expected = oracle
+                                .reference
+                                .linear_rgb(expected_lch)
+                                .map(|v| v.clamp(0.0, 1.0));
+                            let mut out = [0.0; 3];
+                            mapper.map(&input, &mut out);
+                            assert!(
+                                out.iter().all(|v| v.is_finite() && (0.0..=1.0).contains(v)),
+                                "{input:?}: {out:?}"
+                            );
+                            let actual = out.map(|v| oracle.reference.decode(f64::from(v)));
+                            let linear = (0..3)
+                                .map(|i| (actual[i] - expected[i]).abs())
+                                .fold(0.0f64, f64::max);
+                            let delta = crate::rgb_reference::distance(
+                                oracle.reference.encoded_to_lab(out.map(f64::from)),
+                                crate::rgb_reference::lab(expected_lch),
+                            );
+                            assert!(
+                                linear <= 2e-5 && delta <= 5e-6,
+                                "{} {input:?}: linear {linear:e}, delta {delta:e}",
+                                G::DEFINITION.name
+                            );
+                            maximum[0] = maximum[0].max(linear);
+                            maximum[1] = maximum[1].max(delta);
+                            count += 1;
+                        }
+                    }
+                }
+                h = h.next_up();
+            }
+        }
+        eprintln!(
+            "{} f32 Dualray window edges: {count} mappings, errors {maximum:?}",
+            G::DEFINITION.name
+        );
+    }
+    check::<gamut::Srgb>();
+    check::<gamut::Rec2020>();
+}
 
 #[test]
 fn rec2020_minde_jnd_neighbour_has_bounded_perceptual_error() {

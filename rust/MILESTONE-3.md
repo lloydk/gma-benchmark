@@ -8,9 +8,9 @@ keep compile-time target selection and independent native f32/f64 kernels.
 - [x] Edge Seeker and indexed Edge Seeker for sRGB, Display-P3 and Rec.2020.
 - [x] Bottosson and cached Bottosson: derive target sector boundaries and cusp
   fits; validate the fits and both precision lanes against geometric references.
-- [ ] Dualray: derive target seeds and audit channel bounds, fold policy and
+- [x] Dualray: derive target seeds and audit channel bounds, fold policy and
   recovery against independent references.
-- [ ] Final all-13-method comparison across every target, precision and mode.
+- [x] Final all-13-method comparison across every target, precision and mode.
 
 ## Edge Seeker implementation
 
@@ -272,7 +272,7 @@ isolated measurement of abstraction overhead. The full report includes direct
 checked timings and every other method. No unchanged P3 method regressed by
 more than 3% in this comparison. Single-process timings for sRGB and Rec.2020
 cover both precisions and modes; they do not establish a balanced cross-target
-ranking. The final all-method milestone comparison remains pending.
+ranking. The later all-method milestone comparison is recorded below.
 
 At that initial Bottosson checkpoint, all 87 Rust tests passed in native release,
 portable x86-64 release and debug;
@@ -292,10 +292,11 @@ a full-domain bound, and that corpus missed this narrow window.
 The failure combines degree-to-radian rounding at a large f32 angle with
 cancellation in the channel residual used by the saturation refinement. Within
 one degree of each target's blue primary, native f32 now rotates a small angle
-around 270 degrees and compensates the cube/product/sum residual using fused
-operations. The coefficients and single Halley refinement are retained. The
+around 270 degrees and compensates the cube/product/sum residual. The initial
+implementation used `mul_add` unconditionally; the second Dualray review below
+adds a native fallback for builds without hardware FMA. The coefficients and single Halley refinement are retained. The
 canonical conversion and the f64 saturation calculation keep their prior paths.
-No mapper arithmetic widens to f64.
+The later fallback removes the portable software-FMA dependency.
 
 The new test visits every positive f32 hue within 0.1 degrees of each primary,
 plus 3,001 shifted hues over a 2.2-degree window that crosses the conditioning
@@ -390,3 +391,236 @@ to +4.2%. The largest other slowdown is cached cubic on the plain f64 grid,
 single-process timings for both new targets and modes. Those target runs are
 not a balanced cross-target comparison. Portable correctness was tested;
 portable timing was not measured.
+
+## Dualray implementation
+
+The Edge Seeker, Bottosson and review-fix checkpoint above is committed as
+`c2f99ba`. Dualray now completes the Rust target coverage: all thirteen methods
+run for sRGB, Display-P3 and Rec.2020 in native f32/f64 and both benchmark modes.
+`methods.rs` contains one generic registry; the P3-only extras path is removed.
+CLI help and both READMEs describe the complete target coverage.
+
+`dualray::DualrayData` separates the normalized channel basis and lower-root
+seed functions from the physical RGB definitions. `dualray_config.rs` exports
+root limits and the shared fold windows to the generator through the Rust
+profile exporter. The initial sRGB `[263,265]` and Rec.2020 `[244,246]` windows
+were narrowed in the review follow-up below; P3 has no fold window. All three retain a root limit of four;
+the 36,000-direction independent tests found maximum lower saturation below
+0.902. That sampled result is not a proof for an arbitrary RGB profile.
+
+```sh
+node scripts/generate-dualray.mjs
+node scripts/generate-dualray.mjs --check
+```
+
+The generator derives new-target sectors and normalized coefficients from the
+Rust matrices. It fits four lower-root pieces in direction coordinates using
+Chebyshev samples converted to balanced monomials. Red's tip uses a square-root
+coordinate near its stationary contact. sRGB has eighteen terms per piece;
+Rec.2020 uses twenty-two for green/blue and eighteen for the red pieces.
+P3's incumbent coefficients are pinned as numeric data in
+`scripts/data/dualray-display-p3.json` and emitted through the same layout.
+There is no dependency on another checkout or a fitting tool at runtime.
+
+For each new target, 262,148 held-out directions check the one-Halley seed
+refinement against stationary-interval bisection. Maximum f64 saturation errors
+were `5.00e-16` for sRGB and `7.78e-16` for Rec.2020 in the generator. Separate
+Rust tests reconstruct geometry through XYZ and exercise the emitted functions
+in both precisions; their largest f32 refined-seed error was `1.384e-6`.
+The fold windows are excluded from fitting and use first-exit isolation.
+
+### Fold conditioning and policy
+
+A direct native-f32 port initially missed the independent boundary near fold
+tangencies. At sRGB `L=0.45, h=264.207763671875`, the dense corpus reached
+`2.214e-4` linear RGB error; Rec.2020 reached `7.751e-5` near
+`L=0.414, h=245.28399658203125`. Coefficient and angle rounding matter here
+because the first channel crossing is nearly tangent. A residual-only check
+cannot reliably distinguish its root displacement or a changed crossing.
+
+`dualray_fold.rs` keeps this conditioning inside the two f32 fold windows.
+It uses pairs of native scalars, compile-time split constants, small-angle
+polynomial sine/cosine, and compensated polynomial evaluation. It partitions
+at stationary points and isolates the first outward crossing of the six faces.
+The review follow-up replaces `mul_add` (which could invoke widening software
+`fmaf` in portable builds) with a native two-product split, and adds bracketed
+Newton steps before bisection. Focused regressions cover each failing hue
+and 32 neighbouring representable values on both sides, with hue wrapping.
+Ordinary hues retain the fitted lower root, upper-first shortcut, competing-face
+retry and first-root fallback. Recovery now ignores a stationary face touch
+that does not leave gamut; tests cover both signs of such a contact.
+
+Both Dualray modes retain the existing intrinsic first-exit policy. Inputs
+below the first exit use the normalized-cubic conversion. An outer in-gamut
+island beyond that exit is not preserved, and the output does not promise the
+canonical conversion's exact bits. `--in-gamut-check` calls the same solver.
+Validation asserts that the modes are identical, and compares Dualray with
+direct cubic in all three targets using the shared first-exit policy. The
+Bottosson/Edge Seeker outer-branch differences remain separate mapping policies.
+
+### Initial Dualray validation (historical checkpoint)
+
+The counts and results in this subsection describe the initial port, before
+either review follow-up. Current test counts and edge coverage are recorded in
+the second review follow-up below; the historical benchmark reports are retained.
+
+The independent XYZ/physical-chroma oracle checks ordinary hue/lightness grids,
+near-white scales through each precision's last representable step, subnormal
+and small lightness, primary/secondary corner neighbourhoods, and 8,001 hues
+across each fold at thirteen lightnesses. Every ray tests six chromas, including
+both sides of its boundary, and both modes. Counts include repeated mappings.
+
+| Target | f32 mappings | f64 mappings | Max f32 linear RGB error | Max f32 DeltaEOK |
+| --- | ---: | ---: | ---: | ---: |
+| sRGB | 2,580,228 | 2,830,788 | 1.227e-5 | 3.450e-6 |
+| Display-P3 | 1,332,072 | 1,582,632 | 6.817e-6 | 2.117e-6 |
+| Rec.2020 | 2,580,228 | 2,830,788 | 9.555e-6 | 2.934e-6 |
+
+All-target regression gates are `2e-5` linear RGB and `5e-6` DeltaEOK for f32,
+and `2e-11` for both metrics in f64. The largest measured f64 linear error was
+`6.502e-12`, and DeltaEOK was `1.524e-12`. P3 retains its existing `1e-4`
+encoded-channel workload gate and its historical encoded oracle tests. The
+original injected dark-error test also exceeded the perceptual budget and
+did not isolate that gate; the review follow-up corrects the test.
+These are measured corpus budgets, not full-domain or cross-platform guarantees.
+
+At this initial checkpoint, 102 Rust tests passed in native release, portable
+x86-64 release and debug. All four JavaScript test files and all three generator
+freshness checks passed; the native build was warning-free. Assembly probes for all six f32 target/mode
+entry points and their outlined local callees contain no double arithmetic or
+widening. Portable correctness is checked, but portable performance is not.
+
+Against `c2f99ba`, all 7,121,920 sampled P3 mappings remain bit-identical:
+136,960 inputs, thirteen methods, two modes and two precisions. The corpus
+includes the benchmark workloads, mixed/low chroma, wrapped/extreme hues and
+lightness endpoints. This is compatibility evidence for that corpus, not a
+claim that the stationary-touch repair is incapable of changing another input.
+
+### Final milestone timing
+
+The [Dualray and final comparison report](reports/multi-gamut-milestone-3-dualray.json)
+contains all 312 target/method/precision/workload/mode rows, 104 P3 comparisons
+against both `9fcb2d3` and `c2f99ba`, and the additional checked-mode follow-up.
+All three binaries were rebuilt with identical native release/LTO flags on
+Ryzen 7 9800X3D / WSL2, rustc 1.98.1. The `c2f99ba` binary reproduces its prior
+recorded hash. Each run uses CPU 2, ASLR disabled, the same executable pathname,
+35,640 inputs per workload, 50 warmup and 25 measured passes, and consumption
+of all three channels. No builds, tests or competing benchmarks ran during timing.
+
+The P3 process order was milestone-two/checkpoint/final, then reversed, for
+each mode. Separate final-target runs used P3/sRGB/Rec.2020, then the reverse
+order. Values are medians of two process medians; small changes have limited
+statistical weight and include function/data placement effects. This compares
+the full benchmark build rather than isolating a generic-dispatch instruction.
+
+| Final Dualray, ns/call | Plain grid | Plain random | Checked grid | Checked random |
+| --- | ---: | ---: | ---: | ---: |
+| display-p3 f64 | 52.37 | 65.48 | 52.37 | 66.23 |
+| display-p3 f32 | 41.02 | 52.06 | 41.25 | 52.92 |
+| srgb f64 | 61.23 | 71.16 | 58.78 | 71.16 |
+| srgb f32 | 52.27 | 60.50 | 52.94 | 60.45 |
+| rec2020 f64 | 64.62 | 71.55 | 65.93 | 72.28 |
+| rec2020 f32 | 54.20 | 59.82 | 54.67 | 59.45 |
+
+New-target times include their fold handling; the two modes still implement
+identical mapping. Against the pre-Dualray checkpoint, P3 Dualray changes range
+from -1.3% to +4.4% in the initial comparison, with most rows within about 1%.
+The largest increase, f32 checked random, did not repeat in the follow-up:
+52.31 to 52.28 ns (-0.05%). No broad Dualray speedup is claimed.
+
+A material stack-placement sensitivity was found in **P3 f64 cached cubic with
+prechecking** at this checkpoint. The initial grid result is 62.71 to 72.34 ns (+15.3%) against
+`c2f99ba`, but 72.29 to 72.34 ns (+0.06%) against milestone two. A fresh ABBA
+comparison of the unchanged binaries reproduced 63.20 to 72.94 ns (+15.4%);
+the random row increased by 9.0% in that follow-up. This is a real measured
+regression relative to the faster checkpoint and is retained in the report.
+
+Disassembly of the cached checked timing closure matches all 969 instructions
+in 5,188 bytes after resolving relocation targets: the same registers, constants,
+call targets, branches and operations, with different code/data addresses.
+The subsequent [stack investigation](reports/cached-cubic-stack-investigation.md)
+isolated the cause: simplifying the header's `println!` reduced the caller's
+stack frame by 16 bytes, exposing store-to-load forwarding conflicts in a
+104-byte by-value hue-cache copy. Changing only two frame-size bytes in each
+frozen binary reproduced and reversed the slowdown while preserving code and
+static-data addresses. Cached cubic now returns a reference to the hue entry,
+removing the intermediate warm-path copy. No caller padding or global alignment
+flag is needed. The original report remains a snapshot of the pre-fix build.
+
+The [borrowed-entry follow-up](reports/cached-cubic-borrow-fix.json) records
+the applied fix and all-target timings. P3 f64 checked grid improves from
+72.37 to 61.42 ns/call (-15.1%), and checked random from 95.60 to 86.32 ns
+(-9.7%). At that borrowed-entry checkpoint, all 102 tests passed in native
+release, portable release and debug;
+1,643,520 sampled cached-cubic outputs across all targets, precisions and modes
+remain bit-identical. The follow-up also retains small mixed cached-cubic
+changes and timing shifts in unchanged kernels, including a repeated 6.9%
+increase in sRGB f32 cached Bottosson. See the investigation for the complete
+table and limits on interpreting full-build timing changes.
+
+Across the complete milestone, cached checked Bottosson is 18.5–34.3% slower
+than milestone two because it now performs the authored-hue canonical precheck,
+as documented at the earlier checkpoint. Direct f32 Bottosson's plain grid
+is 6.5% slower. These correctness costs and placement effects are included in
+the full report rather than attributed wholesale to the target abstraction.
+
+### First Dualray review follow-up (historical checkpoint)
+
+The [review fixes and measurements](reports/dualray-review-fixes.md) supersede
+the initial Dualray windows and validation-test claims above. The compensated
+f32 path at that checkpoint snapped the selected exit to exactly zero or one
+and used native two-product arithmetic without `mul_add` or a software `fmaf`
+dependency. The second follow-up below adds a hardware-FMA specialization.
+The P3 encoded-gate injection passes both other budgets and must specifically
+fail the encoded gate. NaN rejection was already present; injection coverage
+now includes both precision lanes and modes.
+
+Dualray shares the matrix solvers' f32-rounded windows, `[264.03,264.23]` for
+sRGB and `[245.04,245.31]` for Rec.2020. The generator checks sector/fold
+containment, and compile-time assertions bound the compensated angle series.
+The generated basis is stored once. Bracketed Newton steps, input/root bounds,
+and skipping the unused f64 seed reduce fold costs. Redundant validation work
+has been removed.
+
+At the first review checkpoint, all 108 tests passed in native and portable
+release builds, with all-gamut startup validation and generator freshness checks
+passing. The expanded independent
+oracle covers 14.6 million mappings without relaxing budgets; all 547,840
+sampled P3 Dualray outputs remain bit-identical. Rec.2020's measured workload
+encoded maximum falls from `4.869e-4` to `1.162e-5`. Native and portable assembly
+checks find no f64 arithmetic or `fmaf` calls in the six f32 entry points and
+their local callees. The report separates focused fold timings from the full
+harness and retains all before/after rows.
+
+### Second Dualray review follow-up
+
+The [second review report](reports/dualray-review-followup.md) records the current
+111-test checkpoint; all tests pass in native and portable x86-64 release builds.
+The selected-face regression now uses an input inside the narrowed window and
+checks the independent oracle's face. Scratch mutations removing the snap or
+snapping the wrong channel both fail.
+
+Dualray, Bottosson and iterative fold evaluation now share compensated arithmetic:
+hardware FMA when enabled, native split-product/two-sum arithmetic otherwise.
+Assembly audits of 30 f32 entry points and their local callees per build find no
+f64 arithmetic or software FMA calls. Standard f32 libm internals are outside
+that audit. All 8,217,600 sampled native output arrays across the five affected
+methods, targets, precisions and entry modes remain bit-identical.
+
+Generation and `--check` now enforce 0.02-degree sector/fold margins and run the
+actual Rust window-edge test. Its 637,308 additional mappings include every f32
+hue within 0.02 degrees of both cutoffs, including negative and wrapped hues.
+Maximum linear errors are `6.210e-6` for sRGB and `5.031e-6` for Rec.2020, below
+the unchanged `2e-5` budget. Validation and the oracle use the same membership
+policy while keeping the oracle's boundary geometry independent.
+
+Removing repeated hue/window work and selecting hardware FMA reduces native
+f32 outside-fold cost by about 35%. Bounding the f64 first-exit search for inside
+endpoints reduces interior-fold cost by 84–85%, without bypassing possible
+exit/re-entry. Outside f64 inputs retain the established faster refinement.
+The report separates these focused measurements from all-method harness timings;
+fold mapping remains slower than ordinary mapping.
+
+Rust milestone three is complete. The next milestone is JavaScript target
+factories/ports, using the same separation of physical RGB definitions,
+algorithm-specific data and numerical policy. JavaScript currently remains P3-only.

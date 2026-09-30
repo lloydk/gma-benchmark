@@ -1,7 +1,7 @@
-// One ordered registry. Core entries are generic; extras remain P3-only.
+// One ordered registry: every method supports all three targets.
 // Keep historical P3 method order for controlled benchmark comparisons.
-macro_rules! for_each_method {
-    ($core:ident, $extra:ident) => {
+macro_rules! for_each_rgb_method {
+    ($core:ident) => {
         $core!("clip", clip, Clip, Clip);
         $core!("css-minde", css_minde, CssMinde, Minde);
         $core!("oklch-cubic (cached)", rgb_solvers, OklchCubic, Bucket);
@@ -19,7 +19,7 @@ macro_rules! for_each_method {
         );
         $core!("oklch-halley", rgb_solvers, OklchHalley, Iterative);
         $core!("oklch-ostrowski", rgb_solvers, OklchOstrowski, Iterative);
-        $extra!("dualray", Dualray, 0.0001);
+        $core!("dualray", dualray, Dualray, Dualray);
         $core!(
             "bottosson-lightness",
             bottosson,
@@ -41,18 +41,17 @@ macro_rules! for_each_method {
         );
         $core!("raytrace", rgb_solvers, Raytrace, Raytrace);
     };
-    // P3 test/snapshot compatibility adapter.
+}
+
+// P3 test/snapshot compatibility adapter.
+#[cfg(test)]
+macro_rules! for_each_method {
     ($visit:ident) => {
         macro_rules! core {
             ($name:literal, $module:ident, $method:ident, $policy:ident) => {
                 $visit!($name, $method);
             };
         }
-        macro_rules! extra {
-            ($name:literal, $method:ident, $limit:literal) => {
-                $visit!($name, $method);
-            };
-        }
-        for_each_method!(core, extra);
+        for_each_rgb_method!(core);
     };
 }

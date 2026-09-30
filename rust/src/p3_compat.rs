@@ -1,12 +1,13 @@
-// Compatibility helpers for the P3-only solvers. Retain their arithmetic and
-// gamut-check semantics while clip/CSS MINDE use the generic typed kernel.
+// Historical P3 arithmetic used only by regression tests.
 #[cfg(test)]
 use super::color::{KA0, KA1, KA2, KB0, KB1, KB2};
 #[cfg(test)]
 use super::gamut::{DisplayP3, RgbGamut};
 #[cfg(test)]
 use super::hue_radians;
+#[cfg(test)]
 use super::transfer::{SrgbTransfer, TransferFunction};
+#[cfg(test)]
 use super::Float;
 
 #[cfg(test)]
@@ -28,6 +29,7 @@ pub(super) const BM: Float = DisplayP3::LMS_TO_RGB[2][1];
 #[cfg(test)]
 pub(super) const BS: Float = DisplayP3::LMS_TO_RGB[2][2];
 
+#[cfg(test)]
 #[inline(always)]
 pub(super) fn clamped_gamma(x: Float) -> Float {
     SrgbTransfer::encode_clamped(x)

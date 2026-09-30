@@ -4,6 +4,8 @@
 type Float = f64;
 #[path = "../src/color.rs"]
 mod color;
+#[path = "../src/dualray_config.rs"]
+mod dualray_config;
 #[path = "../src/gamut.rs"]
 mod gamut;
 #[path = "../src/rgb_spaces.rs"]
@@ -27,16 +29,19 @@ fn profile<G: gamut::RgbGamut>() {
         [1.0, color::KA2, color::KB2],
     ];
     let samples = [0.0, 0.001, 0.0031308, 0.01, 0.1, 0.5, 1.0];
+    let config = dualray_config::config(G::ID);
+    let fold = config.fold.map_or("null".to_owned(), |v| format!("{v:?}"));
     let lab_samples = samples.map(|x| {
         let lab = color::LinearRgb::<G>::new([x, 0.25, 0.75]).to_oklab();
         [lab.l, lab.a, lab.b]
     });
     print!(
-        "{{\"name\":{:?},\"encoding\":{encoding:?},\"rgbToLms\":{:?},\"lmsToRgb\":{:?},\"oklabToLms\":{oklab_to_lms:?},\"linearSamples\":{samples:?},\"encodedSamples\":{:?},\"labSamples\":{lab_samples:?}}}",
+        "{{\"name\":{:?},\"encoding\":{encoding:?},\"rgbToLms\":{:?},\"lmsToRgb\":{:?},\"oklabToLms\":{oklab_to_lms:?},\"linearSamples\":{samples:?},\"encodedSamples\":{:?},\"labSamples\":{lab_samples:?},\"dualray\":{{\"rootLimit\":{},\"foldWindow\":{fold}}}}}",
         G::DEFINITION.name,
         G::RGB_TO_LMS,
         G::LMS_TO_RGB,
         samples.map(G::Transfer::encode_clamped),
+        config.root_limit,
     );
 }
 

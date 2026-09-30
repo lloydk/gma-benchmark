@@ -1,11 +1,16 @@
 use crate::rgb_reference::{distance, Reference};
-use crate::rgb_spaces::{DisplayP3, Rec2020, RgbSpace, SpaceId, Srgb};
+#[cfg(test)]
+use crate::rgb_spaces::SpaceId;
+use crate::rgb_spaces::{DisplayP3, Rec2020, RgbSpace, Srgb};
 use crate::{float32, float64};
 
 // Explicit empirical policies: a new target must supply its own budget.
 // These are corpus regression limits, not full-domain numerical guarantees.
 pub(crate) trait ValidationProfile: RgbSpace {
     const MINDE_DELTA_LIMIT: f64;
+    const DUALRAY_LINEAR_LIMIT: f64;
+    const DUALRAY_DELTA_LIMIT: f64;
+    const DUALRAY_ENCODED_LIMIT: Option<f64>;
     const BOTTOSSON_LINEAR_LIMIT: f64;
     const BOTTOSSON_DELTA_LIMIT: f64;
     const EDGE_LINEAR_LIMIT: f64;
@@ -19,6 +24,9 @@ pub(crate) trait ValidationProfile: RgbSpace {
     const RAYTRACE_REFERENCE_LINEAR_LIMIT: f64;
 }
 impl ValidationProfile for Srgb {
+    const DUALRAY_ENCODED_LIMIT: Option<f64> = None;
+    const DUALRAY_LINEAR_LIMIT: f64 = 2e-5;
+    const DUALRAY_DELTA_LIMIT: f64 = 5e-6;
     const BOTTOSSON_LINEAR_LIMIT: f64 = 1.2e-5;
     const BOTTOSSON_DELTA_LIMIT: f64 = 5e-6;
     const EDGE_LINEAR_LIMIT: f64 = 1e-5;
@@ -33,6 +41,9 @@ impl ValidationProfile for Srgb {
     const RAYTRACE_REFERENCE_LINEAR_LIMIT: f64 = 5e-4;
 }
 impl ValidationProfile for DisplayP3 {
+    const DUALRAY_ENCODED_LIMIT: Option<f64> = Some(1e-4);
+    const DUALRAY_LINEAR_LIMIT: f64 = 2e-5;
+    const DUALRAY_DELTA_LIMIT: f64 = 5e-6;
     const BOTTOSSON_LINEAR_LIMIT: f64 = 1.2e-5;
     const BOTTOSSON_DELTA_LIMIT: f64 = 5e-6;
     const EDGE_LINEAR_LIMIT: f64 = 1e-5;
@@ -47,6 +58,9 @@ impl ValidationProfile for DisplayP3 {
     const RAYTRACE_REFERENCE_LINEAR_LIMIT: f64 = 5e-5;
 }
 impl ValidationProfile for Rec2020 {
+    const DUALRAY_ENCODED_LIMIT: Option<f64> = None;
+    const DUALRAY_LINEAR_LIMIT: f64 = 2e-5;
+    const DUALRAY_DELTA_LIMIT: f64 = 5e-6;
     const BOTTOSSON_LINEAR_LIMIT: f64 = 1.2e-5;
     const BOTTOSSON_DELTA_LIMIT: f64 = 5e-6;
     const EDGE_LINEAR_LIMIT: f64 = 1e-5;
@@ -73,7 +87,7 @@ enum Policy {
     Bottosson,
     BottossonBucket,
     EdgeSeeker,
-    Encoded(f64),
+    Dualray,
 }
 impl Policy {
     fn metric(self) -> &'static str {
@@ -83,7 +97,7 @@ impl Policy {
             Self::Boundary | Self::Iterative => "linear RGB",
             Self::Bucket | Self::BottossonBucket => "linear/bucket",
             Self::Raytrace | Self::EdgeSeeker | Self::Bottosson => "linear RGB",
-            Self::Encoded(_) => "encoded RGB",
+            Self::Dualray => "linear RGB",
         }
     }
     fn delta_limit<G: ValidationProfile>(self) -> Option<f64> {
@@ -92,6 +106,7 @@ impl Policy {
             Self::Raytrace => Some(G::RAYTRACE_DELTA_LIMIT),
             Self::EdgeSeeker => Some(G::EDGE_DELTA_LIMIT),
             Self::Bottosson | Self::BottossonBucket => Some(G::BOTTOSSON_DELTA_LIMIT),
+            Self::Dualray => Some(G::DUALRAY_DELTA_LIMIT),
             _ => None,
         }
     }
@@ -104,7 +119,7 @@ impl Policy {
             Self::Raytrace => G::RAYTRACE_LINEAR_LIMIT,
             Self::EdgeSeeker => G::EDGE_LINEAR_LIMIT,
             Self::Bottosson | Self::BottossonBucket => G::BOTTOSSON_LINEAR_LIMIT,
-            Self::Encoded(limit) => limit,
+            Self::Dualray => G::DUALRAY_LINEAR_LIMIT,
         }
     }
 }
@@ -140,10 +155,7 @@ fn fold_branch<G: ValidationProfile>(
     output: [f64; 3],
 ) -> bool {
     let h = f64::from(input[2]);
-    let Some([lo, hi]) = crate::rgb_spaces::blue_fold_window(G::ID) else {
-        return false;
-    };
-    if !(f64::from(lo)..=f64::from(hi)).contains(&h.rem_euclid(360.0)) {
+    if !float32::rgb_solvers::in_blue_fold_id(G::ID, input[2]) {
         return false;
     }
     let [l, a, b] = reference.encoded_to_lab(output);
@@ -253,6 +265,21 @@ fn compare<G: ValidationProfile + float32::gamut::RgbGamut + float64::gamut::Rgb
                 .all(|v| v.is_finite() && (0.0..=1.0).contains(v)),
             "{name}: invalid f32 output at {input:?}: {actual:?}"
         );
+        if checked && matches!(policy, Policy::Dualray) {
+            let (mut plain32, mut plain64) = ([0.0; 3], [0.0; 3]);
+            narrow(input, &mut plain32, false);
+            wide(&input.map(f64::from), &mut plain64, false);
+            assert_eq!(
+                actual.map(f32::to_bits),
+                plain32.map(f32::to_bits),
+                "{name}: intrinsic f32 modes differ at {input:?}"
+            );
+            assert_eq!(
+                expected.map(f64::to_bits),
+                plain64.map(f64::to_bits),
+                "{name}: intrinsic f64 modes differ at {input:?}"
+            );
+        }
         assert!(
             expected
                 .iter()
@@ -261,6 +288,11 @@ fn compare<G: ValidationProfile + float32::gamut::RgbGamut + float64::gamut::Rgb
         );
         let actual = actual.map(f64::from);
         let encoded = max_finite_diff(actual, expected);
+        if matches!(policy, Policy::Dualray) {
+            if let Some(limit) = G::DUALRAY_ENCODED_LIMIT {
+                assert!(encoded <= limit, "{name}: historical encoded budget {limit:e} exceeded: {encoded:e} at {input:?}");
+            }
+        }
         let mut delta = distance(
             reference.encoded_to_lab(actual),
             reference.encoded_to_lab(expected),
@@ -277,7 +309,8 @@ fn compare<G: ValidationProfile + float32::gamut::RgbGamut + float64::gamut::Rgb
             | Policy::Raytrace
             | Policy::EdgeSeeker
             | Policy::Bottosson
-            | Policy::BottossonBucket => max_finite_diff(
+            | Policy::BottossonBucket
+            | Policy::Dualray => max_finite_diff(
                 actual.map(|v| reference.decode(v)),
                 expected.map(|v| reference.decode(v)),
             ),
@@ -285,7 +318,6 @@ fn compare<G: ValidationProfile + float32::gamut::RgbGamut + float64::gamut::Rgb
                 reference.encoded_to_lab(actual),
                 reference.encoded_to_lab(expected),
             ),
-            Policy::Encoded(_) => encoded,
         };
         assert!(
             error.is_finite() && encoded.is_finite(),
@@ -336,17 +368,8 @@ where
         + float32::edge_seeker::EdgeSeekerData
         + float64::bottosson::BottossonData
         + float32::bottosson::BottossonData
-        + ValidationProfile,
-{
-    validate_methods::<G>(grid, random, G::ID == SpaceId::DisplayP3);
-}
-
-fn validate_methods<G>(grid: &[[f32; 3]], random: &[[f32; 3]], p3_extras: bool)
-where
-    G: float64::edge_seeker::EdgeSeekerData
-        + float32::edge_seeker::EdgeSeekerData
-        + float64::bottosson::BottossonData
-        + float32::bottosson::BottossonData
+        + float64::dualray::DualrayData
+        + float32::dualray::DualrayData
         + ValidationProfile,
 {
     let reference = Reference::new(G::ID);
@@ -447,27 +470,17 @@ where
             );
         };
     }
-    macro_rules! extra {
-        ($name:literal, $method:ident, $limit:literal) => {
-            if p3_extras {
-                validate!(
-                    $name,
-                    float32::$method,
-                    float64::$method,
-                    Policy::Encoded($limit)
-                );
-            }
-        };
-    }
-    for_each_method!(core, extra);
+    for_each_rgb_method!(core);
     println!("branches: differing canonical prechecks; each branch is verified, then plain solvers are compared; branch max is encoded RGB");
-    println!("sanity: outputs are finite and in gamut; accepted prechecks preserve canonical bits and rejected prechecks match plain mapping\n");
+    println!("sanity: outputs are finite and in gamut; explicit prechecks preserve canonical bits or match plain mapping; Dualray modes are identical\n");
 }
 
 // Compare only methods with matching policies. Bucketed/exact hues are
 // compared on the integer grid; outer/first-exit policies only outside folds.
 pub(crate) fn validate_solver_agreement<
-    G: float64::edge_seeker::EdgeSeekerData + float64::bottosson::BottossonData,
+    G: float64::edge_seeker::EdgeSeekerData
+        + float64::bottosson::BottossonData
+        + float64::dualray::DualrayData,
 >(
     grid: &[[f64; 3]],
     random: &[[f64; 3]],
@@ -490,6 +503,8 @@ pub(crate) fn validate_solver_agreement<
         float64::bottosson::BottossonLightnessCached::<G>::new(),
     );
     let mut bottosson_max = 0.0f64;
+    let mut dualray = float64::dualray::Dualray::<G>::new();
+    let mut dualray_max = 0.0f64;
     let mut maxima = [0.0f64; 3];
     for (set, samples) in [grid, random].into_iter().enumerate() {
         for input in samples {
@@ -509,6 +524,7 @@ pub(crate) fn validate_solver_agreement<
                     b.map(|v| reference.decode(v)),
                 ));
             }
+            dualray.map(input, &mut a);
             let mut out = [[0.0; 3]; 5];
             cached.map(input, &mut out[0]);
             uncached.map(input, &mut out[1]);
@@ -522,12 +538,11 @@ pub(crate) fn validate_solver_agreement<
                 G::DEFINITION.name
             );
             let rgb = out.map(|v| v.map(|v| reference.decode(v)));
+            dualray_max = dualray_max.max(max_finite_diff(a.map(|v| reference.decode(v)), rgb[2]));
             if set == 0 {
                 maxima[0] = maxima[0].max(max_finite_diff(rgb[0], rgb[2]));
             }
-            let fold = crate::rgb_spaces::blue_fold_window(G::ID).is_some_and(|[lo, hi]| {
-                (f64::from(lo)..=f64::from(hi)).contains(&input[2].rem_euclid(360.0))
-            });
+            let fold = in_blue_fold::<G>(input[2]);
             if !fold {
                 maxima[1] = maxima[1].max(max_finite_diff(rgb[2], rgb[3]));
             }
@@ -542,6 +557,15 @@ pub(crate) fn validate_solver_agreement<
             maxima[i]
         );
     }
+    assert!(
+        dualray_max <= 5e-10,
+        "{} Dualray/direct first-exit error {dualray_max:e}",
+        G::DEFINITION.name
+    );
+    println!(
+        "{} f64 Dualray/direct linear maximum: {dualray_max:e}",
+        G::DEFINITION.name
+    );
     assert!(
         bottosson_max <= 2e-12,
         "{} Bottosson cached/direct grid error {bottosson_max:e}",
@@ -570,18 +594,31 @@ mod tests {
             Policy::EdgeSeeker,
             Policy::Bottosson,
             Policy::BottossonBucket,
+            Policy::Dualray,
         ] {
-            for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
-                assert!(std::panic::catch_unwind(|| compare::<Rec2020>(
-                    "injected non-finite",
-                    policy,
-                    &Reference::new(SpaceId::Rec2020),
-                    &[[0.5, 0.4, 30.0]],
-                    false,
-                    |_, out, _| *out = [bad, 0.5, 0.5],
-                    |_, out, _| *out = [0.5; 3]
-                ))
-                .is_err());
+            for checked in [false, true] {
+                for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+                    for narrow_lane in [false, true] {
+                        assert!(std::panic::catch_unwind(|| compare::<Rec2020>(
+                            "injected non-finite",
+                            policy,
+                            &Reference::new(SpaceId::Rec2020),
+                            &[[0.5, 0.4, 30.0]],
+                            checked,
+                            |_, out, _| *out = if narrow_lane {
+                                [bad as f32, 0.5, 0.5]
+                            } else {
+                                [0.5; 3]
+                            },
+                            |_, out, _| *out = if narrow_lane {
+                                [0.5; 3]
+                            } else {
+                                [bad, 0.5, 0.5]
+                            }
+                        ))
+                        .is_err());
+                    }
+                }
             }
         }
         for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
@@ -589,6 +626,45 @@ mod tests {
                 std::panic::catch_unwind(|| max_finite_diff([0.0, bad, 0.0], [0.0; 3])).is_err()
             );
         }
+    }
+
+    #[test]
+    fn dualray_keeps_the_historical_p3_encoded_gate() {
+        let reference = Reference::new(SpaceId::DisplayP3);
+        let actual = [0.00011f32, 1.0, 1.0];
+        let expected = [0.0, 1.0, 1.0];
+        // Isolate this gate: both other metrics must accept the injected error.
+        assert!(
+            max_finite_diff(actual.map(f64::from), expected)
+                > DisplayP3::DUALRAY_ENCODED_LIMIT.unwrap()
+        );
+        assert!(
+            max_finite_diff(
+                actual.map(|v| reference.decode(f64::from(v))),
+                expected.map(|v| reference.decode(v))
+            ) < Policy::Dualray.limit::<DisplayP3>()
+        );
+        assert!(
+            distance(
+                reference.encoded_to_lab(actual.map(f64::from)),
+                reference.encoded_to_lab(expected)
+            ) < Policy::Dualray.delta_limit::<DisplayP3>().unwrap()
+        );
+        let failure = std::panic::catch_unwind(|| {
+            compare::<DisplayP3>(
+                "injected dark Dualray error",
+                Policy::Dualray,
+                &reference,
+                &[[0.5, 0.4, 30.0]],
+                false,
+                |_, out, _| *out = actual,
+                |_, out, _| *out = expected,
+            )
+        })
+        .err()
+        .expect("encoded budget must reject the injection");
+        let message = failure.downcast_ref::<String>().expect("formatted panic");
+        assert!(message.contains("historical encoded budget"), "{message}");
     }
 
     #[test]
@@ -600,6 +676,7 @@ mod tests {
             Policy::EdgeSeeker,
             Policy::Bottosson,
             Policy::BottossonBucket,
+            Policy::Dualray,
         ] {
             assert!(std::panic::catch_unwind(|| compare::<Rec2020>(
                 "injected dark error",
@@ -628,6 +705,7 @@ mod tests {
             Policy::EdgeSeeker,
             Policy::Bottosson,
             Policy::BottossonBucket,
+            Policy::Dualray,
         ] {
             assert!(std::panic::catch_unwind(|| compare::<Srgb>(
                 "injected mode mismatch",
@@ -646,6 +724,31 @@ mod tests {
     fn fold_window_endpoints_agree_across_precisions() {
         fn check<G: float32::gamut::RgbGamut + float64::gamut::RgbGamut>() {
             let [lo, hi] = crate::rgb_spaces::blue_fold_window(G::ID).unwrap();
+            let oracle = crate::test_oracle::BoundaryOracle::new(G::ID);
+            for (edge, below, above) in [
+                (lo, false, true),
+                (hi, true, false),
+                (lo - 360.0, false, true),
+                (hi - 360.0, true, false),
+            ] {
+                for (h, expected) in [
+                    (edge.next_down(), below),
+                    (edge, true),
+                    (edge.next_up(), above),
+                ] {
+                    assert_eq!(
+                        float32::rgb_solvers::in_blue_fold::<G>(h),
+                        expected,
+                        "f32 edge {h}"
+                    );
+                    assert_eq!(
+                        float64::rgb_solvers::in_blue_fold::<G>(f64::from(h)),
+                        expected,
+                        "f64 edge {h}"
+                    );
+                    assert_eq!(oracle.in_fold(f64::from(h)), expected, "oracle edge {h}");
+                }
+            }
             for h in [
                 lo.next_down(),
                 lo,
@@ -654,10 +757,14 @@ mod tests {
                 hi,
                 hi.next_up(),
             ] {
-                assert_eq!(
-                    float32::rgb_solvers::in_blue_fold::<G>(h),
-                    float64::rgb_solvers::in_blue_fold::<G>(f64::from(h))
-                );
+                for h in [h, h - 360.0, h + 360.0, h - 720.0, h + 720.0] {
+                    assert_eq!(
+                        float32::rgb_solvers::in_blue_fold::<G>(h),
+                        float64::rgb_solvers::in_blue_fold::<G>(f64::from(h)),
+                        "{} hue {h}",
+                        G::DEFINITION.name
+                    );
+                }
             }
         }
         check::<Srgb>();
@@ -719,13 +826,7 @@ mod tests {
     #[test]
     fn core_methods_accept_faces_and_neighbours_in_every_gamut() {
         validate_gamut::<Srgb>(&float32::rgb_tests::boundary_inputs::<Srgb>(), &[]);
-        // Dualray alone remains P3-only with its historical workload budget;
-        // this expanded corpus validates all twelve ported methods.
-        validate_methods::<DisplayP3>(
-            &float32::rgb_tests::boundary_inputs::<DisplayP3>(),
-            &[],
-            false,
-        );
+        validate_gamut::<DisplayP3>(&float32::rgb_tests::boundary_inputs::<DisplayP3>(), &[]);
         validate_gamut::<Rec2020>(&float32::rgb_tests::boundary_inputs::<Rec2020>(), &[]);
     }
 

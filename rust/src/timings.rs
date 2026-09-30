@@ -24,7 +24,9 @@ fn time_method(
     })
 }
 
-pub(crate) fn print_checksums<G: edge_seeker::EdgeSeekerData + bottosson::BottossonData>(
+pub(crate) fn print_checksums<
+    G: edge_seeker::EdgeSeekerData + bottosson::BottossonData + dualray::DualrayData,
+>(
     samples: &[[Float; 3]],
 ) {
     println!(
@@ -43,18 +45,13 @@ pub(crate) fn print_checksums<G: edge_seeker::EdgeSeekerData + bottosson::Bottos
             print_method!($name, $module::$method<G>);
         };
     }
-    macro_rules! extra {
-        ($name:literal, $method:ident, $limit:literal) => {
-            if G::ID == crate::rgb_spaces::SpaceId::DisplayP3 {
-                print_method!($name, $method);
-            }
-        };
-    }
-    for_each_method!(core, extra);
+    for_each_rgb_method!(core);
     println!();
 }
 
-pub(crate) fn run_timings<G: edge_seeker::EdgeSeekerData + bottosson::BottossonData>(
+pub(crate) fn run_timings<
+    G: edge_seeker::EdgeSeekerData + bottosson::BottossonData + dualray::DualrayData,
+>(
     label: &str,
     samples: &[[Float; 3]],
     warmup: usize,
@@ -83,14 +80,7 @@ pub(crate) fn run_timings<G: edge_seeker::EdgeSeekerData + bottosson::BottossonD
             time_mapper!($name, $module::$method<G>);
         };
     }
-    macro_rules! extra {
-        ($name:literal, $method:ident, $limit:literal) => {
-            if G::ID == crate::rgb_spaces::SpaceId::DisplayP3 {
-                time_mapper!($name, $method);
-            }
-        };
-    }
-    for_each_method!(core, extra);
+    for_each_rgb_method!(core);
     print_timings(G::DEFINITION.name, label, repeats, timings);
 }
 

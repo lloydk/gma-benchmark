@@ -211,15 +211,14 @@ impl<G: RgbGamut> OklchCubic<G> {
     }
 
     #[inline(always)]
-    fn hue_data(&mut self, h: Float) -> HueData {
+    fn hue_data(&mut self, h: Float) -> &HueData {
         let key = hue_bucket(h);
-        let d = self.cache[key];
-        if d.t_lower != 0.0 {
-            return d;
+        if self.cache[key].t_lower == 0.0 {
+            self.cache[key] = get_hue_data::<G>(key as Float / 10.0);
         }
-        let d = get_hue_data::<G>(key as Float / 10.0);
-        self.cache[key] = d;
-        d
+        // Borrow the entry to avoid a full-record stack copy on every cache hit.
+        // The native f64 copy was sensitive to the caller's stack alignment.
+        &self.cache[key]
     }
 
     #[inline(always)]
@@ -538,11 +537,22 @@ impl<G: RgbGamut> OklchCubicDirect<G> {
 // does not certify a boundary there. Restrict geometric recovery to the fold.
 #[inline(always)]
 pub(crate) fn in_blue_fold<G: RgbGamut>(h: Float) -> bool {
-    let Some([lo, hi]) = crate::rgb_spaces::blue_fold_window(G::ID) else {
+    in_blue_fold_id(G::ID, h)
+}
+
+#[inline(always)]
+pub(crate) fn in_blue_fold_id(id: crate::rgb_spaces::SpaceId, h: Float) -> bool {
+    let Some([lo, hi]) = crate::rgb_spaces::blue_fold_window(id) else {
         return false;
     };
-    let h = h.rem_euclid(360.0);
-    h >= lo as Float && h <= hi as Float
+    let h = if h > -360.0 && h < 360.0 {
+        h
+    } else {
+        h % 360.0
+    };
+    // Avoid both a remainder for ordinary hues and cancellation from adding
+    // 360 to negative f32 hues near a window endpoint.
+    (h >= lo as Float && h <= hi as Float) || (h >= lo as Float - 360.0 && h <= hi as Float - 360.0)
 }
 
 // Every monotone face interval is bracketed separately. This finds re-entries
@@ -626,7 +636,7 @@ fn fold_eval([a, b, c, d]: [Float; 4], x: Float) -> Float {
     let mut error = 0.0;
     for coefficient in [b, c, d] {
         let product = value * x;
-        let product_error = value.mul_add(x, -product);
+        let product_error = super::compensated::product_error(value, x, product);
         let sum = product + coefficient;
         let z = sum - product;
         let sum_error = (product - (sum - z)) + (coefficient - z);

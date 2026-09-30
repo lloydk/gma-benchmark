@@ -8,6 +8,7 @@ use std::time::Instant;
 #[macro_use]
 mod methods;
 mod cli;
+mod dualray_config;
 mod rgb_spaces;
 mod float64 {
     type Float = f64;
@@ -27,7 +28,6 @@ mod float32 {
         include!("float32_tests.rs");
     }
 }
-use float64::*;
 type EdgeSeeker = float64::edge_seeker::EdgeSeeker<rgb_spaces::DisplayP3>;
 type EdgeSeekerIndexed = float64::edge_seeker::EdgeSeekerIndexed<rgb_spaces::DisplayP3>;
 mod rgb_reference;
@@ -181,6 +181,8 @@ where
         + float32::edge_seeker::EdgeSeekerData
         + float64::bottosson::BottossonData
         + float32::bottosson::BottossonData
+        + float64::dualray::DualrayData
+        + float32::dualray::DualrayData
         + validation::ValidationProfile,
 {
     let Workloads {
@@ -190,15 +192,7 @@ where
         random32,
     } = workloads;
     let is_p3 = G::ID == rgb_spaces::SpaceId::DisplayP3;
-    println!(
-        "target: {} ({})",
-        G::DEFINITION.name,
-        if is_p3 {
-            "all 13 methods"
-        } else {
-            "12 methods"
-        }
-    );
+    println!("target: {} ({})", G::DEFINITION.name, "all 13 methods");
     println!(
         "dataset: {} OKLCh colors per workload (grid + random)\n",
         grid.len()
@@ -233,25 +227,6 @@ where
 }
 
 fn validate_p3_solvers(grid: &[[f64; 3]], random: &[[f64; 3]]) {
-    // Dualray uses intrinsic boundary checks in both modes.
-    let mut dualray_diff: f64 = 0.0;
-    for samples in [&grid, &random] {
-        let mut solver = Dualray::new();
-        let mut reference = float64::rgb_solvers::OklchCubicDirect::<rgb_spaces::DisplayP3>::new();
-        dualray_diff = dualray_diff.max(max_channel_diff(
-            samples,
-            |c, o| solver.map(c, o),
-            |c, o| reference.map(c, o),
-        ));
-    }
-    assert!(
-        dualray_diff <= 5e-8,
-        "dualray/cubic-direct difference: {dualray_diff}"
-    );
-    println!(
-        "equivalence: dualray/cubic-direct max channel diff {dualray_diff:.2e} (grid + random)\n"
-    );
-
     let mut cubic_no_cache_max_diff: f64 = 0.0;
     for samples in [&grid, &random] {
         let mut cubic_eq = float64::rgb_solvers::OklchCubic::<rgb_spaces::DisplayP3>::new();

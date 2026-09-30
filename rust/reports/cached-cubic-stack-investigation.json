@@ -1,0 +1,1640 @@
+{
+  "date": "2026-09-30",
+  "scope": "Cause of P3 f64 cached cubic checked-mode regression during Dualray port",
+  "environment": {
+    "cpu": "AMD Ryzen 7 9800X3D 8-Core Processor",
+    "os": "Linux-6.18.33.2-microsoft-standard-WSL2-x86_64-with-glibc2.43",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8",
+    "node": "v26.10.0",
+    "rustflags": "-C target-cpu=native",
+    "profile": "release, opt-level=3, lto=true, codegen-units=1, panic=abort"
+  },
+  "baseline_report": "multi-gamut-milestone-3-dualray.json",
+  "binary_sha256": {
+    "before": "95f46b8a436efc54bc9d7e64331c63cada4fd2beb651f99434e3a327ba31e6f3",
+    "after": "2424903df9b09588e317329b55c3029add296ce6c10b24fc8214861d8b9eabb7",
+    "before-frame": "f05a0c153f7c1322fd9b5ea7b46227a2250d085da1dabf2828bb29ef97e14232",
+    "after-frame": "84e8069e2e2f9dbc2247e3eaaf202118b0e24deaaae73ea50fe203d26baf27be",
+    "borrow": "b393e59390dabca442dbee4a6b6d2ad69f3b854aae88011077a05424288f38ba"
+  },
+  "source_sha256": {
+    "rust/src/algorithms.rs": "30929a3f76229f75a0fa0ec1929e5e44f8fdf1d51db094d1e74c45f3dc513e85",
+    "rust/src/bottosson.rs": "172edb379c3568fc7e18c477fb1b440591fdec7037cfc14cf892dcf190c6f5bd",
+    "rust/src/bottosson_tests.rs": "90e8c83100abfa0559272173ecde876480bce1dce731c11601b3fb5b82586d53",
+    "rust/src/cli.rs": "2ea42c106e249f0a8287da416c124df9cdda7bcaed5e3effaf57d3fac21e252b",
+    "rust/src/clip.rs": "c887f2277a6c136138b2fd67dd4f61df5c4241d9735c4311bc6f7158e26b74a4",
+    "rust/src/color.rs": "0b976abadff8d4ade250c9a14dd294123308967c9c25942dac91c3b90bfdc589",
+    "rust/src/conditioning.rs": "0527f7068b959b1d2c0e0ffe979edfb939d3853259ca33b3d4ccfe30d40482db",
+    "rust/src/css_minde.rs": "4c929054ca386c72c1cdd50b9e6d5dde2d1881ca89bb30a17af9d04ad1900046",
+    "rust/src/css_minde_tests.rs": "f79840c93c9ef25a1dc9b706eea50c803acb7979f425255bef721a4db8cc5576",
+    "rust/src/dualray.rs": "97a047bd86fa6aa72dd55490c309a866eb3be19a9c98c7460c4e772ad14a9837",
+    "rust/src/dualray_config.rs": "54fe813feed4f733f1c57ee7b3583710c0119208dd79d8a2aa2de93a7ac5842b",
+    "rust/src/dualray_fold.rs": "8ed5eea6f0dcc7074987016120de39897a1c3d28c2c0faadc3bd1988ba52f725",
+    "rust/src/dualray_tests.rs": "54c3f733d4063ab9614b935fcb1708042cc78738af5119a564738c6ced198e90",
+    "rust/src/edge_seeker.rs": "599d39b4810dc276161da66dc2b8eade2d6f78824ced00723cafeef54462425b",
+    "rust/src/edge_seeker_tests.rs": "b7aca518954583b63333f622649386617fbee8bd084d4522f93f4e41d58193d5",
+    "rust/src/float32_tests.rs": "da8446a1e1f669708bccc35edc57fa155389762e53e7ad0746ea9053aa363115",
+    "rust/src/gamut.rs": "00e46d308df71ec0f60c24b461aed0e433a28e5278eb076e6b114c515b487939",
+    "rust/src/generated/bottosson_display_p3.rs": "e4d754532d103a0ca770b3f56af87a6f0e71be8ab5d7536f3a2a957e763aab83",
+    "rust/src/generated/bottosson_rec2020.rs": "8c6b61d7df405f4c846d74091d44bb6612226cc5a8ad174c823f12df75b00803",
+    "rust/src/generated/bottosson_srgb.rs": "878e1be579feaeeada15eb0d4eccb4408a857fd128147a975d6462720c99b075",
+    "rust/src/generated/dualray_display_p3.rs": "a1aad3c3ceaae02fc23531b91568c497c5735ee83017047ab9466bacc37bc14b",
+    "rust/src/generated/dualray_rec2020.rs": "a8ffae0bdfc306dcd0548f580899906c814ea2f1e27dc00fb1e2c24d2dff63f1",
+    "rust/src/generated/dualray_srgb.rs": "51ecbcfb4346903847cdd3f6f38eda0df95d3177df8134e062cc5821d6533bd0",
+    "rust/src/generated/edge_seeker_display_p3.rs": "fc75bfc9910f219116136e6db78b3eed11d32fc86def46479a5dab59032925ef",
+    "rust/src/generated/edge_seeker_rec2020.rs": "25584eacd792d1507f49d01c538a7f10291d6128ae9beecf477cffe8b691cc83",
+    "rust/src/generated/edge_seeker_srgb.rs": "0f6553665c201a73f035bc4374e523399e4aa73a60d3b3089a6c1c5fcbd99070",
+    "rust/src/main.rs": "229a025cf0e012b101fcba0eb6dffde942fa0ff2ece5d7f3cbe6c96330616b95",
+    "rust/src/methods.rs": "d25a6027afbe4a5d6812f10e1de7437f8f6e28f5e5db5f9efcb5d3389e57f778",
+    "rust/src/p3_compat.rs": "be7d567d7962d300bf3674b390eeac7f120857397d845a81eea95c84c858975e",
+    "rust/src/polynomial.rs": "f754797728e009d83606c05b5fc79d23fd864270a8452fe8b57e6d8f6a528ae5",
+    "rust/src/rgb_reference.rs": "d06cf5c561fc78d0e2c3eb895b5fad19f22596fc487274f963b8cee327035dc4",
+    "rust/src/rgb_solver_tests.rs": "c871b12f8576fc7602d265eb58a5910eccf902ae3ca773c867749b17ce42292e",
+    "rust/src/rgb_solvers.rs": "2fab7c6116a30db092eaa738d835d4a32cd55f0cf8d75d6f984a969d3ea894ee",
+    "rust/src/rgb_spaces.rs": "2782791359920b1332a07348bd74a858e1f30091f1e441eb6ade1af6278f1063",
+    "rust/src/rgb_tests.rs": "125ffc46639c46304774b17bfa55e95d55703783f3e2c4ff418f03349d1c3bb9",
+    "rust/src/test_oracle.rs": "e9e7e0d4455e4f7fe5d33bd462534213d0162a178ece0e223bebef656d47320c",
+    "rust/src/timings.rs": "d1649b22c4b68f093766d2fb7c001c01ee25e222aa70cacddf14255a31ad9fcf",
+    "rust/src/transfer.rs": "21656816eee27a4bce7210582f6b197e927d55b37a6572161e16e8270dca6027",
+    "rust/src/validation.rs": "1994401d34e8ff1fcc6dfb4718e9fa19171652951593ff0a22906094eceea6f2",
+    "rust/examples/rgb-gamut-profiles.rs": "7692b153df00c841dca94d49130093fd2f47c1f294c54d755229d5efdcf6f8fc",
+    "scripts/generate-bottosson.mjs": "5c5e5b1c8e5034fa5f4e95b7f32dd16276fba2a80e0b819cf3f7fc233355f3ef",
+    "scripts/generate-dualray.mjs": "9e8deed5daf0cb85b43601e75ab04067b72f38bc119e29689c33d55c8baca83f",
+    "scripts/generate-edge-seeker.mjs": "64a9e9756a3aa891769c977a29ff858d612612434b1adef58ed8b76630686e0f",
+    "scripts/rgb-gamut-profiles.mjs": "4ff78f52338e2e3e63f6375b06ace82b0d0dfab5a0f063291dffa71fdf8d0d5b",
+    "scripts/data/dualray-display-p3.json": "0d14d7ee2a5b672e246222d85c594f67f44ba87a5c244181fcea2470efa14715",
+    "rust/Cargo.toml": "31859fa1b0232ca3aac1d2e0ffb865e07069fb45c4e8540a9eb63167d3bdb190"
+  },
+  "findings": {
+    "trigger": "run_gamut::<DisplayP3> local stack allocation shrank from 0x58 to 0x48 after the header println simplification",
+    "sensitive_operation": "hue_data returns a 104-byte f64 HueData by value; hot cache hit copies it with overlapping 64-byte stores to the stack and then reloads fields",
+    "mechanism": "stack alignment changes store-to-load forwarding conflicts on Ryzen 9800X3D native AVX-512 build",
+    "causal_intervention": "Only two frame-size immediate bytes changed in each original binary; code and static-data addresses preserved",
+    "recommended_change": "Return a shared reference to the cached hue entry, preserving lazy initialization; scratch prototype only"
+  },
+  "assembly": {
+    "before": {
+      "address": "0x2942a0",
+      "bytes": 5188,
+      "instructions": 969,
+      "instruction_counts": {
+        "push": 6,
+        "sub": 1,
+        "vmovupd": 6,
+        "lea": 17,
+        "mov": 28,
+        "test": 2,
+        "je": 4,
+        "vmovddup": 4,
+        "vmovsd": 157,
+        "vxorpd": 28,
+        "jmp": 27,
+        "xchg": 3,
+        "vmulsd": 152,
+        "vaddsd": 101,
+        "add": 3,
+        "cmp": 7,
+        "vucomisd": 65,
+        "jae": 15,
+        "vdivsd": 30,
+        "vzeroupper": 14,
+        "call": 20,
+        "vunpcklpd": 5,
+        "vmulpd": 5,
+        "vbroadcastsd": 1,
+        "vpermpd": 2,
+        "vaddpd": 2,
+        "vsubpd": 1,
+        "vblendpd": 3,
+        "vcmplepd": 2,
+        "vpmovm2d": 2,
+        "vpblendd": 1,
+        "vpmovd2m": 1,
+        "knotw": 1,
+        "kmovd": 1,
+        "jne": 13,
+        "vextractf128": 1,
+        "jb": 8,
+        "vshufpd": 4,
+        "vmovapd": 78,
+        "jbe": 15,
+        "nopw": 3,
+        "nop": 1,
+        "ja": 16,
+        "vcmpltsd": 14,
+        "vpbroadcastq": 1,
+        "vpternlogq": 2,
+        "vroundsd": 1,
+        "vcvttsd2usi": 1,
+        "cmovb": 1,
+        "cmova": 1,
+        "imul": 1,
+        "vmovups": 11,
+        "jp": 3,
+        "vcvtusi2sd": 1,
+        "vmovaps": 5,
+        "vminsd": 8,
+        "vcmpunordsd": 3,
+        "vsubsd": 14,
+        "xor": 2,
+        "data16": 1,
+        "vcmpneqsd": 2,
+        "vandpd": 9,
+        "vsqrtsd": 5,
+        "jnp": 9,
+        "vmovq": 1,
+        "movabs": 1,
+        "bzhi": 1,
+        "jg": 1,
+        "vdivpd": 2,
+        "vmaxsd": 1,
+        "kandw": 1,
+        "vcmpnlesd": 1,
+        "vcmplesd": 2,
+        "pop": 6,
+        "ret": 1
+      }
+    },
+    "after": {
+      "address": "0x2cbbd0",
+      "bytes": 5188,
+      "instructions": 969,
+      "instruction_counts": {
+        "push": 6,
+        "sub": 1,
+        "vmovupd": 6,
+        "lea": 17,
+        "mov": 28,
+        "test": 2,
+        "je": 4,
+        "vmovddup": 4,
+        "vmovsd": 157,
+        "vxorpd": 28,
+        "jmp": 27,
+        "xchg": 3,
+        "vmulsd": 152,
+        "vaddsd": 101,
+        "add": 3,
+        "cmp": 7,
+        "vucomisd": 65,
+        "jae": 15,
+        "vdivsd": 30,
+        "vzeroupper": 14,
+        "call": 20,
+        "vunpcklpd": 5,
+        "vmulpd": 5,
+        "vbroadcastsd": 1,
+        "vpermpd": 2,
+        "vaddpd": 2,
+        "vsubpd": 1,
+        "vblendpd": 3,
+        "vcmplepd": 2,
+        "vpmovm2d": 2,
+        "vpblendd": 1,
+        "vpmovd2m": 1,
+        "knotw": 1,
+        "kmovd": 1,
+        "jne": 13,
+        "vextractf128": 1,
+        "jb": 8,
+        "vshufpd": 4,
+        "vmovapd": 78,
+        "jbe": 15,
+        "nopw": 3,
+        "nop": 1,
+        "ja": 16,
+        "vcmpltsd": 14,
+        "vpbroadcastq": 1,
+        "vpternlogq": 2,
+        "vroundsd": 1,
+        "vcvttsd2usi": 1,
+        "cmovb": 1,
+        "cmova": 1,
+        "imul": 1,
+        "vmovups": 11,
+        "jp": 3,
+        "vcvtusi2sd": 1,
+        "vmovaps": 5,
+        "vminsd": 8,
+        "vcmpunordsd": 3,
+        "vsubsd": 14,
+        "xor": 2,
+        "data16": 1,
+        "vcmpneqsd": 2,
+        "vandpd": 9,
+        "vsqrtsd": 5,
+        "jnp": 9,
+        "vmovq": 1,
+        "movabs": 1,
+        "bzhi": 1,
+        "jg": 1,
+        "vdivpd": 2,
+        "vmaxsd": 1,
+        "kandw": 1,
+        "vcmpnlesd": 1,
+        "vcmplesd": 2,
+        "pop": 6,
+        "ret": 1
+      }
+    },
+    "normalized_identical": true
+  },
+  "frame_patch": {
+    "before": {
+      "prologue_immediate_va": "0x5748d",
+      "epilogue_immediate_va": "0x5765e",
+      "old": "0x58",
+      "new": "0x68"
+    },
+    "after": {
+      "prologue_immediate_va": "0x5919d",
+      "epilogue_immediate_va": "0x5934f",
+      "old": "0x48",
+      "new": "0x58"
+    }
+  },
+  "observed_stack": [
+    {
+      "build": "before",
+      "frame_rsp_mod64": 0
+    },
+    {
+      "build": "after",
+      "frame_rsp_mod64": 16
+    },
+    {
+      "build": "after-frame",
+      "frame_rsp_mod64": 0
+    },
+    {
+      "build": "before-frame",
+      "frame_rsp_mod64": 48
+    }
+  ],
+  "full_harness": {
+    "protocol": "8 sequential processes in forward/reverse variant order, CPU 2, ASLR disabled, same /tmp/gma-dualray-c_nkcyap/timed-bench pathname, --in-gamut-check; 35640 grid and random inputs, 50 warmup/25 measured passes, all outputs consumed; no concurrent builds/tests/benchmarks",
+    "process_rows": [
+      {
+        "run": 0,
+        "build": "before",
+        "ns": [
+          62.6,
+          90.97,
+          54.45,
+          81.58
+        ]
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "ns": [
+          72.81,
+          94.73,
+          54.78,
+          79.8
+        ]
+      },
+      {
+        "run": 0,
+        "build": "after-frame",
+        "ns": [
+          62.38,
+          88.8,
+          54.49,
+          79.38
+        ]
+      },
+      {
+        "run": 0,
+        "build": "before-frame",
+        "ns": [
+          72.71,
+          94.23,
+          54.55,
+          82.91
+        ]
+      },
+      {
+        "run": 1,
+        "build": "before-frame",
+        "ns": [
+          74.29,
+          94.35,
+          54.86,
+          82.19
+        ]
+      },
+      {
+        "run": 1,
+        "build": "after-frame",
+        "ns": [
+          63.37,
+          89.78,
+          54.06,
+          79.56
+        ]
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "ns": [
+          72.96,
+          93.67,
+          54.63,
+          79.51
+        ]
+      },
+      {
+        "run": 1,
+        "build": "before",
+        "ns": [
+          62.69,
+          88.82,
+          54.75,
+          81.56
+        ]
+      }
+    ],
+    "median_of_process_medians": [
+      {
+        "build": "before",
+        "checked_f64_grid_ns": 62.644999999999996,
+        "checked_f64_random_ns": 89.895
+      },
+      {
+        "build": "after",
+        "checked_f64_grid_ns": 72.88499999999999,
+        "checked_f64_random_ns": 94.2
+      },
+      {
+        "build": "after-frame",
+        "checked_f64_grid_ns": 62.875,
+        "checked_f64_random_ns": 89.28999999999999
+      },
+      {
+        "build": "before-frame",
+        "checked_f64_grid_ns": 73.5,
+        "checked_f64_random_ns": 94.28999999999999
+      }
+    ],
+    "validation_and_checksum_text_unchanged": true
+  },
+  "focused_probe": {
+    "protocol": "dlopen original executable with only DF_1_PIE removed; invoke existing closure with reconstructed context and preallocated cache/input. Copying code to a new mapping adjusts only external RIP-relative/relative displacements. Call wrapper aligns stack to 64 bytes then applies 0/16/32/48-byte offsets. Separate sequential processes pinned to CPU 2, ASLR disabled; 50 warmups after one checksum/init pass, 100 measured passes; check every checksum. No hot code recompiled except borrow prototype.",
+    "code_placement_sweep": [
+      {
+        "run": 0,
+        "build": "before",
+        "offset": "original",
+        "mode": "grid",
+        "output": "before original grid 81.49391 checksum 39942.022267463588 code 0x7ffff7b892a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 81.49391
+      },
+      {
+        "run": 0,
+        "build": "before",
+        "offset": "0",
+        "mode": "grid",
+        "output": "before 0 grid 83.47374 checksum 39942.022267463588 code 0x7ffff6800000 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 83.47374
+      },
+      {
+        "run": 0,
+        "build": "before",
+        "offset": "10",
+        "mode": "grid",
+        "output": "before 10 grid 82.50572 checksum 39942.022267463588 code 0x7ffff6800010 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 82.50572
+      },
+      {
+        "run": 0,
+        "build": "before",
+        "offset": "20",
+        "mode": "grid",
+        "output": "before 20 grid 81.66647 checksum 39942.022267463588 code 0x7ffff6800020 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 81.66647
+      },
+      {
+        "run": 0,
+        "build": "before",
+        "offset": "30",
+        "mode": "grid",
+        "output": "before 30 grid 81.41308 checksum 39942.022267463588 code 0x7ffff6800030 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 81.41308
+      },
+      {
+        "run": 0,
+        "build": "before",
+        "offset": "42a0",
+        "mode": "grid",
+        "output": "before 42a0 grid 80.91813 checksum 39942.022267463588 code 0x7ffff68042a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 80.91813
+      },
+      {
+        "run": 0,
+        "build": "before",
+        "offset": "bbd0",
+        "mode": "grid",
+        "output": "before bbd0 grid 80.76411 checksum 39942.022267463588 code 0x7ffff680bbd0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 80.76411
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "offset": "original",
+        "mode": "grid",
+        "output": "after original grid 81.93246 checksum 39942.022267463588 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 81.93246
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "offset": "0",
+        "mode": "grid",
+        "output": "after 0 grid 80.74473 checksum 39942.022267463588 code 0x7ffff6800000 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 80.74473
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "offset": "10",
+        "mode": "grid",
+        "output": "after 10 grid 81.62214 checksum 39942.022267463588 code 0x7ffff6800010 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 81.62214
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "offset": "20",
+        "mode": "grid",
+        "output": "after 20 grid 81.16535 checksum 39942.022267463588 code 0x7ffff6800020 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 81.16535
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "offset": "30",
+        "mode": "grid",
+        "output": "after 30 grid 81.12632 checksum 39942.022267463588 code 0x7ffff6800030 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 81.12632
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "offset": "42a0",
+        "mode": "grid",
+        "output": "after 42a0 grid 80.92823 checksum 39942.022267463588 code 0x7ffff68042a0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 80.92823
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "offset": "bbd0",
+        "mode": "grid",
+        "output": "after bbd0 grid 81.26411 checksum 39942.022267463588 code 0x7ffff680bbd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 81.26411
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "offset": "original",
+        "mode": "grid",
+        "output": "after original grid 81.32329 checksum 39942.022267463588 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 81.32329
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "offset": "0",
+        "mode": "grid",
+        "output": "after 0 grid 80.67458 checksum 39942.022267463588 code 0x7ffff6800000 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 80.67458
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "offset": "10",
+        "mode": "grid",
+        "output": "after 10 grid 81.45070 checksum 39942.022267463588 code 0x7ffff6800010 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 81.4507
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "offset": "20",
+        "mode": "grid",
+        "output": "after 20 grid 80.88392 checksum 39942.022267463588 code 0x7ffff6800020 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 80.88392
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "offset": "30",
+        "mode": "grid",
+        "output": "after 30 grid 80.83171 checksum 39942.022267463588 code 0x7ffff6800030 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 80.83171
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "offset": "42a0",
+        "mode": "grid",
+        "output": "after 42a0 grid 81.04329 checksum 39942.022267463588 code 0x7ffff68042a0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 81.04329
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "offset": "bbd0",
+        "mode": "grid",
+        "output": "after bbd0 grid 81.03740 checksum 39942.022267463588 code 0x7ffff680bbd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 81.0374
+      },
+      {
+        "run": 1,
+        "build": "before",
+        "offset": "original",
+        "mode": "grid",
+        "output": "before original grid 81.12326 checksum 39942.022267463588 code 0x7ffff7b892a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 81.12326
+      },
+      {
+        "run": 1,
+        "build": "before",
+        "offset": "0",
+        "mode": "grid",
+        "output": "before 0 grid 80.67573 checksum 39942.022267463588 code 0x7ffff6800000 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 80.67573
+      },
+      {
+        "run": 1,
+        "build": "before",
+        "offset": "10",
+        "mode": "grid",
+        "output": "before 10 grid 81.14543 checksum 39942.022267463588 code 0x7ffff6800010 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 81.14543
+      },
+      {
+        "run": 1,
+        "build": "before",
+        "offset": "20",
+        "mode": "grid",
+        "output": "before 20 grid 80.82217 checksum 39942.022267463588 code 0x7ffff6800020 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 80.82217
+      },
+      {
+        "run": 1,
+        "build": "before",
+        "offset": "30",
+        "mode": "grid",
+        "output": "before 30 grid 80.54214 checksum 39942.022267463588 code 0x7ffff6800030 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 80.54214
+      },
+      {
+        "run": 1,
+        "build": "before",
+        "offset": "42a0",
+        "mode": "grid",
+        "output": "before 42a0 grid 80.67290 checksum 39942.022267463588 code 0x7ffff68042a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 80.6729
+      },
+      {
+        "run": 1,
+        "build": "before",
+        "offset": "bbd0",
+        "mode": "grid",
+        "output": "before bbd0 grid 81.05536 checksum 39942.022267463588 code 0x7ffff680bbd0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 81.05536
+      },
+      {
+        "run": 0,
+        "build": "before",
+        "offset": "original",
+        "mode": "random",
+        "output": "before original random 101.53269 checksum 39811.710276675301 code 0x7ffff7b892a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 101.53269
+      },
+      {
+        "run": 0,
+        "build": "before",
+        "offset": "0",
+        "mode": "random",
+        "output": "before 0 random 101.00238 checksum 39811.710276675301 code 0x7ffff6800000 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 101.00238
+      },
+      {
+        "run": 0,
+        "build": "before",
+        "offset": "10",
+        "mode": "random",
+        "output": "before 10 random 102.05491 checksum 39811.710276675301 code 0x7ffff6800010 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 102.05491
+      },
+      {
+        "run": 0,
+        "build": "before",
+        "offset": "20",
+        "mode": "random",
+        "output": "before 20 random 103.31616 checksum 39811.710276675301 code 0x7ffff6800020 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 103.31616
+      },
+      {
+        "run": 0,
+        "build": "before",
+        "offset": "30",
+        "mode": "random",
+        "output": "before 30 random 102.28134 checksum 39811.710276675301 code 0x7ffff6800030 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 102.28134
+      },
+      {
+        "run": 0,
+        "build": "before",
+        "offset": "42a0",
+        "mode": "random",
+        "output": "before 42a0 random 102.48224 checksum 39811.710276675301 code 0x7ffff68042a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 102.48224
+      },
+      {
+        "run": 0,
+        "build": "before",
+        "offset": "bbd0",
+        "mode": "random",
+        "output": "before bbd0 random 102.02876 checksum 39811.710276675301 code 0x7ffff680bbd0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 102.02876
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "offset": "original",
+        "mode": "random",
+        "output": "after original random 102.61888 checksum 39811.710276675301 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 102.61888
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "offset": "0",
+        "mode": "random",
+        "output": "after 0 random 101.37222 checksum 39811.710276675301 code 0x7ffff6800000 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 101.37222
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "offset": "10",
+        "mode": "random",
+        "output": "after 10 random 101.57957 checksum 39811.710276675301 code 0x7ffff6800010 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 101.57957
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "offset": "20",
+        "mode": "random",
+        "output": "after 20 random 102.29116 checksum 39811.710276675301 code 0x7ffff6800020 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 102.29116
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "offset": "30",
+        "mode": "random",
+        "output": "after 30 random 102.57792 checksum 39811.710276675301 code 0x7ffff6800030 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 102.57792
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "offset": "42a0",
+        "mode": "random",
+        "output": "after 42a0 random 102.33996 checksum 39811.710276675301 code 0x7ffff68042a0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 102.33996
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "offset": "bbd0",
+        "mode": "random",
+        "output": "after bbd0 random 102.12562 checksum 39811.710276675301 code 0x7ffff680bbd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 102.12562
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "offset": "original",
+        "mode": "random",
+        "output": "after original random 102.19517 checksum 39811.710276675301 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 102.19517
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "offset": "0",
+        "mode": "random",
+        "output": "after 0 random 101.49680 checksum 39811.710276675301 code 0x7ffff6800000 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 101.4968
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "offset": "10",
+        "mode": "random",
+        "output": "after 10 random 102.35567 checksum 39811.710276675301 code 0x7ffff6800010 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 102.35567
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "offset": "20",
+        "mode": "random",
+        "output": "after 20 random 102.06414 checksum 39811.710276675301 code 0x7ffff6800020 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 102.06414
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "offset": "30",
+        "mode": "random",
+        "output": "after 30 random 102.48474 checksum 39811.710276675301 code 0x7ffff6800030 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 102.48474
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "offset": "42a0",
+        "mode": "random",
+        "output": "after 42a0 random 101.58575 checksum 39811.710276675301 code 0x7ffff68042a0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 101.58575
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "offset": "bbd0",
+        "mode": "random",
+        "output": "after bbd0 random 101.79085 checksum 39811.710276675301 code 0x7ffff680bbd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 101.79085
+      },
+      {
+        "run": 1,
+        "build": "before",
+        "offset": "original",
+        "mode": "random",
+        "output": "before original random 102.35513 checksum 39811.710276675301 code 0x7ffff7b892a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 102.35513
+      },
+      {
+        "run": 1,
+        "build": "before",
+        "offset": "0",
+        "mode": "random",
+        "output": "before 0 random 101.37391 checksum 39811.710276675301 code 0x7ffff6800000 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 101.37391
+      },
+      {
+        "run": 1,
+        "build": "before",
+        "offset": "10",
+        "mode": "random",
+        "output": "before 10 random 102.25129 checksum 39811.710276675301 code 0x7ffff6800010 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 102.25129
+      },
+      {
+        "run": 1,
+        "build": "before",
+        "offset": "20",
+        "mode": "random",
+        "output": "before 20 random 101.77287 checksum 39811.710276675301 code 0x7ffff6800020 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 101.77287
+      },
+      {
+        "run": 1,
+        "build": "before",
+        "offset": "30",
+        "mode": "random",
+        "output": "before 30 random 101.89492 checksum 39811.710276675301 code 0x7ffff6800030 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 101.89492
+      },
+      {
+        "run": 1,
+        "build": "before",
+        "offset": "42a0",
+        "mode": "random",
+        "output": "before 42a0 random 101.37618 checksum 39811.710276675301 code 0x7ffff68042a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 101.37618
+      },
+      {
+        "run": 1,
+        "build": "before",
+        "offset": "bbd0",
+        "mode": "random",
+        "output": "before bbd0 random 102.03050 checksum 39811.710276675301 code 0x7ffff680bbd0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 102.0305
+      }
+    ],
+    "stack_sweep": [
+      {
+        "run": 0,
+        "build": "before",
+        "mode": "grid",
+        "stackoffset": 0,
+        "output": "before original grid 72.87536 checksum 39942.022267463588 code 0x7ffff7b892a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 72.87536
+      },
+      {
+        "run": 0,
+        "build": "before",
+        "mode": "grid",
+        "stackoffset": 16,
+        "output": "before original grid 62.50985 checksum 39942.022267463588 code 0x7ffff7b892a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 62.50985
+      },
+      {
+        "run": 0,
+        "build": "before",
+        "mode": "grid",
+        "stackoffset": 32,
+        "output": "before original grid 72.78302 checksum 39942.022267463588 code 0x7ffff7b892a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 72.78302
+      },
+      {
+        "run": 0,
+        "build": "before",
+        "mode": "grid",
+        "stackoffset": 48,
+        "output": "before original grid 72.09080 checksum 39942.022267463588 code 0x7ffff7b892a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 72.0908
+      },
+      {
+        "run": 0,
+        "build": "before",
+        "mode": "random",
+        "stackoffset": 0,
+        "output": "before original random 94.06681 checksum 39811.710276675301 code 0x7ffff7b892a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 94.06681
+      },
+      {
+        "run": 0,
+        "build": "before",
+        "mode": "random",
+        "stackoffset": 16,
+        "output": "before original random 88.08802 checksum 39811.710276675301 code 0x7ffff7b892a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 88.08802
+      },
+      {
+        "run": 0,
+        "build": "before",
+        "mode": "random",
+        "stackoffset": 32,
+        "output": "before original random 95.19223 checksum 39811.710276675301 code 0x7ffff7b892a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 95.19223
+      },
+      {
+        "run": 0,
+        "build": "before",
+        "mode": "random",
+        "stackoffset": 48,
+        "output": "before original random 93.55671 checksum 39811.710276675301 code 0x7ffff7b892a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 93.55671
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "mode": "grid",
+        "stackoffset": 0,
+        "output": "after original grid 72.85233 checksum 39942.022267463588 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 72.85233
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "mode": "grid",
+        "stackoffset": 16,
+        "output": "after original grid 62.63302 checksum 39942.022267463588 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 62.63302
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "mode": "grid",
+        "stackoffset": 32,
+        "output": "after original grid 73.22020 checksum 39942.022267463588 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 73.2202
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "mode": "grid",
+        "stackoffset": 48,
+        "output": "after original grid 72.63880 checksum 39942.022267463588 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 72.6388
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "mode": "random",
+        "stackoffset": 0,
+        "output": "after original random 97.10867 checksum 39811.710276675301 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 97.10867
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "mode": "random",
+        "stackoffset": 16,
+        "output": "after original random 90.73735 checksum 39811.710276675301 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 90.73735
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "mode": "random",
+        "stackoffset": 32,
+        "output": "after original random 94.99400 checksum 39811.710276675301 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 94.994
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "mode": "random",
+        "stackoffset": 48,
+        "output": "after original random 94.57214 checksum 39811.710276675301 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 94.57214
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "mode": "grid",
+        "stackoffset": 0,
+        "output": "after original grid 73.30831 checksum 39942.022267463588 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 73.30831
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "mode": "grid",
+        "stackoffset": 16,
+        "output": "after original grid 63.62601 checksum 39942.022267463588 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 63.62601
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "mode": "grid",
+        "stackoffset": 32,
+        "output": "after original grid 72.49287 checksum 39942.022267463588 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 72.49287
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "mode": "grid",
+        "stackoffset": 48,
+        "output": "after original grid 73.34394 checksum 39942.022267463588 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 73.34394
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "mode": "random",
+        "stackoffset": 0,
+        "output": "after original random 96.27671 checksum 39811.710276675301 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 96.27671
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "mode": "random",
+        "stackoffset": 16,
+        "output": "after original random 89.08914 checksum 39811.710276675301 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 89.08914
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "mode": "random",
+        "stackoffset": 32,
+        "output": "after original random 93.74046 checksum 39811.710276675301 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 93.74046
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "mode": "random",
+        "stackoffset": 48,
+        "output": "after original random 93.44447 checksum 39811.710276675301 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 93.44447
+      },
+      {
+        "run": 1,
+        "build": "before",
+        "mode": "grid",
+        "stackoffset": 0,
+        "output": "before original grid 72.57567 checksum 39942.022267463588 code 0x7ffff7b892a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 72.57567
+      },
+      {
+        "run": 1,
+        "build": "before",
+        "mode": "grid",
+        "stackoffset": 16,
+        "output": "before original grid 62.52553 checksum 39942.022267463588 code 0x7ffff7b892a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 62.52553
+      },
+      {
+        "run": 1,
+        "build": "before",
+        "mode": "grid",
+        "stackoffset": 32,
+        "output": "before original grid 72.54877 checksum 39942.022267463588 code 0x7ffff7b892a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 72.54877
+      },
+      {
+        "run": 1,
+        "build": "before",
+        "mode": "grid",
+        "stackoffset": 48,
+        "output": "before original grid 72.36411 checksum 39942.022267463588 code 0x7ffff7b892a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 72.36411
+      },
+      {
+        "run": 1,
+        "build": "before",
+        "mode": "random",
+        "stackoffset": 0,
+        "output": "before original random 94.04467 checksum 39811.710276675301 code 0x7ffff7b892a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 94.04467
+      },
+      {
+        "run": 1,
+        "build": "before",
+        "mode": "random",
+        "stackoffset": 16,
+        "output": "before original random 88.31644 checksum 39811.710276675301 code 0x7ffff7b892a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 88.31644
+      },
+      {
+        "run": 1,
+        "build": "before",
+        "mode": "random",
+        "stackoffset": 32,
+        "output": "before original random 93.82273 checksum 39811.710276675301 code 0x7ffff7b892a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 93.82273
+      },
+      {
+        "run": 1,
+        "build": "before",
+        "mode": "random",
+        "stackoffset": 48,
+        "output": "before original random 92.86902 checksum 39811.710276675301 code 0x7ffff7b892a0 data 0x7ffff7898000 input 0x7ffff77c6000 base 0x7ffff78f5000\n",
+        "ns": 92.86902
+      }
+    ],
+    "stack_summary": [
+      {
+        "build": "after",
+        "workload": "grid",
+        "caller_stack_offset": 0,
+        "median_ns": 73.08032
+      },
+      {
+        "build": "after",
+        "workload": "grid",
+        "caller_stack_offset": 16,
+        "median_ns": 63.129515
+      },
+      {
+        "build": "after",
+        "workload": "grid",
+        "caller_stack_offset": 32,
+        "median_ns": 72.85653500000001
+      },
+      {
+        "build": "after",
+        "workload": "grid",
+        "caller_stack_offset": 48,
+        "median_ns": 72.99137
+      },
+      {
+        "build": "after",
+        "workload": "random",
+        "caller_stack_offset": 0,
+        "median_ns": 96.69269
+      },
+      {
+        "build": "after",
+        "workload": "random",
+        "caller_stack_offset": 16,
+        "median_ns": 89.913245
+      },
+      {
+        "build": "after",
+        "workload": "random",
+        "caller_stack_offset": 32,
+        "median_ns": 94.36723
+      },
+      {
+        "build": "after",
+        "workload": "random",
+        "caller_stack_offset": 48,
+        "median_ns": 94.00830500000001
+      },
+      {
+        "build": "before",
+        "workload": "grid",
+        "caller_stack_offset": 0,
+        "median_ns": 72.725515
+      },
+      {
+        "build": "before",
+        "workload": "grid",
+        "caller_stack_offset": 16,
+        "median_ns": 62.51769
+      },
+      {
+        "build": "before",
+        "workload": "grid",
+        "caller_stack_offset": 32,
+        "median_ns": 72.665895
+      },
+      {
+        "build": "before",
+        "workload": "grid",
+        "caller_stack_offset": 48,
+        "median_ns": 72.22745499999999
+      },
+      {
+        "build": "before",
+        "workload": "random",
+        "caller_stack_offset": 0,
+        "median_ns": 94.05574
+      },
+      {
+        "build": "before",
+        "workload": "random",
+        "caller_stack_offset": 16,
+        "median_ns": 88.20223
+      },
+      {
+        "build": "before",
+        "workload": "random",
+        "caller_stack_offset": 32,
+        "median_ns": 94.50748
+      },
+      {
+        "build": "before",
+        "workload": "random",
+        "caller_stack_offset": 48,
+        "median_ns": 93.212865
+      }
+    ],
+    "borrow_sweep": [
+      {
+        "run": 0,
+        "build": "after",
+        "mode": "grid",
+        "stackoffset": 0,
+        "output": "after original grid 73.27517 checksum 39942.022267463588 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 73.27517
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "mode": "grid",
+        "stackoffset": 16,
+        "output": "after original grid 63.86411 checksum 39942.022267463588 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 63.86411
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "mode": "grid",
+        "stackoffset": 32,
+        "output": "after original grid 73.20867 checksum 39942.022267463588 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 73.20867
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "mode": "grid",
+        "stackoffset": 48,
+        "output": "after original grid 72.52015 checksum 39942.022267463588 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 72.52015
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "mode": "random",
+        "stackoffset": 0,
+        "output": "after original random 95.50901 checksum 39811.710276675301 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 95.50901
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "mode": "random",
+        "stackoffset": 16,
+        "output": "after original random 89.62175 checksum 39811.710276675301 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 89.62175
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "mode": "random",
+        "stackoffset": 32,
+        "output": "after original random 99.25965 checksum 39811.710276675301 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 99.25965
+      },
+      {
+        "run": 0,
+        "build": "after",
+        "mode": "random",
+        "stackoffset": 48,
+        "output": "after original random 93.90519 checksum 39811.710276675301 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 93.90519
+      },
+      {
+        "run": 0,
+        "build": "borrow",
+        "mode": "grid",
+        "stackoffset": 0,
+        "output": "borrow original grid 60.81395 checksum 39942.022267463588 code 0x7ffff7b888b0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 60.81395
+      },
+      {
+        "run": 0,
+        "build": "borrow",
+        "mode": "grid",
+        "stackoffset": 16,
+        "output": "borrow original grid 61.01372 checksum 39942.022267463588 code 0x7ffff7b888b0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 61.01372
+      },
+      {
+        "run": 0,
+        "build": "borrow",
+        "mode": "grid",
+        "stackoffset": 32,
+        "output": "borrow original grid 61.20508 checksum 39942.022267463588 code 0x7ffff7b888b0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 61.20508
+      },
+      {
+        "run": 0,
+        "build": "borrow",
+        "mode": "grid",
+        "stackoffset": 48,
+        "output": "borrow original grid 60.84537 checksum 39942.022267463588 code 0x7ffff7b888b0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 60.84537
+      },
+      {
+        "run": 0,
+        "build": "borrow",
+        "mode": "random",
+        "stackoffset": 0,
+        "output": "borrow original random 86.71790 checksum 39811.710276675301 code 0x7ffff7b888b0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 86.7179
+      },
+      {
+        "run": 0,
+        "build": "borrow",
+        "mode": "random",
+        "stackoffset": 16,
+        "output": "borrow original random 86.48754 checksum 39811.710276675301 code 0x7ffff7b888b0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 86.48754
+      },
+      {
+        "run": 0,
+        "build": "borrow",
+        "mode": "random",
+        "stackoffset": 32,
+        "output": "borrow original random 86.56695 checksum 39811.710276675301 code 0x7ffff7b888b0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 86.56695
+      },
+      {
+        "run": 0,
+        "build": "borrow",
+        "mode": "random",
+        "stackoffset": 48,
+        "output": "borrow original random 86.61352 checksum 39811.710276675301 code 0x7ffff7b888b0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 86.61352
+      },
+      {
+        "run": 1,
+        "build": "borrow",
+        "mode": "grid",
+        "stackoffset": 0,
+        "output": "borrow original grid 61.09428 checksum 39942.022267463588 code 0x7ffff7b888b0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 61.09428
+      },
+      {
+        "run": 1,
+        "build": "borrow",
+        "mode": "grid",
+        "stackoffset": 16,
+        "output": "borrow original grid 60.69161 checksum 39942.022267463588 code 0x7ffff7b888b0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 60.69161
+      },
+      {
+        "run": 1,
+        "build": "borrow",
+        "mode": "grid",
+        "stackoffset": 32,
+        "output": "borrow original grid 60.94893 checksum 39942.022267463588 code 0x7ffff7b888b0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 60.94893
+      },
+      {
+        "run": 1,
+        "build": "borrow",
+        "mode": "grid",
+        "stackoffset": 48,
+        "output": "borrow original grid 60.69133 checksum 39942.022267463588 code 0x7ffff7b888b0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 60.69133
+      },
+      {
+        "run": 1,
+        "build": "borrow",
+        "mode": "random",
+        "stackoffset": 0,
+        "output": "borrow original random 86.42104 checksum 39811.710276675301 code 0x7ffff7b888b0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 86.42104
+      },
+      {
+        "run": 1,
+        "build": "borrow",
+        "mode": "random",
+        "stackoffset": 16,
+        "output": "borrow original random 86.25297 checksum 39811.710276675301 code 0x7ffff7b888b0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 86.25297
+      },
+      {
+        "run": 1,
+        "build": "borrow",
+        "mode": "random",
+        "stackoffset": 32,
+        "output": "borrow original random 86.64523 checksum 39811.710276675301 code 0x7ffff7b888b0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 86.64523
+      },
+      {
+        "run": 1,
+        "build": "borrow",
+        "mode": "random",
+        "stackoffset": 48,
+        "output": "borrow original random 86.39554 checksum 39811.710276675301 code 0x7ffff7b888b0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 86.39554
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "mode": "grid",
+        "stackoffset": 0,
+        "output": "after original grid 73.20306 checksum 39942.022267463588 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 73.20306
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "mode": "grid",
+        "stackoffset": 16,
+        "output": "after original grid 63.03538 checksum 39942.022267463588 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 63.03538
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "mode": "grid",
+        "stackoffset": 32,
+        "output": "after original grid 72.77643 checksum 39942.022267463588 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 72.77643
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "mode": "grid",
+        "stackoffset": 48,
+        "output": "after original grid 72.51341 checksum 39942.022267463588 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 72.51341
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "mode": "random",
+        "stackoffset": 0,
+        "output": "after original random 94.61678 checksum 39811.710276675301 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 94.61678
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "mode": "random",
+        "stackoffset": 16,
+        "output": "after original random 88.68230 checksum 39811.710276675301 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 88.6823
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "mode": "random",
+        "stackoffset": 32,
+        "output": "after original random 94.60556 checksum 39811.710276675301 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 94.60556
+      },
+      {
+        "run": 1,
+        "build": "after",
+        "mode": "random",
+        "stackoffset": 48,
+        "output": "after original random 93.70317 checksum 39811.710276675301 code 0x7ffff7b88bd0 data 0x7ffff7860000 input 0x7ffff778e000 base 0x7ffff78bd000\n",
+        "ns": 93.70317
+      }
+    ],
+    "borrow_summary": [
+      {
+        "build": "after",
+        "workload": "grid",
+        "caller_stack_offset": 0,
+        "median_ns": 73.239115
+      },
+      {
+        "build": "after",
+        "workload": "grid",
+        "caller_stack_offset": 16,
+        "median_ns": 63.449745
+      },
+      {
+        "build": "after",
+        "workload": "grid",
+        "caller_stack_offset": 32,
+        "median_ns": 72.99255
+      },
+      {
+        "build": "after",
+        "workload": "grid",
+        "caller_stack_offset": 48,
+        "median_ns": 72.51678
+      },
+      {
+        "build": "after",
+        "workload": "random",
+        "caller_stack_offset": 0,
+        "median_ns": 95.062895
+      },
+      {
+        "build": "after",
+        "workload": "random",
+        "caller_stack_offset": 16,
+        "median_ns": 89.15202500000001
+      },
+      {
+        "build": "after",
+        "workload": "random",
+        "caller_stack_offset": 32,
+        "median_ns": 96.932605
+      },
+      {
+        "build": "after",
+        "workload": "random",
+        "caller_stack_offset": 48,
+        "median_ns": 93.80418
+      },
+      {
+        "build": "borrow",
+        "workload": "grid",
+        "caller_stack_offset": 0,
+        "median_ns": 60.954115
+      },
+      {
+        "build": "borrow",
+        "workload": "grid",
+        "caller_stack_offset": 16,
+        "median_ns": 60.852665
+      },
+      {
+        "build": "borrow",
+        "workload": "grid",
+        "caller_stack_offset": 32,
+        "median_ns": 61.077005
+      },
+      {
+        "build": "borrow",
+        "workload": "grid",
+        "caller_stack_offset": 48,
+        "median_ns": 60.76835
+      },
+      {
+        "build": "borrow",
+        "workload": "random",
+        "caller_stack_offset": 0,
+        "median_ns": 86.56947
+      },
+      {
+        "build": "borrow",
+        "workload": "random",
+        "caller_stack_offset": 16,
+        "median_ns": 86.370255
+      },
+      {
+        "build": "borrow",
+        "workload": "random",
+        "caller_stack_offset": 32,
+        "median_ns": 86.60609
+      },
+      {
+        "build": "borrow",
+        "workload": "random",
+        "caller_stack_offset": 48,
+        "median_ns": 86.50452999999999
+      }
+    ],
+    "checksum": {
+      "grid": 39942.02226746359,
+      "random": 39811.7102766753
+    }
+  },
+  "perf": {
+    "scope": "Process-wide hardware counters for focused grid probe; 1 initial pass + 50 warmup + 700 measured passes, plus loader/setup/teardown. Six simultaneous events, 100% running, one run each; counters corroborate, do not replace paired timing evidence.",
+    "counts": {
+      "fast": {
+        "cycles:u": 8720546676,
+        "instructions:u": 22020322604,
+        "branches:u": 2295039187,
+        "branch-misses:u": 13363609,
+        "ls_bad_status2.stli_other:u": 50050079,
+        "ls_misal_loads.ma64:u": 110825826
+      },
+      "slow": {
+        "cycles:u": 10158935494,
+        "instructions:u": 22020319798,
+        "branches:u": 2295038784,
+        "branch-misses:u": 13938712,
+        "ls_bad_status2.stli_other:u": 165895885,
+        "ls_misal_loads.ma64:u": 57492440
+      },
+      "borrow": {
+        "cycles:u": 8440772523,
+        "instructions:u": 21913255633,
+        "branches:u": 2295038814,
+        "branch-misses:u": 12790240,
+        "ls_bad_status2.stli_other:u": 7124972,
+        "ls_misal_loads.ma64:u": 7709924
+      }
+    },
+    "conflict_sampling": {
+      "event": "ls_bad_status2.stli_other:u",
+      "period": 20000,
+      "fast": {
+        "estimated_events": 50080000,
+        "closure_percent": 64.54
+      },
+      "slow": {
+        "estimated_events": 164840000,
+        "closure_percent": 71.44
+      }
+    },
+    "sample_ip_caveat": "Raw PMU sampling is imprecise; do not assign every event to the sampled instruction or claim a particular undocumented hardware forwarding rule."
+  },
+  "prototype": {
+    "diff": "--- rust/src/rgb_solvers.rs\n+++ scratch/borrow/src/rgb_solvers.rs\n@@ -211,15 +211,12 @@\n     }\n \n     #[inline(always)]\n-    fn hue_data(&mut self, h: Float) -> HueData {\n+    fn hue_data(&mut self, h: Float) -> &HueData {\n         let key = hue_bucket(h);\n-        let d = self.cache[key];\n-        if d.t_lower != 0.0 {\n-            return d;\n-        }\n-        let d = get_hue_data::<G>(key as Float / 10.0);\n-        self.cache[key] = d;\n-        d\n+        if self.cache[key].t_lower == 0.0 {\n+            self.cache[key] = get_hue_data::<G>(key as Float / 10.0);\n+        }\n+        &self.cache[key]\n     }\n \n     #[inline(always)]\n",
+    "source_sha256": "8bf65ed4d512be3ac5e790709d26a9f2dabb35e543dc8ea32e31073cce8f9bd9",
+    "native_release_tests": "102 passed, 0 failed",
+    "compatibility": {
+      "outputs": 7121920,
+      "changed": 0,
+      "bytes": 128194560,
+      "sha256": "993edc95018b92f5ce25d56f7f4a335a4a383838ac1639ed62345dde7e10117d",
+      "scope": "Display-P3, all 13 methods, both precisions and modes; same 136960-input manifest as milestone-3 report"
+    },
+    "working_tree_algorithm_changed": false
+  },
+  "limitations": [
+    "Findings scoped to the native target-cpu build on this Ryzen 9800X3D; no portable x86-64, other CPU or JavaScript performance claim.",
+    "Prototype timing is a focused closure probe. Adoption still merits full all-target/precision/mode timing and portable validation.",
+    "Code-placement sweep was an initial diagnostic; the decisive original-binary frame patch preserves code and data placement.",
+    "Only the stack-size patch changes were made to executable copies; unwind metadata was not changed, and these panic-abort diagnostic copies are not production artifacts."
+  ],
+  "artifacts": {
+    "scratch_directory": "/tmp/gma-cached-investigation",
+    "script_sha256": {
+      "prepare.py": "34f85a07034facdaaea8c5253aa3866496299f5675d172db1e7367eeb9ad850a",
+      "probe.c": "957d1ded72b3b960f46e96ef88ef5b6164ac38e67f3e7681e9b55faa8282f57b",
+      "probe-original.c": "69cec896d23d118929428c7e40cb213a805e586742c7d4ebfbc57b1a3f5ccdf6",
+      "sweep.py": "e3398314378c153b708afc24cec5dc5b81d8ed4bcf449b850398c6a756de56b1",
+      "stack.py": "546ff6943d8f3d7e7979820e7cbe38dd27cd99a74e89f74254fe46626ba20dd4",
+      "frame-patch.py": "e9ec1d214878b056af6157b32860ffc1d8951df06b9f19083f7b1e52440cbbbf",
+      "frame-bench.py": "027feee1848fba89c95bd6bf3580d137f2b91c91f3ec5e371c6bb8692619e501",
+      "observe-stack.py": "005938f71b3394aee35794ff3d236062a0604c743ded1e204e8c4d7061bb4f19",
+      "borrow-stack.py": "e3934e10c06cbaa2555c20dc6c3fbb3c378ee5f6425a3b84f542504d21f8bbb8",
+      "borrow-snapshot.py": "c53afbdfbf5a799ba01326d28b57cf1ed17845b2254fcdd3b205a6eafbe6d06e"
+    },
+    "log_sha256": {
+      "frame-0-after-frame.txt": "62469ad1cd0d89c038528e00cfcfc9da4ffa437c4f6eb9348404787fd49e08cf",
+      "frame-0-after.txt": "2cdc8e8cbb666e2d08cca5007da4254d1eff599aa84319879d39c455b0932f12",
+      "frame-0-before-frame.txt": "e444a8d7d70c6e00c49f9715f69019e7427e1d4e28338172bf6b39c3c861b90b",
+      "frame-0-before.txt": "162e73e6405ee3ce0f69c20222d9879882081f4694412b225511bd6be3ab56e2",
+      "frame-1-after-frame.txt": "1f73f2baf2eff1c8f0f5901c1d01e3a3fbce2ccddc70bd68f59e7a6e6844e308",
+      "frame-1-after.txt": "40ab7794e1f5a52dc2376fc95acdbab4fe400c6ad63ee16c5e40b3638183245e",
+      "frame-1-before-frame.txt": "6e6e3b1bd6d9e24d246d62b94187e2a85405e1f9299e779b330073fc98c081d1",
+      "frame-1-before.txt": "b22ca0750eef4f6bd088db1e7a408f25afb9d801cc5ba5d1fdbf4ced02c84b87",
+      "frame-progress.txt": "cbd0b4928cf713534a463e4f32701170e75bcd18b94a1f80dd885e9f092a5d11",
+      "borrow-tests.txt": "4efa0dc5f6b75bef900b972df34ec594db469ec8247954e30100c4ec34290d18",
+      "borrow-snapshot.txt": "cc4463a4ddba5678f15a94381f921f14b1de51da5ea3b90748d79e8e2451cd8d"
+    }
+  }
+}

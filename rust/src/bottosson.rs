@@ -2,6 +2,7 @@
 #[cfg(test)]
 use super::color::Oklch;
 use super::color::{Oklab, KA0, KA1, KA2, KB0, KB1, KB2};
+use super::compensated::{mul_add, product_error};
 use super::gamut::{DisplayP3, Rec2020, RgbGamut, Srgb};
 use super::rgb_solvers::{oklab_to_rgb_if_in_gamut, oklch_to_rgb_if_in_gamut};
 use super::transfer::{clamp01, TransferFunction};
@@ -86,19 +87,22 @@ fn sector<G: BottossonData>(a: Float, b: Float, h: Float) -> usize {
 }
 
 // Compensate the cancellation-prone channel residual using native scalars.
-// mul_add recovers each product's rounding residual; the low cube part also
+// product_error recovers each product's rounding residual; the low cube part also
 // retains the rounding lost when forming 1 + saturation * slope.
 #[inline(always)]
 fn saturation_residual(sat: Float, q: [Float; 3], weights: [Float; 3]) -> Float {
     let terms = std::array::from_fn::<_, 3, _>(|i| {
-        let x = sat.mul_add(q[i], 1.0);
-        let dx = sat.mul_add(q[i], 1.0 - x);
+        let x = mul_add(sat, q[i], 1.0);
+        let dx = mul_add(sat, q[i], 1.0 - x);
         let x2 = x * x;
-        let dx2 = x.mul_add(x, -x2) + 2.0 * x * dx;
+        let dx2 = product_error(x, x, x2) + 2.0 * x * dx;
         let x3 = x2 * x;
-        let dx3 = x2.mul_add(x, -x3) + dx2 * x + x2 * dx;
+        let dx3 = product_error(x2, x, x3) + dx2 * x + x2 * dx;
         let product = weights[i] * x3;
-        [product, weights[i].mul_add(x3, -product) + weights[i] * dx3]
+        [
+            product,
+            product_error(weights[i], x3, product) + weights[i] * dx3,
+        ]
     });
     let sum = terms[0][0] + terms[1][0];
     let recovered = sum - terms[0][0];
@@ -123,24 +127,28 @@ fn compute_max_saturation<G: BottossonData, const FUSED: bool>(
 
     let a2 = a * a;
     let sat = if FUSED {
-        (k4 * a).mul_add(b, (k3 * a).mul_add(a, k2.mul_add(b, k1.mul_add(a, k0))))
+        mul_add(
+            k4 * a,
+            b,
+            mul_add(k3 * a, a, mul_add(k2, b, mul_add(k1, a, k0))),
+        )
     } else {
         k0 + k1 * a + k2 * b + k3 * a2 + k4 * a * b
     };
     let (kl, km, ks) = if FUSED {
         (
-            KA0.mul_add(a, KB0 * b),
-            KA1.mul_add(a, KB1 * b),
-            KA2.mul_add(a, KB2 * b),
+            mul_add(KA0, a, KB0 * b),
+            mul_add(KA1, a, KB1 * b),
+            mul_add(KA2, a, KB2 * b),
         )
     } else {
         (KA0 * a + KB0 * b, KA1 * a + KB1 * b, KA2 * a + KB2 * b)
     };
     let (l, m, s) = if FUSED {
         (
-            sat.mul_add(kl, 1.0),
-            sat.mul_add(km, 1.0),
-            sat.mul_add(ks, 1.0),
+            mul_add(sat, kl, 1.0),
+            mul_add(sat, km, 1.0),
+            mul_add(sat, ks, 1.0),
         )
     } else {
         (1.0 + sat * kl, 1.0 + sat * km, 1.0 + sat * ks)
@@ -151,8 +159,8 @@ fn compute_max_saturation<G: BottossonData, const FUSED: bool>(
     let (f, f1, f2) = if FUSED {
         (
             saturation_residual(sat, [kl, km, ks], [wl, wm, ws]),
-            3.0 * (wl * kl).mul_add(l2, (wm * km).mul_add(m2, ws * ks * s2)),
-            6.0 * (wl * kl * kl).mul_add(l, (wm * km * km).mul_add(m, ws * ks * ks * s)),
+            3.0 * mul_add(wl * kl, l2, mul_add(wm * km, m2, ws * ks * s2)),
+            6.0 * mul_add(wl * kl * kl, l, mul_add(wm * km * km, m, ws * ks * ks * s)),
         )
     } else {
         (

@@ -164,10 +164,9 @@ impl BoundaryOracle {
     }
 
     pub fn in_fold(&self, h: f64) -> bool {
-        let Some([lo, hi]) = crate::rgb_spaces::blue_fold_window(self.id) else {
-            return false;
-        };
-        (f64::from(lo)..=f64::from(hi)).contains(&h.rem_euclid(360.0))
+        // Share only the authored policy window; the root geometry above is
+        // independent of the production solvers.
+        crate::float64::rgb_solvers::in_blue_fold_id(self.id, h)
     }
 
     // All feasible outward face intersections, only for the fold window.

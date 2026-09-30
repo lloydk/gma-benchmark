@@ -2,10 +2,13 @@
 // entries use that precision. SINGLE branches are resolved at compile time.
 include!("conditioning.rs");
 
-mod dualray {
+pub(crate) mod compensated {
+    include!("compensated.rs");
+}
+
+pub(crate) mod dualray {
     include!("dualray.rs");
 }
-pub(crate) use dualray::Dualray;
 
 pub(crate) mod css_minde {
     include!("css_minde.rs");
@@ -26,6 +29,7 @@ mod p3_compat {
     include!("p3_compat.rs");
 }
 use color::{KA0, KA1, KA2, KB0, KB1, KB2};
+#[cfg(test)]
 use p3_compat::*;
 include!("polynomial.rs");
 pub(crate) mod rgb_solvers {
