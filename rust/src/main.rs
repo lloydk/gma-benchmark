@@ -1,3 +1,6 @@
+type BottossonLightness = float64::bottosson::BottossonLightness<crate::rgb_spaces::DisplayP3>;
+type BottossonLightnessCached =
+    float64::bottosson::BottossonLightnessCached<crate::rgb_spaces::DisplayP3>;
 // Scalar OKLCh -> RGB benchmarks in native f64 and f32.
 use std::hint::black_box;
 use std::time::Instant;
@@ -25,6 +28,8 @@ mod float32 {
     }
 }
 use float64::*;
+type EdgeSeeker = float64::edge_seeker::EdgeSeeker<rgb_spaces::DisplayP3>;
+type EdgeSeekerIndexed = float64::edge_seeker::EdgeSeekerIndexed<rgb_spaces::DisplayP3>;
 mod rgb_reference;
 #[cfg(test)]
 mod test_oracle;
@@ -172,7 +177,11 @@ impl Workloads {
 
 fn run_gamut<G>(options: &cli::Options, workloads: &Workloads)
 where
-    G: float64::gamut::RgbGamut + float32::gamut::RgbGamut + validation::ValidationProfile,
+    G: float64::edge_seeker::EdgeSeekerData
+        + float32::edge_seeker::EdgeSeekerData
+        + float64::bottosson::BottossonData
+        + float32::bottosson::BottossonData
+        + validation::ValidationProfile,
 {
     let Workloads {
         grid,
@@ -187,7 +196,7 @@ where
         if is_p3 {
             "all 13 methods"
         } else {
-            "8 matrix-based methods"
+            "12 methods"
         }
     );
     println!(
@@ -241,104 +250,6 @@ fn validate_p3_solvers(grid: &[[f64; 3]], random: &[[f64; 3]]) {
     );
     println!(
         "equivalence: dualray/cubic-direct max channel diff {dualray_diff:.2e} (grid + random)\n"
-    );
-
-    // Equivalence across both workloads: the in-gamut-check fast path must match
-    // the unchecked path for both methods.
-    let mut max_diff: f64 = 0.0;
-    for samples in [&grid, &random] {
-        let mut cubic_eq = float64::rgb_solvers::OklchCubic::<rgb_spaces::DisplayP3>::new();
-        let mut cubic_checked_eq = float64::rgb_solvers::OklchCubic::<rgb_spaces::DisplayP3>::new();
-        let cubic_check_diff = max_channel_diff(
-            samples,
-            |c, o| cubic_eq.map(c, o),
-            |c, o| cubic_checked_eq.map_with_in_gamut_check(c, o),
-        );
-        let mut cubic_no_cache_eq =
-            float64::rgb_solvers::OklchCubicNoCache::<rgb_spaces::DisplayP3>::new();
-        let mut cubic_no_cache_checked_eq =
-            float64::rgb_solvers::OklchCubicNoCache::<rgb_spaces::DisplayP3>::new();
-        let cubic_no_cache_check_diff = max_channel_diff(
-            samples,
-            |c, o| cubic_no_cache_eq.map(c, o),
-            |c, o| cubic_no_cache_checked_eq.map_with_in_gamut_check(c, o),
-        );
-        let mut cubic_direct_eq =
-            float64::rgb_solvers::OklchCubicDirect::<rgb_spaces::DisplayP3>::new();
-        let mut cubic_direct_checked_eq =
-            float64::rgb_solvers::OklchCubicDirect::<rgb_spaces::DisplayP3>::new();
-        let cubic_direct_check_diff = max_channel_diff(
-            samples,
-            |c, o| cubic_direct_eq.map(c, o),
-            |c, o| cubic_direct_checked_eq.map_with_in_gamut_check(c, o),
-        );
-        let mut halley_eq = float64::rgb_solvers::OklchHalley::<rgb_spaces::DisplayP3>::new();
-        let mut halley_checked_eq =
-            float64::rgb_solvers::OklchHalley::<rgb_spaces::DisplayP3>::new();
-        let halley_check_diff = max_channel_diff(
-            samples,
-            |c, o| halley_eq.map(c, o),
-            |c, o| halley_checked_eq.map_with_in_gamut_check(c, o),
-        );
-        let mut ostrowski_eq = float64::rgb_solvers::OklchOstrowski::<rgb_spaces::DisplayP3>::new();
-        let mut ostrowski_checked_eq =
-            float64::rgb_solvers::OklchOstrowski::<rgb_spaces::DisplayP3>::new();
-        let ostrowski_check_diff = max_channel_diff(
-            samples,
-            |c, o| ostrowski_eq.map(c, o),
-            |c, o| ostrowski_checked_eq.map_with_in_gamut_check(c, o),
-        );
-        let mut bottosson_eq = BottossonLightness::new();
-        let mut bottosson_checked_eq = BottossonLightness::new();
-        let bottosson_check_diff = max_channel_diff(
-            samples,
-            |c, o| bottosson_eq.map(c, o),
-            |c, o| bottosson_checked_eq.map_with_in_gamut_check(c, o),
-        );
-        let mut bottosson_cached_eq = BottossonLightnessCached::new();
-        let mut bottosson_cached_checked_eq = BottossonLightnessCached::new();
-        let bottosson_cached_check_diff = max_channel_diff(
-            samples,
-            |c, o| bottosson_cached_eq.map(c, o),
-            |c, o| bottosson_cached_checked_eq.map_with_in_gamut_check(c, o),
-        );
-        let mut raytrace_eq = float64::rgb_solvers::Raytrace::<rgb_spaces::DisplayP3>::new();
-        let mut raytrace_checked_eq =
-            float64::rgb_solvers::Raytrace::<rgb_spaces::DisplayP3>::new();
-        let raytrace_check_diff = max_channel_diff(
-            samples,
-            |c, o| raytrace_eq.map(c, o),
-            |c, o| raytrace_checked_eq.map_with_in_gamut_check(c, o),
-        );
-        let mut edge_eq = EdgeSeeker::new();
-        let mut edge_checked_eq = EdgeSeeker::new();
-        let edge_check_diff = max_channel_diff(
-            samples,
-            |c, o| edge_eq.map(c, o),
-            |c, o| edge_checked_eq.map_with_in_gamut_check(c, o),
-        );
-        let mut edge_indexed_eq = EdgeSeekerIndexed::new();
-        let mut edge_indexed_checked_eq = EdgeSeekerIndexed::new();
-        let edge_indexed_check_diff = max_channel_diff(
-            samples,
-            |c, o| edge_indexed_eq.map(c, o),
-            |c, o| edge_indexed_checked_eq.map_with_in_gamut_check(c, o),
-        );
-        max_diff = max_diff
-            .max(cubic_check_diff)
-            .max(cubic_no_cache_check_diff)
-            .max(cubic_direct_check_diff)
-            .max(halley_check_diff)
-            .max(ostrowski_check_diff)
-            .max(bottosson_check_diff)
-            .max(bottosson_cached_check_diff)
-            .max(raytrace_check_diff)
-            .max(edge_check_diff)
-            .max(edge_indexed_check_diff);
-    }
-    println!(
-        "equivalence: unchecked/in-gamut-check max channel diff {} (grid + random)\n",
-        max_diff
     );
 
     let mut cubic_no_cache_max_diff: f64 = 0.0;

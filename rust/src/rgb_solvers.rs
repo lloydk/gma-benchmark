@@ -10,17 +10,32 @@ fn encode<G: RgbGamut>(x: Float) -> Float {
     G::Transfer::encode_clamped(x)
 }
 #[inline(always)]
-fn oklch_to_clipped_rgb<G: RgbGamut>(l: Float, c: Float, h: Float, out: &mut [Float; 3]) {
+pub(super) fn oklch_to_clipped_rgb<G: RgbGamut>(
+    l: Float,
+    c: Float,
+    h: Float,
+    out: &mut [Float; 3],
+) {
     super::clip::Clip::<G>::new().map(&[l, c, h], out);
 }
 #[inline(always)]
-fn oklch_to_rgb_if_in_gamut<G: RgbGamut>(
+pub(super) fn oklch_to_rgb_if_in_gamut<G: RgbGamut>(
     l: Float,
     c: Float,
     h: Float,
     out: &mut [Float; 3],
 ) -> bool {
-    let rgb = Oklch::from([l, c, h]).to_oklab().to_linear_rgb::<G>();
+    let lab = Oklch::from([l, c, h]).to_oklab();
+    oklab_to_rgb_if_in_gamut::<G>(lab.l, lab.a, lab.b, out)
+}
+#[inline(always)]
+pub(super) fn oklab_to_rgb_if_in_gamut<G: RgbGamut>(
+    l: Float,
+    a: Float,
+    b: Float,
+    out: &mut [Float; 3],
+) -> bool {
+    let rgb = Oklab { l, a, b }.to_linear_rgb::<G>();
     if !rgb.in_gamut() {
         return false;
     }
@@ -197,11 +212,7 @@ impl<G: RgbGamut> OklchCubic<G> {
 
     #[inline(always)]
     fn hue_data(&mut self, h: Float) -> HueData {
-        let mut hh = h % 360.0;
-        if hh < 0.0 {
-            hh += 360.0;
-        }
-        let key = (hh * 10.0).round() as usize;
+        let key = hue_bucket(h);
         let d = self.cache[key];
         if d.t_lower != 0.0 {
             return d;
@@ -254,7 +265,14 @@ impl<G: RgbGamut> OklchCubic<G> {
                     continue;
                 }
             }
-            max_t = max_t.min(first_root(d[i], 3.0 * b[i], 3.0 * a[i], dd, 0.0, max_t));
+            max_t = max_t.min(first_face_root(
+                d[i],
+                3.0 * b[i],
+                3.0 * a[i],
+                dd,
+                max_t,
+                true,
+            ));
         }
 
         let l3 = l * l * l;
@@ -269,8 +287,8 @@ impl<G: RgbGamut> OklchCubic<G> {
 
 // ── Method 3: oklch-cubic (no cache) ─────────────────────────────────────────
 // Same fixed 0.1° bucket semantics as the cached variant, but recomputes the
-// per-hue cubic structure for every call. Kept separate so this row cannot affect
-// the cached implementation.
+// per-hue cubic structure for every call. The root solver and conditioning
+// are shared with the cached implementation.
 
 #[derive(Clone, Copy)]
 struct NoCacheHueData {
@@ -283,15 +301,11 @@ struct NoCacheHueData {
 
 #[inline(always)]
 fn first_turn_no_cache(d: Float, b: Float, a: Float) -> Float {
-    first_root_no_cache(0.0, d, 2.0 * b, a, 1e-12, Float::INFINITY)
+    first_root(0.0, d, 2.0 * b, a, 1e-12, Float::INFINITY)
 }
 
 fn get_hue_data_no_cache<G: RgbGamut>(h: Float) -> NoCacheHueData {
-    let mut hh = h % 360.0;
-    if hh < 0.0 {
-        hh += 360.0;
-    }
-    let bucket_h = ((hh * 10.0).round() as usize) as Float / 10.0;
+    let bucket_h = hue_bucket(h) as Float / 10.0;
     let rad = hue_radians(bucket_h);
     let (cos, sin) = (rad.cos(), rad.sin());
     let q0 = KA0 * cos + KB0 * sin;
@@ -317,7 +331,7 @@ fn get_hue_data_no_cache<G: RgbGamut>(h: Float) -> NoCacheHueData {
     let mut t_lower = Float::INFINITY;
     let mut turn = [0.0; 3];
     for i in 0..3 {
-        t_lower = t_lower.min(first_root_no_cache(
+        t_lower = t_lower.min(first_root(
             d[i],
             3.0 * b[i],
             3.0 * a[i],
@@ -387,13 +401,13 @@ impl<G: RgbGamut> OklchCubicNoCache<G> {
                     continue;
                 }
             }
-            max_t = max_t.min(first_root_no_cache(
+            max_t = max_t.min(first_face_root(
                 d[i],
                 3.0 * b[i],
                 3.0 * a[i],
                 dd,
-                0.0,
                 max_t,
+                true,
             ));
         }
 

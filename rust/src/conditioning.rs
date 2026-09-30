@@ -13,9 +13,6 @@ fn hue_radians(h: Float) -> Float {
 
 #[inline(always)]
 fn first_root(a: Float, b: Float, c: Float, d: Float, lo: Float, hi: Float) -> Float {
-    if lo == 0.0 && d == 0.0 {
-        return face_exit(a, b, c, true, hi);
-    }
     let candidate = first_root_candidate(a, b, c, d, lo, hi);
     if SINGLE {
         checked_cardano([a, b, c, d], lo, hi, candidate)
@@ -24,8 +21,22 @@ fn first_root(a: Float, b: Float, c: Float, d: Float, lo: Float, hi: Float) -> F
     }
 }
 #[inline(always)]
-fn first_root_no_cache(a: Float, b: Float, c: Float, d: Float, lo: Float, hi: Float) -> Float {
-    first_root(a, b, c, d, lo, hi)
+fn first_face_root(a: Float, b: Float, c: Float, d: Float, hi: Float, upper: bool) -> Float {
+    if d == 0.0 {
+        face_exit(a, b, c, upper, hi)
+    } else {
+        first_root(a, b, c, d, 0.0, hi)
+    }
+}
+
+// Shared 0.1-degree policy for both cubic variants and cached Bottosson.
+#[inline(always)]
+fn hue_bucket(h: Float) -> usize {
+    let mut h = h % 360.0;
+    if h < 0.0 {
+        h += 360.0;
+    }
+    (h * 10.0).round() as usize
 }
 // Forced inlining regressed native f32 timing here. Let LLVM optimize the
 // three-channel caller independently of this solver wrapper.

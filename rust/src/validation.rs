@@ -6,6 +6,10 @@ use crate::{float32, float64};
 // These are corpus regression limits, not full-domain numerical guarantees.
 pub(crate) trait ValidationProfile: RgbSpace {
     const MINDE_DELTA_LIMIT: f64;
+    const BOTTOSSON_LINEAR_LIMIT: f64;
+    const BOTTOSSON_DELTA_LIMIT: f64;
+    const EDGE_LINEAR_LIMIT: f64;
+    const EDGE_DELTA_LIMIT: f64;
     const BOUNDARY_LINEAR_LIMIT: f64;
     const BUCKET_LINEAR_LIMIT: f64;
     const RAYTRACE_LINEAR_LIMIT: f64;
@@ -15,6 +19,10 @@ pub(crate) trait ValidationProfile: RgbSpace {
     const RAYTRACE_REFERENCE_LINEAR_LIMIT: f64;
 }
 impl ValidationProfile for Srgb {
+    const BOTTOSSON_LINEAR_LIMIT: f64 = 1.2e-5;
+    const BOTTOSSON_DELTA_LIMIT: f64 = 5e-6;
+    const EDGE_LINEAR_LIMIT: f64 = 1e-5;
+    const EDGE_DELTA_LIMIT: f64 = 3e-6;
     const MINDE_DELTA_LIMIT: f64 = 0.0002;
     const BOUNDARY_LINEAR_LIMIT: f64 = 5e-5;
     const BOUNDARY_DELTA_LIMIT: f64 = 2e-5;
@@ -25,6 +33,10 @@ impl ValidationProfile for Srgb {
     const RAYTRACE_REFERENCE_LINEAR_LIMIT: f64 = 5e-4;
 }
 impl ValidationProfile for DisplayP3 {
+    const BOTTOSSON_LINEAR_LIMIT: f64 = 1.2e-5;
+    const BOTTOSSON_DELTA_LIMIT: f64 = 5e-6;
+    const EDGE_LINEAR_LIMIT: f64 = 1e-5;
+    const EDGE_DELTA_LIMIT: f64 = 3e-6;
     const MINDE_DELTA_LIMIT: f64 = 0.00025;
     const BOUNDARY_LINEAR_LIMIT: f64 = 5e-5;
     const BOUNDARY_DELTA_LIMIT: f64 = 2e-5;
@@ -35,6 +47,10 @@ impl ValidationProfile for DisplayP3 {
     const RAYTRACE_REFERENCE_LINEAR_LIMIT: f64 = 5e-5;
 }
 impl ValidationProfile for Rec2020 {
+    const BOTTOSSON_LINEAR_LIMIT: f64 = 1.2e-5;
+    const BOTTOSSON_DELTA_LIMIT: f64 = 5e-6;
+    const EDGE_LINEAR_LIMIT: f64 = 1e-5;
+    const EDGE_DELTA_LIMIT: f64 = 3e-6;
     const MINDE_DELTA_LIMIT: f64 = 0.0015;
     const BOUNDARY_LINEAR_LIMIT: f64 = 5e-5;
     const BOUNDARY_DELTA_LIMIT: f64 = 2e-5;
@@ -54,6 +70,9 @@ enum Policy {
     Iterative,
     Bucket,
     Raytrace,
+    Bottosson,
+    BottossonBucket,
+    EdgeSeeker,
     Encoded(f64),
 }
 impl Policy {
@@ -62,8 +81,8 @@ impl Policy {
             Self::Clip => "linear RGB",
             Self::Minde => "deltaEOK",
             Self::Boundary | Self::Iterative => "linear RGB",
-            Self::Bucket => "linear/bucket",
-            Self::Raytrace => "linear RGB",
+            Self::Bucket | Self::BottossonBucket => "linear/bucket",
+            Self::Raytrace | Self::EdgeSeeker | Self::Bottosson => "linear RGB",
             Self::Encoded(_) => "encoded RGB",
         }
     }
@@ -71,6 +90,8 @@ impl Policy {
         match self {
             Self::Boundary | Self::Iterative | Self::Bucket => Some(G::BOUNDARY_DELTA_LIMIT),
             Self::Raytrace => Some(G::RAYTRACE_DELTA_LIMIT),
+            Self::EdgeSeeker => Some(G::EDGE_DELTA_LIMIT),
+            Self::Bottosson | Self::BottossonBucket => Some(G::BOTTOSSON_DELTA_LIMIT),
             _ => None,
         }
     }
@@ -81,6 +102,8 @@ impl Policy {
             Self::Boundary | Self::Iterative => G::BOUNDARY_LINEAR_LIMIT,
             Self::Bucket => G::BUCKET_LINEAR_LIMIT,
             Self::Raytrace => G::RAYTRACE_LINEAR_LIMIT,
+            Self::EdgeSeeker => G::EDGE_LINEAR_LIMIT,
+            Self::Bottosson | Self::BottossonBucket => G::BOTTOSSON_LINEAR_LIMIT,
             Self::Encoded(limit) => limit,
         }
     }
@@ -150,7 +173,7 @@ fn compare<G: ValidationProfile + float32::gamut::RgbGamut + float64::gamut::Rgb
         // Quantization is a mapping policy, not solver roundoff. Compare the
         // same 0.1-degree bucket; tests separately cover authored-hue prechecks.
         let mut input = *authored;
-        if matches!(policy, Policy::Bucket) {
+        if matches!(policy, Policy::Bucket | Policy::BottossonBucket) {
             let h = input[2].rem_euclid(360.0);
             input[2] = (h * 10.0).round() / 10.0;
         }
@@ -164,7 +187,13 @@ fn compare<G: ValidationProfile + float32::gamut::RgbGamut + float64::gamut::Rgb
         if checked
             && matches!(
                 policy,
-                Policy::Boundary | Policy::Iterative | Policy::Bucket | Policy::Raytrace
+                Policy::Boundary
+                    | Policy::Iterative
+                    | Policy::Bucket
+                    | Policy::Raytrace
+                    | Policy::EdgeSeeker
+                    | Policy::Bottosson
+                    | Policy::BottossonBucket
             )
             && input[0] > 0.0
             && input[0] < 1.0
@@ -190,24 +219,32 @@ fn compare<G: ValidationProfile + float32::gamut::RgbGamut + float64::gamut::Rgb
                     "{name}: f64 canonical pass-through at {input:?}"
                 );
             }
-            if rgb32.in_gamut() != rgb64.in_gamut() {
-                result.classifications += 1;
-                result.branch_encoded = result.branch_encoded.max(
-                    (0..3)
-                        .map(|i| (f64::from(actual[i]) - expected[i]).abs())
-                        .fold(0.0, f64::max),
-                );
+            if !rgb32.in_gamut() || !rgb64.in_gamut() {
                 let (mut plain32, mut plain64) = ([0.0; 3], [0.0; 3]);
                 narrow(input, &mut plain32, false);
                 wide(&input.map(f64::from), &mut plain64, false);
                 if !rgb32.in_gamut() {
-                    assert_eq!(actual.map(f32::to_bits), plain32.map(f32::to_bits));
+                    assert_eq!(
+                        actual.map(f32::to_bits),
+                        plain32.map(f32::to_bits),
+                        "{name}: rejected f32 precheck changed output at {input:?}"
+                    );
                 }
                 if !rgb64.in_gamut() {
-                    assert_eq!(expected.map(f64::to_bits), plain64.map(f64::to_bits));
+                    assert_eq!(
+                        expected.map(f64::to_bits),
+                        plain64.map(f64::to_bits),
+                        "{name}: rejected f64 precheck changed output at {input:?}"
+                    );
                 }
-                actual = plain32;
-                expected = plain64;
+                if rgb32.in_gamut() != rgb64.in_gamut() {
+                    result.classifications += 1;
+                    result.branch_encoded = result
+                        .branch_encoded
+                        .max(max_finite_diff(actual.map(f64::from), expected));
+                    actual = plain32;
+                    expected = plain64;
+                }
             }
         }
         assert!(
@@ -237,7 +274,10 @@ fn compare<G: ValidationProfile + float32::gamut::RgbGamut + float64::gamut::Rgb
             | Policy::Boundary
             | Policy::Iterative
             | Policy::Bucket
-            | Policy::Raytrace => max_finite_diff(
+            | Policy::Raytrace
+            | Policy::EdgeSeeker
+            | Policy::Bottosson
+            | Policy::BottossonBucket => max_finite_diff(
                 actual.map(|v| reference.decode(v)),
                 expected.map(|v| reference.decode(v)),
             ),
@@ -292,18 +332,26 @@ fn compare<G: ValidationProfile + float32::gamut::RgbGamut + float64::gamut::Rgb
 
 pub(crate) fn validate_gamut<G>(grid: &[[f32; 3]], random: &[[f32; 3]])
 where
-    G: float64::gamut::RgbGamut + float32::gamut::RgbGamut + ValidationProfile,
+    G: float64::edge_seeker::EdgeSeekerData
+        + float32::edge_seeker::EdgeSeekerData
+        + float64::bottosson::BottossonData
+        + float32::bottosson::BottossonData
+        + ValidationProfile,
 {
     validate_methods::<G>(grid, random, G::ID == SpaceId::DisplayP3);
 }
 
 fn validate_methods<G>(grid: &[[f32; 3]], random: &[[f32; 3]], p3_extras: bool)
 where
-    G: float64::gamut::RgbGamut + float32::gamut::RgbGamut + ValidationProfile,
+    G: float64::edge_seeker::EdgeSeekerData
+        + float32::edge_seeker::EdgeSeekerData
+        + float64::bottosson::BottossonData
+        + float32::bottosson::BottossonData
+        + ValidationProfile,
 {
     let reference = Reference::new(G::ID);
     println!(
-        "{} f32 validation: identical f32-rounded inputs (cubic buckets aligned); encoded differences are also reported",
+        "{} f32 validation: identical f32-rounded inputs (hue buckets aligned); encoded differences are also reported",
         G::DEFINITION.name
     );
     println!(
@@ -413,12 +461,14 @@ where
     }
     for_each_method!(core, extra);
     println!("branches: differing canonical prechecks; each branch is verified, then plain solvers are compared; branch max is encoded RGB");
-    println!("sanity: all f32/f64 validation outputs are finite and in gamut\n");
+    println!("sanity: outputs are finite and in gamut; accepted prechecks preserve canonical bits and rejected prechecks match plain mapping\n");
 }
 
 // Compare only methods with matching policies. Bucketed/exact hues are
 // compared on the integer grid; outer/first-exit policies only outside folds.
-pub(crate) fn validate_solver_agreement<G: float64::gamut::RgbGamut>(
+pub(crate) fn validate_solver_agreement<
+    G: float64::edge_seeker::EdgeSeekerData + float64::bottosson::BottossonData,
+>(
     grid: &[[f64; 3]],
     random: &[[f64; 3]],
 ) {
@@ -431,9 +481,34 @@ pub(crate) fn validate_solver_agreement<G: float64::gamut::RgbGamut>(
         OklchHalley::<G>::new(),
         OklchOstrowski::<G>::new(),
     );
+    let (mut edge, mut indexed) = (
+        float64::edge_seeker::EdgeSeeker::<G>::new(),
+        float64::edge_seeker::EdgeSeekerIndexed::<G>::new(),
+    );
+    let (mut bottosson, mut bottosson_cached) = (
+        float64::bottosson::BottossonLightness::<G>::new(),
+        float64::bottosson::BottossonLightnessCached::<G>::new(),
+    );
+    let mut bottosson_max = 0.0f64;
     let mut maxima = [0.0f64; 3];
     for (set, samples) in [grid, random].into_iter().enumerate() {
         for input in samples {
+            let (mut a, mut b) = ([0.0; 3], [0.0; 3]);
+            edge.map(input, &mut a);
+            indexed.map(input, &mut b);
+            assert_eq!(
+                a.map(f64::to_bits),
+                b.map(f64::to_bits),
+                "Edge Seeker lookup mismatch at {input:?}"
+            );
+            if set == 0 {
+                bottosson.map(input, &mut a);
+                bottosson_cached.map(input, &mut b);
+                bottosson_max = bottosson_max.max(max_finite_diff(
+                    a.map(|v| reference.decode(v)),
+                    b.map(|v| reference.decode(v)),
+                ));
+            }
             let mut out = [[0.0; 3]; 5];
             cached.map(input, &mut out[0]);
             uncached.map(input, &mut out[1]);
@@ -467,7 +542,16 @@ pub(crate) fn validate_solver_agreement<G: float64::gamut::RgbGamut>(
             maxima[i]
         );
     }
-    println!("{} f64 cross-method linear maxima: cubic/direct (grid) {:.3e}, direct/Halley (outside folds) {:.3e}, Halley/Ostrowski {:.3e}; cached/uncached bit-identical", G::DEFINITION.name,maxima[0],maxima[1],maxima[2]);
+    assert!(
+        bottosson_max <= 2e-12,
+        "{} Bottosson cached/direct grid error {bottosson_max:e}",
+        G::DEFINITION.name
+    );
+    println!(
+        "{} f64 Bottosson cached/direct linear maximum on integer-hue grid: {bottosson_max:e}",
+        G::DEFINITION.name
+    );
+    println!("{} f64 cross-method linear maxima: cubic/direct (grid) {:.3e}, direct/Halley (outside folds) {:.3e}, Halley/Ostrowski {:.3e}; cached/uncached and Edge Seeker lookups bit-identical", G::DEFINITION.name,maxima[0],maxima[1],maxima[2]);
 }
 
 #[cfg(test)]
@@ -483,6 +567,9 @@ mod tests {
             Policy::Iterative,
             Policy::Bucket,
             Policy::Raytrace,
+            Policy::EdgeSeeker,
+            Policy::Bottosson,
+            Policy::BottossonBucket,
         ] {
             for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
                 assert!(std::panic::catch_unwind(|| compare::<Rec2020>(
@@ -506,7 +593,14 @@ mod tests {
 
     #[test]
     fn perceptual_gate_rejects_a_dark_regression_inside_the_linear_budget() {
-        for policy in [Policy::Boundary, Policy::Bucket, Policy::Raytrace] {
+        for policy in [
+            Policy::Boundary,
+            Policy::Bucket,
+            Policy::Raytrace,
+            Policy::EdgeSeeker,
+            Policy::Bottosson,
+            Policy::BottossonBucket,
+        ] {
             assert!(std::panic::catch_unwind(|| compare::<Rec2020>(
                 "injected dark error",
                 policy,
@@ -515,6 +609,34 @@ mod tests {
                 false,
                 |_, out, _| *out = [0.01; 3],
                 |_, out, _| *out = [0.0; 3]
+            ))
+            .is_err());
+        }
+    }
+
+    #[test]
+    fn srgb_blue_primary_review_reproducer_passes_startup_validation() {
+        validate_gamut::<Srgb>(&[[0.49, 0.4, 264.04913]], &[]);
+    }
+
+    #[test]
+    fn rejected_prechecks_must_match_plain_mapping() {
+        for policy in [
+            Policy::Boundary,
+            Policy::Bucket,
+            Policy::Raytrace,
+            Policy::EdgeSeeker,
+            Policy::Bottosson,
+            Policy::BottossonBucket,
+        ] {
+            assert!(std::panic::catch_unwind(|| compare::<Srgb>(
+                "injected mode mismatch",
+                policy,
+                &Reference::new(SpaceId::Srgb),
+                &[[0.5, 1.0, 30.0]],
+                true,
+                |_, out, checked| *out = if checked { [0.25; 3] } else { [0.5; 3] },
+                |_, out, checked| *out = if checked { [0.25; 3] } else { [0.5; 3] },
             ))
             .is_err());
         }
@@ -597,8 +719,8 @@ mod tests {
     #[test]
     fn core_methods_accept_faces_and_neighbours_in_every_gamut() {
         validate_gamut::<Srgb>(&float32::rgb_tests::boundary_inputs::<Srgb>(), &[]);
-        // The unported, hue-quantized P3 solvers retain their historical
-        // workload budgets; this expanded corpus validates the ported methods.
+        // Dualray alone remains P3-only with its historical workload budget;
+        // this expanded corpus validates all twelve ported methods.
         validate_methods::<DisplayP3>(
             &float32::rgb_tests::boundary_inputs::<DisplayP3>(),
             &[],

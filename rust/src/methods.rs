@@ -20,14 +20,25 @@ macro_rules! for_each_method {
         $core!("oklch-halley", rgb_solvers, OklchHalley, Iterative);
         $core!("oklch-ostrowski", rgb_solvers, OklchOstrowski, Iterative);
         $extra!("dualray", Dualray, 0.0001);
-        $extra!("bottosson-lightness", BottossonLightness, 0.001);
-        $extra!(
-            "bottosson-lightness (cached)",
-            BottossonLightnessCached,
-            0.002
+        $core!(
+            "bottosson-lightness",
+            bottosson,
+            BottossonLightness,
+            Bottosson
         );
-        $extra!("edge-seeker", EdgeSeeker, 0.0001);
-        $extra!("edge-seeker (indexed)", EdgeSeekerIndexed, 0.0001);
+        $core!(
+            "bottosson-lightness (cached)",
+            bottosson,
+            BottossonLightnessCached,
+            BottossonBucket
+        );
+        $core!("edge-seeker", edge_seeker, EdgeSeeker, EdgeSeeker);
+        $core!(
+            "edge-seeker (indexed)",
+            edge_seeker,
+            EdgeSeekerIndexed,
+            EdgeSeeker
+        );
         $core!("raytrace", rgb_solvers, Raytrace, Raytrace);
     };
     // P3 test/snapshot compatibility adapter.

@@ -1,3 +1,7 @@
+type BottossonLightness = bottosson::BottossonLightness<crate::rgb_spaces::DisplayP3>;
+type BottossonLightnessCached = bottosson::BottossonLightnessCached<crate::rgb_spaces::DisplayP3>;
+type EdgeSeeker = edge_seeker::EdgeSeeker<gamut::DisplayP3>;
+type EdgeSeekerIndexed = edge_seeker::EdgeSeekerIndexed<gamut::DisplayP3>;
 type OklchCubic = rgb_solvers::OklchCubic<gamut::DisplayP3>;
 type OklchCubicNoCache = rgb_solvers::OklchCubicNoCache<gamut::DisplayP3>;
 type OklchCubicDirect = rgb_solvers::OklchCubicDirect<gamut::DisplayP3>;
@@ -108,7 +112,7 @@ fn exact_hue_methods_match_independent_boundary_oracle() {
 fn edge_seeker_arc_is_stable_near_zero_curvature() {
     for k in [-1e-6f32, -1e-9, 0.0, 1e-9, 1e-6] {
         for x in [0.0, 0.1, 0.5, 0.9, 1.0] {
-            let y = intersection_with_arc(x, k);
+            let y = edge_seeker::intersection_with_arc(x, k);
             assert!((y - x).abs() < 1e-6, "{x}, {k}: {y}");
             if k == 0.0 {
                 assert_eq!(x.to_bits(), y.to_bits());
@@ -182,7 +186,10 @@ fn raytrace_rounding_regressions() {
 
 #[test]
 fn lut_and_caches_store_f32() {
-    assert_eq!(std::mem::size_of_val(&LUT), 710 * 4 * 4);
+    assert_eq!(
+        std::mem::size_of_val(<gamut::DisplayP3 as edge_seeker::EdgeSeekerData>::LUT),
+        710 * 4 * 4
+    );
     assert_eq!(
         std::mem::size_of_val(OklchCubic::new().cache.as_slice()),
         3601 * 13 * 4

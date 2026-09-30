@@ -109,6 +109,21 @@ impl BoundaryOracle {
         }
     }
 
+    // Selected lower face, independent of Bottosson's fits and Halley step.
+    pub fn face_saturation(&self, h: f64, channel: usize) -> f64 {
+        let q = direction(h);
+        let row = self.rows[channel];
+        first_exit(
+            [
+                (0..3).map(|i| row[i] * q[i].powi(3)).sum(),
+                3.0 * (0..3).map(|i| row[i] * q[i].powi(2)).sum::<f64>(),
+                3.0 * (0..3).map(|i| row[i] * q[i]).sum::<f64>(),
+                row.iter().sum(),
+            ],
+            f64::INFINITY,
+        )
+    }
+
     pub fn boundary(&self, l: f64, h: f64) -> f64 {
         if l <= 0.0 || l >= 1.0 {
             return 0.0;

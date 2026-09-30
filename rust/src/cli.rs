@@ -60,7 +60,7 @@ impl Options {
 pub(crate) const HELP: &str =
     "Usage: gma-bench [--gamut display-p3|srgb|rec2020|all] [--in-gamut-check] [--validate-only]
 Default: display-p3, all 13 methods, native f64 and f32.
-sRGB and Rec.2020 support 8 methods; fitted and table-based methods remain P3-only.
+sRGB and Rec.2020 support 12 methods; only Dualray remains P3-only.
 --validate-only runs workload checks without timing; cargo test runs the independent oracle tests.";
 
 #[cfg(test)]

@@ -639,3 +639,13 @@ fn raytrace_and_reference_retain_a_converged_near_white_hit() {
         );
     }
 }
+
+#[test]
+fn zero_root_face_direction_is_explicit() {
+    // t*(t-1) immediately leaves the lower face, but moves inward from the
+    // upper face. A zero lower bound alone cannot tell those cases apart.
+    assert_eq!(first_face_root(0.0, 1.0, -1.0, 0.0, 2.0, false), 0.0);
+    assert_eq!(first_face_root(0.0, 1.0, -1.0, 0.0, 2.0, true), 1.0);
+    assert_eq!(first_face_root(0.0, -1.0, 1.0, 0.0, 2.0, true), 0.0);
+    assert_eq!(first_face_root(0.0, -1.0, 1.0, 0.0, 2.0, false), 1.0);
+}

@@ -7,14 +7,16 @@ hue/lightness workload (stratified/jittered, shuffled).
 Display-P3 remains the default target with all 13 methods. Milestone two adds
 sRGB and Rec.2020 versions of the matrix-driven solvers in native f64 and f32:
 clip, CSS MINDE, cached/uncached cubic, direct cubic, Halley, Ostrowski and Raytrace.
-Bottosson, Dualray and Edge Seeker still require separate target-specific fits
-or tables and remain P3-only.
+Milestone three adds both Edge Seeker variants and both constant-lightness
+Bottosson variants in all three targets, with generated tables and cusp fits.
+Only Dualray remains P3-only. See the
+[milestone-three progress](MILESTONE-3.md) for scope and validation.
 
 | Target | Methods |
 | --- | --- |
 | `display-p3` (default) | All 13 |
-| `srgb` | All 8 matrix-driven methods |
-| `rec2020` | All 8 matrix-driven methods |
+| `srgb` | 12: matrix solvers, both Edge Seeker and both Bottosson variants |
+| `rec2020` | 12: matrix solvers, both Edge Seeker and both Bottosson variants |
 
 ```sh
 ./target/release/gma-bench --gamut srgb
@@ -62,11 +64,19 @@ other implementations must use the same encoding.
   native f32 Cardano conditioning remains in `conditioning.rs`. There is no
   per-mapping, all-face first-exit guard. No fitted constants are used by these
   six ports; the iterative solvers retain upstream's gamut-specific fold windows.
-- `p3_compat.rs` preserves the conversion entry points and evaluation order of
-  the remaining P3 solvers. Its multiply-based conversion delegates to the
-  typed kernel; historical `powi` and membership-check semantics are retained.
-  `p3_fits.rs` holds their Bottosson approximation constants. Dualray's fits and the EdgeSeeker LUT remain algorithm-owned P3
-  data, pending their separate multi-gamut ports.
+- `p3_compat.rs` retains Dualray's encoding helper and test-only historical
+  conversion routines. Dualray's fits remain algorithm-owned P3 data.
+- `bottosson::BottossonData` owns primary-hue sectors and saturation fits.
+  sRGB/Rec.2020 fits are generated; the same generator retains the pinned P3
+  coefficients. All three targets use the same generated data layout.
+  The two variants share one intersection kernel; the cache stores five
+  native scalars per 0.1-degree hue bucket. Checked mapping first converts
+  the authored hue, preserving accepted canonical results bit-for-bit.
+- `edge_seeker::EdgeSeekerData` owns per-target tables in `generated/`. Both
+  lookup variants use static dispatch and native-precision data; the physical
+  `RgbGamut` contract has no LUT or approximation policy. The indexed variant
+  shares a compile-time 3,600-entry index per gamut/precision; instances allocate
+  no index. Sharp-interval bands and residuals are compile-time table data.
 
 The f32 mappers, including cube roots, powers, trigonometry and CSS MINDE
 comparisons, stay entirely f32. Only benchmark checksums/statistics and
@@ -122,8 +132,18 @@ Validation separates conversion arithmetic from MINDE stopping decisions:
   Rec.2020. Measured maxima across the validation corpora are approximately
   `0.00180`, `0.00102` and `0.00294`, respectively; these larger errors are
   specific to Raytrace's native f32 convergence and anchor decisions.
-- **P3-only fitted/table solvers:** retain their existing encoded-channel
-  workload budgets.
+- **Edge Seeker:** `1e-5` linear RGB and `3e-6` DeltaEOK f32/f64 limits.
+  Independent table-policy tests check chroma, conversion and canonical
+  preservation separately from approximation quality against the geometric
+  boundary. Both lookups must be bit-identical in every target and mode.
+- **Bottosson:** `1.2e-5` linear RGB and `5e-6` DeltaEOK f32/f64 limits.
+  Cached comparisons align hue buckets. Independent tests check sector
+  geometry, cusp fits, one-Halley mapping arithmetic and canonical pass-through.
+  Approximation quality is measured separately: this is not a first-exit solver.
+  Near blue, native f32 uses a small-angle rotation and compensated residual
+  for the same single Halley step; it does not widen to f64. Dense primary-hue
+  sweeps cover every f32 value within 0.1 degrees and a shifted wider grid.
+- **Dualray (P3-only):** retains its `1e-4` encoded-channel workload budget.
 
 | Native f32 CSS MINDE target | ΔEOK limit |
 | --- | ---: |
@@ -136,7 +156,8 @@ physical gamut definitions. They are empirical corpus limits, not full-domain
 accuracy guarantees. A new target must provide its own validation policy.
 Non-finite outputs and individual error metrics fail explicitly. Cross-method
 CLI checks run for every target, comparing only matching policies: bucketed
-cubics on grid hues, direct/Halley outside folds, and Halley/Ostrowski everywhere.
+cubics on grid hues, direct/Halley outside folds, Halley/Ostrowski everywhere, and the two
+Edge Seeker lookups bit-for-bit.
 
 Linear budgets imply finite encoded bounds even for Rec.2020: a linear error
 `e` permits at most `e^(1/2.4)` encoded error there. That global bound is loose
@@ -222,7 +243,7 @@ behavior deliberately seeks vivid blue outer intersections. The near-black
 Halley discrepancy remains: at `L=1e-6, h=270.25` in P3 its relative chroma error
 is large, but its final output difference is only about `1.4e-7` DeltaEOK.
 
-The [milestone-two report](reports/multi-gamut-milestone-2.json) records current
+The [milestone-two report](reports/multi-gamut-milestone-2.json) records milestone-two
 source hashes, numerical measurements and a balanced before/after review-fix
 comparison. The earlier milestone-one/blanket-guard comparison is retained as
 historical evidence; its pre-review validation claims have been superseded.
@@ -244,7 +265,8 @@ order. Every process consumes all output channels over the same 35,640 inputs,
 The report includes both precisions, both workloads, and separate runs of every
 target in both precheck modes. JavaScript performance was not measured.
 
-All 77 Rust tests pass in debug, native release and portable x86-64 release.
+At the milestone-two commit, all 77 Rust tests passed in debug, native release
+and portable x86-64 release.
 All four JavaScript test files pass under Node 26.10.0. The cubic regressions
 include 57,600 near-white inputs per variant in both modes, plus probes around
 the double-root failure. Native f32 sRGB Raytrace reaches `4.37e-4` linear error
@@ -288,7 +310,19 @@ output channels for the checksum is included in the timed region. Both lanes
 use 50 warmup passes and 25 measured passes over 35,640 colors per workload.
 
 `algorithms.rs` and `timings.rs` are compiled twice with concrete scalar aliases.
-The Edge Seeker LUT in `lut.rs` is likewise stored separately at each precision.
+The Edge Seeker tables in `generated/` are likewise stored at each precision.
+Regenerate or verify them from the repository root with:
+
+```sh
+node scripts/generate-edge-seeker.mjs
+node scripts/generate-edge-seeker.mjs --check
+```
+
+The generator exports the Rust gamut profiles, then reuses the existing JS
+`makeLut` builder. Generation is a development step; building or running the
+Rust benchmark does not require Node. Recorded generation uses Node 26.10.0;
+platform math-library differences can change the final bits of generated data.
+
 `methods.rs` supplies one ordered registry of core and P3-only methods for both
 lanes and validation. This keeps algorithm and benchmark coverage aligned.
 
@@ -312,7 +346,7 @@ and f32 convergence/stagnation checks. Hues
 outside one turn are reduced before f32 trigonometry to avoid overflow.
 These precision-specific adjustments leave the f64 path unchanged.
 
-Both precisions share a rationalized Edge Seeker arc in `algorithms.rs`.
+Both precisions share a rationalized Edge Seeker arc in `edge_seeker.rs`.
 The former f64 radius/center formula could select the opposite circle root
 after endpoint rounding and return large negative chroma. The shared formula
 avoids that root switch and cancellation near zero curvature, preserves the
@@ -328,13 +362,12 @@ Before timing, both mapper modes are compared on identical f32-rounded inputs
 (widened to f64 for the reference), and every output is checked for finiteness
 and gamut membership. The table labels each acceptance metric and also prints
 the maximum encoded-channel difference. Clip and CSS MINDE use the policies
-above. The P3-only encoded-channel limits are `1e-4` for Dualray and both
-Edge Seeker variants, `1e-3` for Bottosson, and `2e-3` for cached Bottosson. These remain
-budgets for their existing workloads, not arbitrary boundary inputs: adjacent
-cache-bucket choices can exceed them on other corpora.
+above. Dualray's P3-only encoded-channel limit remains `1e-4` for its existing
+workloads. Bottosson now uses the separate linear/perceptual limits above;
+its cache's hue quantization is kept separate from arithmetic error.
 
 The independent tests separately check conversion and transfer arithmetic,
-MINDE output error, and exact canonical pass-through. All eight core methods are
+MINDE output error, and exact canonical pass-through. All twelve core methods are
 validated on mixed chroma and RGB boundary neighbours in all three gamuts.
 
 Run the numerical tests with:
@@ -356,7 +389,7 @@ CSS MINDE has shared reference vectors generated from the spec's pseudocode
 and uncomposed XYZ conversions, plus tests for exact in-gamut preservation,
 black/white endpoints, achromatic inputs, and extreme finite hues.
 Edge Seeker tests compare both lookup variants with an independent circle
-residual/bisection oracle at 576,016 near-cusp/near-white inputs per precision,
+residual/bisection oracle at 576,016 near-cusp/near-white inputs per target and precision,
 plus small-curvature cases and the yellow-to-magenta regression in both modes.
 
 The timed passes use the same all-channel checksum as validation. Each pass's

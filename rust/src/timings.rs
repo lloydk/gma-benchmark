@@ -24,7 +24,9 @@ fn time_method(
     })
 }
 
-pub(crate) fn print_checksums<G: gamut::RgbGamut>(samples: &[[Float; 3]]) {
+pub(crate) fn print_checksums<G: edge_seeker::EdgeSeekerData + bottosson::BottossonData>(
+    samples: &[[Float; 3]],
+) {
     println!(
         "{} / {PRECISION} checksums on grid (sum of all RGB channels):",
         G::DEFINITION.name
@@ -52,7 +54,7 @@ pub(crate) fn print_checksums<G: gamut::RgbGamut>(samples: &[[Float; 3]]) {
     println!();
 }
 
-pub(crate) fn run_timings<G: gamut::RgbGamut>(
+pub(crate) fn run_timings<G: edge_seeker::EdgeSeekerData + bottosson::BottossonData>(
     label: &str,
     samples: &[[Float; 3]],
     warmup: usize,
