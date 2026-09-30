@@ -115,6 +115,7 @@ fn max_channel_diff(
         b(c, &mut b_out);
         for i in 0..3 {
             let diff = (a_out[i] - b_out[i]).abs();
+            assert!(diff.is_finite(), "non-finite comparison at {c:?}");
             if diff > max {
                 max = diff;
             }
@@ -186,7 +187,7 @@ where
         if is_p3 {
             "all 13 methods"
         } else {
-            "clip and css-minde"
+            "8 matrix-based methods"
         }
     );
     println!(
@@ -206,6 +207,7 @@ where
     if is_p3 {
         validate_p3_solvers(grid, random);
     }
+    validation::validate_solver_agreement::<G>(grid, random);
     validation::validate_gamut::<G>(grid32, random32);
     float32::print_checksums::<G>(grid32);
     if options.validate_only {
@@ -226,7 +228,7 @@ fn validate_p3_solvers(grid: &[[f64; 3]], random: &[[f64; 3]]) {
     let mut dualray_diff: f64 = 0.0;
     for samples in [&grid, &random] {
         let mut solver = Dualray::new();
-        let mut reference = OklchCubicDirect::new();
+        let mut reference = float64::rgb_solvers::OklchCubicDirect::<rgb_spaces::DisplayP3>::new();
         dualray_diff = dualray_diff.max(max_channel_diff(
             samples,
             |c, o| solver.map(c, o),
@@ -245,36 +247,42 @@ fn validate_p3_solvers(grid: &[[f64; 3]], random: &[[f64; 3]]) {
     // the unchecked path for both methods.
     let mut max_diff: f64 = 0.0;
     for samples in [&grid, &random] {
-        let mut cubic_eq = OklchCubic::new();
-        let mut cubic_checked_eq = OklchCubic::new();
+        let mut cubic_eq = float64::rgb_solvers::OklchCubic::<rgb_spaces::DisplayP3>::new();
+        let mut cubic_checked_eq = float64::rgb_solvers::OklchCubic::<rgb_spaces::DisplayP3>::new();
         let cubic_check_diff = max_channel_diff(
             samples,
             |c, o| cubic_eq.map(c, o),
             |c, o| cubic_checked_eq.map_with_in_gamut_check(c, o),
         );
-        let mut cubic_no_cache_eq = OklchCubicNoCache::new();
-        let mut cubic_no_cache_checked_eq = OklchCubicNoCache::new();
+        let mut cubic_no_cache_eq =
+            float64::rgb_solvers::OklchCubicNoCache::<rgb_spaces::DisplayP3>::new();
+        let mut cubic_no_cache_checked_eq =
+            float64::rgb_solvers::OklchCubicNoCache::<rgb_spaces::DisplayP3>::new();
         let cubic_no_cache_check_diff = max_channel_diff(
             samples,
             |c, o| cubic_no_cache_eq.map(c, o),
             |c, o| cubic_no_cache_checked_eq.map_with_in_gamut_check(c, o),
         );
-        let mut cubic_direct_eq = OklchCubicDirect::new();
-        let mut cubic_direct_checked_eq = OklchCubicDirect::new();
+        let mut cubic_direct_eq =
+            float64::rgb_solvers::OklchCubicDirect::<rgb_spaces::DisplayP3>::new();
+        let mut cubic_direct_checked_eq =
+            float64::rgb_solvers::OklchCubicDirect::<rgb_spaces::DisplayP3>::new();
         let cubic_direct_check_diff = max_channel_diff(
             samples,
             |c, o| cubic_direct_eq.map(c, o),
             |c, o| cubic_direct_checked_eq.map_with_in_gamut_check(c, o),
         );
-        let mut halley_eq = OklchHalley::new();
-        let mut halley_checked_eq = OklchHalley::new();
+        let mut halley_eq = float64::rgb_solvers::OklchHalley::<rgb_spaces::DisplayP3>::new();
+        let mut halley_checked_eq =
+            float64::rgb_solvers::OklchHalley::<rgb_spaces::DisplayP3>::new();
         let halley_check_diff = max_channel_diff(
             samples,
             |c, o| halley_eq.map(c, o),
             |c, o| halley_checked_eq.map_with_in_gamut_check(c, o),
         );
-        let mut ostrowski_eq = OklchOstrowski::new();
-        let mut ostrowski_checked_eq = OklchOstrowski::new();
+        let mut ostrowski_eq = float64::rgb_solvers::OklchOstrowski::<rgb_spaces::DisplayP3>::new();
+        let mut ostrowski_checked_eq =
+            float64::rgb_solvers::OklchOstrowski::<rgb_spaces::DisplayP3>::new();
         let ostrowski_check_diff = max_channel_diff(
             samples,
             |c, o| ostrowski_eq.map(c, o),
@@ -294,8 +302,9 @@ fn validate_p3_solvers(grid: &[[f64; 3]], random: &[[f64; 3]]) {
             |c, o| bottosson_cached_eq.map(c, o),
             |c, o| bottosson_cached_checked_eq.map_with_in_gamut_check(c, o),
         );
-        let mut raytrace_eq = Raytrace::new();
-        let mut raytrace_checked_eq = Raytrace::new();
+        let mut raytrace_eq = float64::rgb_solvers::Raytrace::<rgb_spaces::DisplayP3>::new();
+        let mut raytrace_checked_eq =
+            float64::rgb_solvers::Raytrace::<rgb_spaces::DisplayP3>::new();
         let raytrace_check_diff = max_channel_diff(
             samples,
             |c, o| raytrace_eq.map(c, o),
@@ -334,8 +343,9 @@ fn validate_p3_solvers(grid: &[[f64; 3]], random: &[[f64; 3]]) {
 
     let mut cubic_no_cache_max_diff: f64 = 0.0;
     for samples in [&grid, &random] {
-        let mut cubic_eq = OklchCubic::new();
-        let mut cubic_no_cache_eq = OklchCubicNoCache::new();
+        let mut cubic_eq = float64::rgb_solvers::OklchCubic::<rgb_spaces::DisplayP3>::new();
+        let mut cubic_no_cache_eq =
+            float64::rgb_solvers::OklchCubicNoCache::<rgb_spaces::DisplayP3>::new();
         cubic_no_cache_max_diff = cubic_no_cache_max_diff.max(max_channel_diff(
             samples,
             |c, o| cubic_eq.map(c, o),
@@ -353,8 +363,10 @@ fn validate_p3_solvers(grid: &[[f64; 3]], random: &[[f64; 3]]) {
         cubic_no_cache_max_diff
     );
 
-    let mut cubic_direct_eq = OklchCubicDirect::new();
-    let mut cubic_exact_eq = OklchCubicNoCache::new();
+    let mut cubic_direct_eq =
+        float64::rgb_solvers::OklchCubicDirect::<rgb_spaces::DisplayP3>::new();
+    let mut cubic_exact_eq =
+        float64::rgb_solvers::OklchCubicNoCache::<rgb_spaces::DisplayP3>::new();
     let cubic_direct_diff = max_channel_diff(
         &grid,
         |c, o| cubic_direct_eq.map(c, o),
@@ -371,8 +383,9 @@ fn validate_p3_solvers(grid: &[[f64; 3]], random: &[[f64; 3]]) {
         cubic_direct_diff
     );
 
-    let mut halley_eq = OklchHalley::new();
-    let mut cubic_exact_eq = OklchCubicNoCache::new();
+    let mut halley_eq = float64::rgb_solvers::OklchHalley::<rgb_spaces::DisplayP3>::new();
+    let mut cubic_exact_eq =
+        float64::rgb_solvers::OklchCubicNoCache::<rgb_spaces::DisplayP3>::new();
     let halley_cubic_diff = max_channel_diff(
         &grid,
         |c, o| halley_eq.map(c, o),
@@ -389,8 +402,9 @@ fn validate_p3_solvers(grid: &[[f64; 3]], random: &[[f64; 3]]) {
         halley_cubic_diff
     );
 
-    let mut ostrowski_eq = OklchOstrowski::new();
-    let mut cubic_exact_eq = OklchCubicNoCache::new();
+    let mut ostrowski_eq = float64::rgb_solvers::OklchOstrowski::<rgb_spaces::DisplayP3>::new();
+    let mut cubic_exact_eq =
+        float64::rgb_solvers::OklchCubicNoCache::<rgb_spaces::DisplayP3>::new();
     let ostrowski_cubic_diff = max_channel_diff(
         &grid,
         |c, o| ostrowski_eq.map(c, o),
@@ -407,8 +421,9 @@ fn validate_p3_solvers(grid: &[[f64; 3]], random: &[[f64; 3]]) {
         ostrowski_cubic_diff
     );
 
-    let mut cubic_direct_eq = OklchCubicDirect::new();
-    let mut halley_exact_eq = OklchHalley::new();
+    let mut cubic_direct_eq =
+        float64::rgb_solvers::OklchCubicDirect::<rgb_spaces::DisplayP3>::new();
+    let mut halley_exact_eq = float64::rgb_solvers::OklchHalley::<rgb_spaces::DisplayP3>::new();
     let direct_halley_diff = max_channel_diff(
         &random,
         |c, o| cubic_direct_eq.map(c, o),

@@ -18,6 +18,15 @@ pub(crate) enum SpaceId {
     DisplayP3,
     Rec2020,
 }
+// Algorithm policy windows, represented once in binary32 so both arithmetic
+// lanes classify identical f32-rounded hues identically at the endpoints.
+pub(crate) const fn blue_fold_window(id: SpaceId) -> Option<[f32; 2]> {
+    match id {
+        SpaceId::Srgb => Some([264.03, 264.23]),
+        SpaceId::Rec2020 => Some([245.04, 245.31]),
+        SpaceId::DisplayP3 => None,
+    }
+}
 pub(crate) trait RgbSpace: Copy {
     const ID: SpaceId;
     const DEFINITION: &'static Definition;

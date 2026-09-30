@@ -43,13 +43,12 @@ pub(crate) fn print_checksums<G: gamut::RgbGamut>(samples: &[[Float; 3]]) {
     }
     macro_rules! extra {
         ($name:literal, $method:ident, $limit:literal) => {
-            print_method!($name, $method);
+            if G::ID == crate::rgb_spaces::SpaceId::DisplayP3 {
+                print_method!($name, $method);
+            }
         };
     }
-    for_each_rgb_method!(core);
-    if G::ID == crate::rgb_spaces::SpaceId::DisplayP3 {
-        for_each_p3_extra!(extra);
-    }
+    for_each_method!(core, extra);
     println!();
 }
 
@@ -84,13 +83,12 @@ pub(crate) fn run_timings<G: gamut::RgbGamut>(
     }
     macro_rules! extra {
         ($name:literal, $method:ident, $limit:literal) => {
-            time_mapper!($name, $method);
+            if G::ID == crate::rgb_spaces::SpaceId::DisplayP3 {
+                time_mapper!($name, $method);
+            }
         };
     }
-    for_each_rgb_method!(core);
-    if G::ID == crate::rgb_spaces::SpaceId::DisplayP3 {
-        for_each_p3_extra!(extra);
-    }
+    for_each_method!(core, extra);
     print_timings(G::DEFINITION.name, label, repeats, timings);
 }
 

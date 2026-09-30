@@ -10,65 +10,7 @@ import {
 
 const HUE_SCALE = 10;
 
-// Cardano solver for the hue-normalized t = C/L polynomials used below. Its
-// fixed discriminant band is part of the existing cubic's numerical behavior.
-// The direct cubic must not reuse it unchanged: once L, L², and L³ are folded
-// into the coefficients, valid discriminants can fall inside this fixed band.
-function firstRootNoCache (a, b, c, d, lo, hi) {
-	let r0 = Infinity, r1 = Infinity, r2 = Infinity;
-
-	if (Math.abs(a) < 1e-12) {
-		if (Math.abs(b) < 1e-12) {
-			if (Math.abs(c) >= 1e-12) {
-				r0 = -d / c;
-			}
-		}
-		else {
-			const disc = c * c - 4 * b * d;
-			if (disc >= 0) {
-				const s = Math.sqrt(disc);
-				r0 = (-c + s) / (2 * b);
-				r1 = (-c - s) / (2 * b);
-			}
-		}
-	}
-	else {
-		b /= a; c /= a; d /= a;
-		const p = c - b * b / 3;
-		const q = 2 * b * b * b / 27 - b * c / 3 + d;
-		const off = -b / 3;
-		const disc = q * q / 4 + p * p * p / 27;
-
-		if (disc > 1e-14) {
-			const s = Math.sqrt(disc);
-			r0 = Math.cbrt(-q / 2 + s) + Math.cbrt(-q / 2 - s) + off;
-		}
-		else if (disc > -1e-14) {
-			const u = Math.cbrt(-q / 2);
-			r0 = 2 * u + off;
-			r1 = -u + off;
-		}
-		else {
-			const m = 2 * Math.sqrt(-p / 3);
-			const phi = Math.acos(Math.max(-1, Math.min(1, 3 * q / (p * m))));
-			r0 = m * Math.cos(phi / 3) + off;
-			r1 = m * Math.cos((phi - 2 * Math.PI) / 3) + off;
-			r2 = m * Math.cos((phi - 4 * Math.PI) / 3) + off;
-		}
-	}
-
-	let best = Infinity;
-	if (r0 > lo && r0 < hi) {
-		best = r0;
-	}
-	if (r1 > lo && r1 < hi && r1 < best) {
-		best = r1;
-	}
-	if (r2 > lo && r2 < hi && r2 < best) {
-		best = r2;
-	}
-	return best;
-}
+import { firstRoot as firstRootNoCache } from "./polynomial.js";
 
 function firstTurnNoCache (D, B, A) {
 	return firstRootNoCache(0, D, 2 * B, A, 1e-12, Infinity);
@@ -123,13 +65,13 @@ export function oklchCubicNoCache (oklch, out, checkInGamut = false) {
 	const dd = 1 - target;
 
 	if (turn0 <= maxT || (a0 > 0 && !((((d0 * maxT + 3 * b0) * maxT + 3 * a0) * maxT + 1) < target))) {
-		maxT = Math.min(maxT, firstRootNoCache(d0, 3 * b0, 3 * a0, dd, 1e-9, maxT));
+		maxT = Math.min(maxT, firstRootNoCache(d0, 3 * b0, 3 * a0, dd, 0, maxT));
 	}
 	if (turn1 <= maxT || (a1 > 0 && !((((d1 * maxT + 3 * b1) * maxT + 3 * a1) * maxT + 1) < target))) {
-		maxT = Math.min(maxT, firstRootNoCache(d1, 3 * b1, 3 * a1, dd, 1e-9, maxT));
+		maxT = Math.min(maxT, firstRootNoCache(d1, 3 * b1, 3 * a1, dd, 0, maxT));
 	}
 	if (turn2 <= maxT || (a2 > 0 && !((((d2 * maxT + 3 * b2) * maxT + 3 * a2) * maxT + 1) < target))) {
-		maxT = Math.min(maxT, firstRootNoCache(d2, 3 * b2, 3 * a2, dd, 1e-9, maxT));
+		maxT = Math.min(maxT, firstRootNoCache(d2, 3 * b2, 3 * a2, dd, 0, maxT));
 	}
 
 	out[0] = clampedGamma(L3 * (((d0 * maxT + 3 * b0) * maxT + 3 * a0) * maxT + 1));

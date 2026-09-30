@@ -39,6 +39,8 @@ such method links to the original it was derived from.
   ([original](https://github.com/color-js/apps/blob/main/gamut-mapping/methods/oklch-cubic.js))
 - **oklch-cubic (no cache)** — same 0.1° bucket semantics as the cached cubic
   method, but recomputes the per-hue structure every call to isolate cache reuse.
+  Both bucketed variants share root conditioning with the direct cubic, including
+  near-white roots below `1e-9`.
 - **oklch-cubic-direct** — a cache-free, exact-hue Cardano variant that folds
   lightness into each channel polynomial from the start. It probes the channel
   at `C = 0.5` to choose the nearer 0 or 1 boundary, then needs one cubic solve
@@ -201,8 +203,12 @@ A scalar Rust implementation lives in [`rust/`](rust/). Every method has native
 f64 and f32 implementations. Running `gma-bench` prints both precisions over
 the same two 35,640-color workloads, with separate grid and random timing
 tables for each. The existing `--in-gamut-check` option applies to both.
-This gives a native baseline for how much of the JS timing is runtime/JIT
-overhead versus the algorithmic work itself. See
+Display-P3 supports all 13 methods; `--gamut srgb` and `--gamut rec2020` support
+eight methods: clip, CSS MINDE, cached/uncached/direct cubic, Halley, Ostrowski
+and Raytrace.
+Rust includes native f32 conditioning and target-specific blue-fold handling,
+so check algorithm policies before
+attributing Rust/JavaScript timing differences to runtime overhead. See
 [`rust/README.md`](rust/README.md) for build commands.
 
 ## Conversions

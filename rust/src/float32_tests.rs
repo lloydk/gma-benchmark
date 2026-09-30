@@ -1,3 +1,9 @@
+type OklchCubic = rgb_solvers::OklchCubic<gamut::DisplayP3>;
+type OklchCubicNoCache = rgb_solvers::OklchCubicNoCache<gamut::DisplayP3>;
+type OklchCubicDirect = rgb_solvers::OklchCubicDirect<gamut::DisplayP3>;
+type OklchHalley = rgb_solvers::OklchHalley<gamut::DisplayP3>;
+type OklchOstrowski = rgb_solvers::OklchOstrowski<gamut::DisplayP3>;
+type Raytrace = rgb_solvers::Raytrace<gamut::DisplayP3>;
 use super::*;
 type CssMinde = css_minde::CssMinde<gamut::DisplayP3>;
 type Clip = clip::Clip<gamut::DisplayP3>;
@@ -155,7 +161,10 @@ fn cached_cubics_match_oracle_at_their_bucket_hue() {
 
 #[test]
 fn raytrace_rounding_regressions() {
-    let (mut narrow, mut wide) = (Raytrace::new(), crate::float64::Raytrace::new());
+    let (mut narrow, mut wide) = (
+        Raytrace::new(),
+        crate::float64::rgb_solvers::Raytrace::<gamut::DisplayP3>::new(),
+    );
     for input in [
         [0.9, 0.0698177, 9.75],
         [0.9482159, 0.4, 6.3630238],

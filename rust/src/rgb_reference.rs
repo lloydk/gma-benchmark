@@ -81,6 +81,11 @@ impl Reference {
             lab(lch),
         )
         .map(|x| x.powi(3));
+        self.lms_to_rgb(lms)
+    }
+
+    #[cfg(test)]
+    pub fn lms_to_rgb(&self, lms: [f64; 3]) -> [f64; 3] {
         let xyz = multiply(
             [
                 [1.2268798758459243, -0.5578149944602171, 0.2813910456659647],

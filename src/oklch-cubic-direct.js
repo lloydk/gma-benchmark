@@ -1,3 +1,4 @@
+import { conditionedFirstRoot, faceExit } from "./polynomial.js";
 import {
 	oklchToClippedP3, oklchToP3IfInGamut, clampedGamma,
 	KA0, KB0, KA1, KB1, KA2, KB2,
@@ -25,7 +26,10 @@ const P3_ROWS = [
 // whereas these coefficients include L, L², and L³. Near black, a legitimately
 // positive discriminant can be smaller than 1e-14, so this version tests zero
 // relative to the two discriminant terms and polishes the selected root once.
-function firstRootDirect (a, b, c, d, hi) {
+function firstRootDirect (a, b, c, d, hi, upper) {
+	if (d === 0) return faceExit(a, b, c, upper, hi);
+	const root = conditionedFirstRoot(a, b, c, d, hi);
+	if (root !== undefined) return root;
 	const aa = a, bb = b, cc = c, dd = d;
 	let r0 = Infinity, r1 = Infinity, r2 = Infinity;
 
@@ -87,11 +91,13 @@ function firstRootDirect (a, b, c, d, hi) {
 	// boundary accuracy lost to cancellation in the closed-form expression.
 	for (let i = 0; i < 1 && Number.isFinite(best); i++) {
 		const derivative = (3 * aa * best + 2 * bb) * best + cc;
-		if (derivative === 0) {
+		const derivativeScale = Math.abs(3 * aa * best) * Math.abs(best) + Math.abs(2 * bb * best) + Math.abs(cc);
+		if (Math.abs(derivative) <= 32 * Number.EPSILON * derivativeScale) {
 			break;
 		}
-		const next = best - (((aa * best + bb) * best + cc) * best + dd) / derivative;
-		if (next < 0 || next > hi) {
+		const residual = ((aa * best + bb) * best + cc) * best + dd;
+		const next = best - residual / derivative;
+		if (next < 0 || next > hi || (Math.abs(derivative) < Math.sqrt(Number.EPSILON) * derivativeScale && Math.abs(((aa * next + bb) * next + cc) * next + dd) > Math.abs(residual))) {
 			break;
 		}
 		best = next;
@@ -118,7 +124,7 @@ function maxChroma (L, q0, q1, q2) {
 		// At C = 0.5, choose the nearer end of the channel's [0, 1] interval.
 		const atHalf = ((c1 * 0.5 + c2) * 0.5 + c3) * 0.5 + c4;
 		const target = Math.abs(atHalf - 1) < Math.abs(atHalf) ? 1 : 0;
-		best = Math.min(best, firstRootDirect(c1, c2, c3, c4 - target, best));
+		best = Math.min(best, firstRootDirect(c1, c2, c3, c4 - target, best, target === 1));
 	}
 	return best;
 }

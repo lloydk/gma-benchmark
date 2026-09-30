@@ -8,62 +8,7 @@ import {
 // form, the cubic each linear-P3 channel traces as a function of chroma. The
 // per-hue structure is memoized (cached variant).
 
-// Smallest real root of a·t³ + b·t² + c·t + d in (lo, hi), or Infinity if none.
-function firstRoot (a, b, c, d, lo, hi) {
-	let r0 = Infinity, r1 = Infinity, r2 = Infinity;
-
-	if (Math.abs(a) < 1e-12) {
-		if (Math.abs(b) < 1e-12) {
-			if (Math.abs(c) >= 1e-12) {
-				r0 = -d / c;
-			}
-		}
-		else {
-			const disc = c * c - 4 * b * d;
-			if (disc >= 0) {
-				const s = Math.sqrt(disc);
-				r0 = (-c + s) / (2 * b);
-				r1 = (-c - s) / (2 * b);
-			}
-		}
-	}
-	else {
-		b /= a; c /= a; d /= a;
-		const p = c - b * b / 3;
-		const q = 2 * b * b * b / 27 - b * c / 3 + d;
-		const off = -b / 3;
-		const disc = q * q / 4 + p * p * p / 27;
-
-		if (disc > 1e-14) {
-			const s = Math.sqrt(disc);
-			r0 = Math.cbrt(-q / 2 + s) + Math.cbrt(-q / 2 - s) + off;
-		}
-		else if (disc > -1e-14) {
-			const u = Math.cbrt(-q / 2);
-			r0 = 2 * u + off;
-			r1 = -u + off;
-		}
-		else {
-			const m = 2 * Math.sqrt(-p / 3);
-			const phi = Math.acos(Math.max(-1, Math.min(1, 3 * q / (p * m))));
-			r0 = m * Math.cos(phi / 3) + off;
-			r1 = m * Math.cos((phi - 2 * Math.PI) / 3) + off;
-			r2 = m * Math.cos((phi - 4 * Math.PI) / 3) + off;
-		}
-	}
-
-	let best = Infinity;
-	if (r0 > lo && r0 < hi) {
-		best = r0;
-	}
-	if (r1 > lo && r1 < hi && r1 < best) {
-		best = r1;
-	}
-	if (r2 > lo && r2 < hi && r2 < best) {
-		best = r2;
-	}
-	return best;
-}
+import { firstRoot } from "./polynomial.js";
 
 // Smallest t > 0 where a channel turns: first positive root of D·t² + 2B·t + A.
 function firstTurn (D, B, A) {
@@ -157,7 +102,7 @@ export function oklchCubic (oklch, out, checkInGamut = false) {
 				continue;
 			}
 		}
-		maxT = Math.min(maxT, firstRoot(Di, 3 * Bi, 3 * Ai, d, 1e-9, maxT));
+		maxT = Math.min(maxT, firstRoot(Di, 3 * Bi, 3 * Ai, d, 0, maxT));
 	}
 
 	// linear-P3 straight from the hue cubic (channelᵢ = L³·Pᵢ(maxT)),

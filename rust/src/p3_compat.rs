@@ -1,6 +1,6 @@
 // Compatibility helpers for the P3-only solvers. Retain their arithmetic and
 // gamut-check semantics while clip/CSS MINDE use the generic typed kernel.
-use super::color::{LinearRgb, Oklab, KA0, KA1, KA2, KB0, KB1, KB2};
+use super::color::{Oklab, KA0, KA1, KA2, KB0, KB1, KB2};
 use super::gamut::{DisplayP3, RgbGamut};
 use super::transfer::{SrgbTransfer, TransferFunction};
 use super::{hue_radians, Float};
@@ -80,10 +80,4 @@ pub(super) fn oklab_to_p3_if_in_gamut(l: Float, a: Float, b: Float, out: &mut [F
     out[1] = clamped_gamma(g);
     out[2] = clamped_gamma(bl);
     true
-}
-
-#[inline(always)]
-pub(super) fn linear_p3_to_oklab_chroma(r: Float, g: Float, b: Float) -> Float {
-    let lab = LinearRgb::<DisplayP3>::new([r, g, b]).to_oklab();
-    (lab.a * lab.a + lab.b * lab.b).sqrt()
 }

@@ -13,6 +13,9 @@ fn hue_radians(h: Float) -> Float {
 
 #[inline(always)]
 fn first_root(a: Float, b: Float, c: Float, d: Float, lo: Float, hi: Float) -> Float {
+    if lo == 0.0 && d == 0.0 {
+        return face_exit(a, b, c, true, hi);
+    }
     let candidate = first_root_candidate(a, b, c, d, lo, hi);
     if SINGLE {
         checked_cardano([a, b, c, d], lo, hi, candidate)
@@ -22,18 +25,20 @@ fn first_root(a: Float, b: Float, c: Float, d: Float, lo: Float, hi: Float) -> F
 }
 #[inline(always)]
 fn first_root_no_cache(a: Float, b: Float, c: Float, d: Float, lo: Float, hi: Float) -> Float {
-    let candidate = first_root_no_cache_candidate(a, b, c, d, lo, hi);
-    if SINGLE {
-        checked_cardano([a, b, c, d], lo, hi, candidate)
-    } else {
-        candidate
-    }
+    first_root(a, b, c, d, lo, hi)
 }
 // Forced inlining regressed native f32 timing here. Let LLVM optimize the
 // three-channel caller independently of this solver wrapper.
-fn first_root_cubic_direct(a: Float, b: Float, c: Float, d: Float, hi: Float) -> Float {
-    if SINGLE && d == 0.0 {
-        return 0.0;
+fn first_root_cubic_direct(
+    a: Float,
+    b: Float,
+    c: Float,
+    d: Float,
+    hi: Float,
+    upper: bool,
+) -> Float {
+    if d == 0.0 {
+        return face_exit(a, b, c, upper, hi);
     }
     if SINGLE {
         // Evaluate the coefficient array before the candidate. Moving the

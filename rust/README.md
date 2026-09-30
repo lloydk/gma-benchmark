@@ -4,15 +4,17 @@ A native point of reference for the JS `gma-benchmark`, timed over the same two
 35,640-color workloads: the canonical grid (`oklch(L 0.4 H)`) and a random
 hue/lightness workload (stratified/jittered, shuffled).
 
-Display-P3 remains the default target with all 13 methods. The first multi-gamut
-milestone adds **clip** and **css-minde** for sRGB and Rec.2020 in native f64 and
-f32. The other methods still use their P3 fits, caches and tables.
+Display-P3 remains the default target with all 13 methods. Milestone two adds
+sRGB and Rec.2020 versions of the matrix-driven solvers in native f64 and f32:
+clip, CSS MINDE, cached/uncached cubic, direct cubic, Halley, Ostrowski and Raytrace.
+Bottosson, Dualray and Edge Seeker still require separate target-specific fits
+or tables and remain P3-only.
 
 | Target | Methods |
 | --- | --- |
 | `display-p3` (default) | All 13 |
-| `srgb` | clip, css-minde |
-| `rec2020` | clip, css-minde |
+| `srgb` | All 8 matrix-driven methods |
+| `rec2020` | All 8 matrix-driven methods |
 
 ```sh
 ./target/release/gma-bench --gamut srgb
@@ -51,8 +53,15 @@ other implementations must use the same encoding.
 - `Oklch`, `Oklab`, `LinearRgb<G>` and `EncodedRgb<G>` hold three native scalars.
   RGB gamut markers have no storage. Construction preserves the coordinates;
   conversion, clipping and encoding are explicit operations.
-- `clip::Clip<G>` and `css_minde::CssMinde<G>` use static gamut dispatch. The
-  method registry combines these core methods with P3-only extras.
+- `clip::Clip<G>`, `css_minde::CssMinde<G>` and the six `rgb_solvers` types use
+  static gamut dispatch. The single ordered method registry combines these
+  core methods with P3-only extras. A cubic cache belongs to its gamut type;
+  buckets retain 13 native scalars with no runtime gamut tag.
+- `polynomial.rs` holds shared polynomial candidates and targeted conditioning
+  for cancellation-prone roots and ill-conditioned Newton refinements. The existing
+  native f32 Cardano conditioning remains in `conditioning.rs`. There is no
+  per-mapping, all-face first-exit guard. No fitted constants are used by these
+  six ports; the iterative solvers retain upstream's gamut-specific fold windows.
 - `p3_compat.rs` preserves the conversion entry points and evaluation order of
   the remaining P3 solvers. Its multiply-based conversion delegates to the
   typed kernel; historical `powi` and membership-check semantics are retained.
@@ -62,7 +71,8 @@ other implementations must use the same encoding.
 The f32 mappers, including cube roots, powers, trigonometry and CSS MINDE
 comparisons, stay entirely f32. Only benchmark checksums/statistics and
 validation/reference calculations widen values, outside the mapper kernels.
-JavaScript mappers are unchanged.
+All three existing P3 JavaScript cubics share the conditioned root helper;
+the direct cubic also receives the Newton-refinement fix. JavaScript multi-gamut ports remain a later milestone.
 
 ## Multi-gamut numerical validation
 
@@ -82,7 +92,38 @@ Validation separates conversion arithmetic from MINDE stopping decisions:
   an encoded acceptance interval is derived from the linear error allowance.
 - **CSS MINDE:** output differences are checked in ΔEOK. Encoded-channel
   differences remain diagnostics, with no blanket `0.1` acceptance budget.
-- **P3-only solvers:** retain their existing encoded-channel workload budgets.
+- **Direct cubic:** decoded linear RGB, `5e-5` f32/f64 workload limit, plus
+  an independent `2e-5` ΔEOK limit. Raw
+  boundary chroma is checked against an independent first-exit oracle
+  (`2e-5` f32, `1e-8` f64).
+- **Halley and Ostrowski:** the same linear and perceptual workload limits.
+  Within the padded blue windows `[264.03, 264.23]` for sRGB and
+  `[245.04, 245.31]` for Rec.2020, they select the outer feasible face
+  intersection. Stationary intervals isolate each crossing, and all channels
+  must be feasible within arithmetic roundoff. This replaces the upstream
+  second iteration, which can stall at an out-of-gamut corner. P3 has no fold
+  solve. Shared binary32 endpoints make both lanes classify rounded input hues
+  identically; hue wrapping does not change canonical conversion.
+  Raw chroma checks cover `L >= 0.001`; near-black stopping is assessed in RGB.
+- **Cached and uncached cubic:** decoded linear RGB, `5e-5` workload limit,
+  plus a `2e-5` ΔEOK limit, with both lanes aligned to the same 0.1-degree bucket. Independent mapping
+  tests use each lane's actual bucket; canonical checks use the authored hue.
+  The f64 reference limit is `1e-6` linear RGB (measured maximum `8.45e-7`),
+  retaining the incumbent Cardano approximation without a full boundary guard.
+  The geometric f64 mapping limits are `1e-8` for direct cubic and `2e-8`
+  for the iterative solvers. The latter includes their existing `1e-9` chroma
+  stopping rule; the new geometric oracle measures up to `1.28e-8` linear
+  error where the old copied iteration masked that error.
+- **Raytrace:** decoded linear RGB, `2e-4` f32/f64 workload limit for sRGB,
+  `5e-5` for P3/Rec.2020. Independent four-cast reference limits are `5e-4`
+  for native f32 sRGB and `5e-5` for native f32 P3/Rec.2020. Raytrace is checked
+  against its mapping policy rather than treated as an exact first-exit solver.
+  Additional f32/f64 ΔEOK limits are `0.002` sRGB, `0.0015` P3 and `0.0035`
+  Rec.2020. Measured maxima across the validation corpora are approximately
+  `0.00180`, `0.00102` and `0.00294`, respectively; these larger errors are
+  specific to Raytrace's native f32 convergence and anchor decisions.
+- **P3-only fitted/table solvers:** retain their existing encoded-channel
+  workload budgets.
 
 | Native f32 CSS MINDE target | ΔEOK limit |
 | --- | ---: |
@@ -93,6 +134,14 @@ Validation separates conversion arithmetic from MINDE stopping decisions:
 These policies are explicit per target in `validation.rs`, separate from the
 physical gamut definitions. They are empirical corpus limits, not full-domain
 accuracy guarantees. A new target must provide its own validation policy.
+Non-finite outputs and individual error metrics fail explicitly. Cross-method
+CLI checks run for every target, comparing only matching policies: bucketed
+cubics on grid hues, direct/Halley outside folds, and Halley/Ostrowski everywhere.
+
+Linear budgets imply finite encoded bounds even for Rec.2020: a linear error
+`e` permits at most `e^(1/2.4)` encoded error there. That global bound is loose
+near zero, so the separate ΔEOK gate limits perceptual error as well; encoded
+maxima remain visible in the validation output.
 
 At f32-rounded `oklch(0.88 0.4643206 18.5)`, Rec.2020 clip can differ by
 `0.002213233` in encoded green while differing by only about `4.3e-7` in linear
@@ -107,27 +156,105 @@ Rec.2020 produces about `0.092906` encoded-channel difference from f64, but only
 midpoint to JND; it permits either valid stopping decision across math libraries.
 No JND adjustment or wider mapper arithmetic is used.
 
-The [initial milestone report](reports/multi-gamut-milestone-1.json) preserves
-measurements from before the review fixes. The
-[review-fix report](reports/multi-gamut-review-fixes.json) records the current
-source/binary hashes, expanded validation, CLI checks and controlled timings.
-All 13 P3 methods still produce identical output bits to `5835529` in both modes
-and precisions on 136,960 inputs (7,121,920 mappings). Debug and native release
-builds each pass 51 tests.
+At a folded gamut boundary, the f32 and f64 canonical prechecks can disagree:
+for sRGB at f32-rounded `[0.17938177, 0.12429921, -95.947975]`, one lane can
+preserve a re-entered color while the other maps to the earlier exit. Validation
+checks accepted output bits against each lane's canonical conversion and checks
+rejected outputs against that lane's plain mapper. When classifications differ,
+it compares the two plain solvers and reports the branch count and original
+encoded-output difference separately. It does not introduce a membership epsilon.
 
-On Ryzen 7 9800X3D / WSL2 (rustc 1.98.1, LLVM 22.1.8, `target-cpu=native`,
-release/LTO), three runs per build pinned to CPU 2 and with balanced build order
-measured current P3 CSS MINDE at +3.9%/+1.8% versus the original f32 grid/random
-baseline, and +2.1%/-4.8% for f64. The f64 cached-cubic grid median was +1.6%;
-the earlier +9.1% result was not reproduced consistently. Individual process
-results are retained because this row varied substantially between runs.
+`test_oracle.rs` derives matrices through the independent XYZ reference. Its
+geometric oracle splits all six face polynomials at stationary points and
+bisects crossings. The first-exit reference skips tangencies that stay inside;
+it uses normalized `C/L` and a polynomial root bound. The iterative reference
+selects the outer feasible intersection inside the fold windows and the first
+exit elsewhere. It does not copy Halley/Ostrowski iterations or stopping rules.
 
-Four isolated MINDE code-generation experiments (forced map inlining, local
-candidate scope, an out-of-line delta helper, and scalar search state) showed
-slowdowns or workload tradeoffs; none was adopted. The small f32 MINDE regression
-remains a known limitation. These are build/workload measurements, not universal
-abstraction costs. Standalone f32 kernel assembly still uses native
-`sincosf`/`cbrtf`/`powf` with no double-precision arithmetic.
+Near a blue primary, floating-point rounding can change whether the outer
+island touches the RGB cube. A first-exit result and a vivid outer result can
+then differ by about `0.05` DeltaEOK without representing numerical error within
+one branch. Tests enumerate feasible outward intersections independently. They
+accept an alternate branch only in the fold window when a corner or stationary
+contact is within `2e-6` linear feasibility slack for f32 or `2e-14` for f64.
+Ordinary within-branch accuracy limits are unchanged. Dedicated stable-island regressions require the outer branch, so an
+implementation that always returns the inner boundary cannot pass.
+
+The workload validator reports differing iterative fold branches separately.
+Each such output must be on a cube face, retain authored L/h within `2e-6`
+in Oklab, and not increase chroma. This is a validation allowance, not a
+production gamut-membership epsilon. Canonical prechecks remain strict.
+
+The corpus includes all six cube faces, fractional hues, RGB primary/secondary
+neighbours, mixed chroma, near-black/near-white rays and benchmark workloads:
+241,483 mapping inputs per gamut in f64 and 224,203 in f32. Added near-white
+scales cover `1-2^-14` through `1-2^-28` where representable. A separate fold
+sweep covers 109,382 lightness/hue pairs per precision across sRGB and Rec.2020,
+including the reported `L=0.414, h=264.0425` corner. Canonical accepted outputs are
+checked bit-for-bit. These are sampled checks, not full-domain proofs.
+
+The mechanical port preserved all 7,121,920 P3 mappings in the milestone-one
+snapshot. The final implementation intentionally includes these targeted fixes:
+
+- Cardano can round a tiny positive upper-face root negative near white, or
+  a tiny negative root positive. A derivative-bound test selects a local Newton
+  solve with no arbitrary `d/c` cutoff. A recovered negative root is deflated
+  before selecting the next positive root. Both Rust and JavaScript cached
+  cubics now accept upper roots below the former `1e-9` cutoff.
+- Exactly touching a cube face exits only when the ray points outward. Inward
+  contacts factor out the zero root and continue to the next positive root.
+- Direct cubic's Newton polish skips nearly singular derivatives. Only poorly
+  conditioned derivatives need the additional residual evaluation in f64. Native
+  f32 refines once inside its existing bracket validation. This keeps the
+  double-root regression fixed without duplicate unbracketed refinement.
+- The blue-fold second iteration can stop off the boundary at an active-face
+  corner. Geometric solving is restricted to the fold windows and retains
+  valid outer islands; the rest of the iterative path is unchanged.
+- Raytrace checks reprojection against the last hit as well as the anchor in
+  both precisions. This prevents roundoff from casting to the opposite face.
+  Its independent reference has the same convergence protection, plus a
+  physical near-white regression assertion. Non-positive chroma uses the
+  canonical achromatic conversion in both checked and unchecked modes.
+
+The earlier blanket first-exit guard has been removed. It added substantial
+cost and imposed a first-exit policy on iterative algorithms whose upstream
+behavior deliberately seeks vivid blue outer intersections. The near-black
+Halley discrepancy remains: at `L=1e-6, h=270.25` in P3 its relative chroma error
+is large, but its final output difference is only about `1.4e-7` DeltaEOK.
+
+The [milestone-two report](reports/multi-gamut-milestone-2.json) records current
+source hashes, numerical measurements and a balanced before/after review-fix
+comparison. The earlier milestone-one/blanket-guard comparison is retained as
+historical evidence; its pre-review validation claims have been superseded.
+The [milestone-one report](reports/multi-gamut-milestone-1.json) and
+[review-fix report](reports/multi-gamut-review-fixes.json) are historical snapshots.
+
+| P3 f64 grid, ns/call | Before review fixes | After review fixes |
+| --- | ---: | ---: |
+| oklch-cubic (cached) | 58.50 | 55.76 |
+| oklch-halley | 98.06 | 97.45 |
+| oklch-ostrowski | 97.92 | 97.51 |
+| oklch-cubic-direct | 184.41 | 190.37 |
+| oklch-cubic (no cache) | 197.25 | 195.78 |
+
+These are medians of process medians on Ryzen 7 9800X3D / WSL2, rustc 1.98.1,
+native release/LTO, two processes per build pinned to CPU 2 with alternating
+order. Every process consumes all output channels over the same 35,640 inputs,
+50 warmup passes and 25 measured passes. Timings include code-layout effects.
+The report includes both precisions, both workloads, and separate runs of every
+target in both precheck modes. JavaScript performance was not measured.
+
+All 77 Rust tests pass in debug, native release and portable x86-64 release.
+All four JavaScript test files pass under Node 26.10.0. The cubic regressions
+include 57,600 near-white inputs per variant in both modes, plus probes around
+the double-root failure. Native f32 sRGB Raytrace reaches `4.37e-4` linear error
+against the four-cast reference on the expanded corpus, within its existing
+`5e-4` reference limit. This is separate from the boundary solvers' limits.
+
+The legacy f64 conversion multiplies degrees by PI before dividing by 180;
+finite hues large enough to overflow that multiplication remain outside its
+finite-output domain. Native f32 reduces out-of-range hue before conversion.
+The numerical tests retain these existing input policies.
 
 ## `gma-bench` — scalar, apples-to-apples
 
@@ -138,7 +265,8 @@ sorted timing tables (`--validate-only` omits them): f64 grid/random and f32
 grid/random. No precision flag is needed. `--in-gamut-check` selects the prechecked path in both precisions;
 `dualray` retains its intrinsic boundary checks in either mode, and `css-minde`
 retains the in-gamut check required by CSS Color 4 in either mode.
-The f64 lane uses the same conversion math as the JS methods.
+The f64 lane retains the JS conversion math. Rust also has native f32
+conditioning and the target-specific iterative blue-fold policy described above.
 
 ```sh
 RUSTFLAGS="-C target-cpu=native" cargo build --release --bin gma-bench
@@ -148,10 +276,9 @@ RUSTFLAGS="-C target-cpu=native" cargo build --release --bin gma-bench
 ./target/release/gma-bench --in-gamut-check
 ```
 
-The f64 checksums (sum of all output channels) match the JS port:
-`clip` and `edge-seeker` bit-for-bit, and the cubic variants to a few last-place
-digits (from cbrt/acos libm differences). `oklch-cubic-direct` currently matches
-across JS and Rust to all 10 printed decimal places.
+The checksums sum all output channels. Compare output policies as well as
+arithmetic when checking Rust against JavaScript: native f32 convergence and
+multi-gamut fold handling can intentionally change mapped colors.
 
 The f64 timing inputs retain their original values. The f32 inputs are rounded
 once before timing. Every mapper, intermediate, cache entry, LUT value, and
@@ -162,10 +289,8 @@ use 50 warmup passes and 25 measured passes over 35,640 colors per workload.
 
 `algorithms.rs` and `timings.rs` are compiled twice with concrete scalar aliases.
 The Edge Seeker LUT in `lut.rs` is likewise stored separately at each precision.
-`methods.rs` supplies a core method list and a P3-only extras list for both lanes
-and validation. This keeps
-the algorithms and benchmark coverage aligned without copying implementations
-or generating code by string replacement.
+`methods.rs` supplies one ordered registry of core and P3-only methods for both
+lanes and validation. This keeps algorithm and benchmark coverage aligned.
 
 `css_minde.rs` implements the [CSS Color 4 Local MINDE search](https://www.w3.org/TR/css-color-4/#binsearch)
 with native arithmetic in both lanes, `JND = 0.02`, and `epsilon = 0.0001`.
@@ -203,15 +328,14 @@ Before timing, both mapper modes are compared on identical f32-rounded inputs
 (widened to f64 for the reference), and every output is checked for finiteness
 and gamut membership. The table labels each acceptance metric and also prints
 the maximum encoded-channel difference. Clip and CSS MINDE use the policies
-above. The P3-only encoded-channel limits are `1e-4` for direct cubic, Halley,
-Ostrowski, Dualray, and both Edge Seeker variants; `2e-4` for Raytrace; `1e-3` for
-Bottosson; and `2e-3` for hue-quantized cubic/Bottosson variants. These remain
+above. The P3-only encoded-channel limits are `1e-4` for Dualray and both
+Edge Seeker variants, `1e-3` for Bottosson, and `2e-3` for cached Bottosson. These remain
 budgets for their existing workloads, not arbitrary boundary inputs: adjacent
 cache-bucket choices can exceed them on other corpora.
 
 The independent tests separately check conversion and transfer arithmetic,
-MINDE output error, and exact canonical pass-through. Core clip/MINDE validation
-includes mixed chroma and RGB boundary neighbours in all three gamuts.
+MINDE output error, and exact canonical pass-through. All eight core methods are
+validated on mixed chroma and RGB boundary neighbours in all three gamuts.
 
 Run the numerical tests with:
 

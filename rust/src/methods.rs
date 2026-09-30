@@ -1,33 +1,36 @@
-// Core methods and P3-only extras are each registered once. The explicit
-// policies are validation concerns, not properties of a physical RGB space.
-macro_rules! for_each_rgb_method {
-    ($visit:ident) => {
-        $visit!("clip", clip, Clip, Clip);
-        $visit!("css-minde", css_minde, CssMinde, Minde);
-    };
-}
-macro_rules! for_each_p3_extra {
-    ($visit:ident) => {
-        $visit!("oklch-cubic (cached)", OklchCubic, 0.002);
-        $visit!("oklch-cubic (no cache)", OklchCubicNoCache, 0.002);
-        $visit!("oklch-cubic-direct", OklchCubicDirect, 0.0001);
-        $visit!("oklch-halley", OklchHalley, 0.0001);
-        $visit!("oklch-ostrowski", OklchOstrowski, 0.0001);
-        $visit!("dualray", Dualray, 0.0001);
-        $visit!("bottosson-lightness", BottossonLightness, 0.001);
-        $visit!(
+// One ordered registry. Core entries are generic; extras remain P3-only.
+// Keep historical P3 method order for controlled benchmark comparisons.
+macro_rules! for_each_method {
+    ($core:ident, $extra:ident) => {
+        $core!("clip", clip, Clip, Clip);
+        $core!("css-minde", css_minde, CssMinde, Minde);
+        $core!("oklch-cubic (cached)", rgb_solvers, OklchCubic, Bucket);
+        $core!(
+            "oklch-cubic (no cache)",
+            rgb_solvers,
+            OklchCubicNoCache,
+            Bucket
+        );
+        $core!(
+            "oklch-cubic-direct",
+            rgb_solvers,
+            OklchCubicDirect,
+            Boundary
+        );
+        $core!("oklch-halley", rgb_solvers, OklchHalley, Iterative);
+        $core!("oklch-ostrowski", rgb_solvers, OklchOstrowski, Iterative);
+        $extra!("dualray", Dualray, 0.0001);
+        $extra!("bottosson-lightness", BottossonLightness, 0.001);
+        $extra!(
             "bottosson-lightness (cached)",
             BottossonLightnessCached,
             0.002
         );
-        $visit!("edge-seeker", EdgeSeeker, 0.0001);
-        $visit!("edge-seeker (indexed)", EdgeSeekerIndexed, 0.0001);
-        $visit!("raytrace", Raytrace, 0.0002);
+        $extra!("edge-seeker", EdgeSeeker, 0.0001);
+        $extra!("edge-seeker (indexed)", EdgeSeekerIndexed, 0.0001);
+        $core!("raytrace", rgb_solvers, Raytrace, Raytrace);
     };
-}
-// Compatibility adapter for the P3-only tests and output snapshots.
-#[cfg(test)]
-macro_rules! for_each_method {
+    // P3 test/snapshot compatibility adapter.
     ($visit:ident) => {
         macro_rules! core {
             ($name:literal, $module:ident, $method:ident, $policy:ident) => {
@@ -39,7 +42,6 @@ macro_rules! for_each_method {
                 $visit!($name, $method);
             };
         }
-        for_each_rgb_method!(core);
-        for_each_p3_extra!(extra);
+        for_each_method!(core, extra);
     };
 }
