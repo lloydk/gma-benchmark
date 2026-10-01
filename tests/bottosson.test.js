@@ -1,4 +1,4 @@
-import { bindMapperMode } from "./helpers/canonical-reference.js";
+import { bindMapperMode, createCanonicalReference } from "./helpers/canonical-reference.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { RGB_SPACES, SRGB, DISPLAY_P3, REC2020 } from "../src/rgb-spaces.js";
@@ -63,6 +63,16 @@ test("Bottosson target caches remain isolated against independent expected color
    const actual=maps[i]([.49,.4,h],[]).map(ref.decode);
    assert.ok(actual.every((v,j)=>Math.abs(v-expected[j])<2e-11),`${space.id} ${h}`);
   }
+ }
+});
+test("Bottosson only preserves interior Rec.2020 workload colors when the precheck is enabled",()=>{
+ const input=[.85,.4,148],canonical=createCanonicalReference(REC2020)(input);
+ assert.ok(canonical.inside);
+ for(const map of Object.values(createBottossonMappers(REC2020))) {
+  const plain=map(input,[]),checked=map(input,[],true);
+  assert.deepEqual(plain,map(input,[],false));
+  assert.ok(Math.max(...plain.map((v,i)=>Math.abs(v-canonical.encoded[i])))>.1);
+  assert.deepEqual(checked,canonical.encoded);
  }
 });
 test("Bottosson validation rejects wrong callbacks and NaN",()=>{

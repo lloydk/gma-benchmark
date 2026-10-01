@@ -32,6 +32,7 @@ export function createRgbConversions (space) {
 		const hr = H * Math.PI / 180;
 		const a = C * Math.cos(hr);
 		const b = C * Math.sin(hr);
+		// @bottosson-precheck-begin
 		const l0 = L + KA0 * a + KB0 * b;
 		const m0 = L + KA1 * a + KB1 * b;
 		const s0 = L + KA2 * a + KB2 * b;
@@ -48,6 +49,7 @@ export function createRgbConversions (space) {
 		out[1] = encodeClamped(g);
 		out[2] = encodeClamped(bl);
 		return true;
+		// @bottosson-precheck-end
 	}
 
 	// ── Target RGB (gamma) → OKLCh, returning { l, c, h } ──

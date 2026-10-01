@@ -99,6 +99,11 @@ Every method except `clip`, `css-minde`, and `dualray` also has an **in-gamut pr
 variant that first checks whether the input already lies inside the target gamut and skips the chroma
 reduction if so. Pass `--in-gamut-check` to time those variants instead — a run
 reports one mode at a time rather than mixing checked and unchecked rows.
+The flag is **off by default**. Unchecked Bottosson deliberately projects even
+in-gamut inputs to its approximate boundary; preserving those inputs is not a
+requirement of the default benchmark. This distinction matters for Rec.2020,
+where the benchmark workloads include in-gamut colors. With the flag enabled,
+Bottosson checks the original coordinates before any cached hue rounding.
 Dualray uses intrinsic boundary comparisons in both modes:
 it evaluates the input through its normalized cubics when it lies below the
 computed boundary. Its checked row calls the same solver, so the flag adds
@@ -266,6 +271,13 @@ fitted boundary even for interior colors; checked mode preserves canonical
 in-gamut conversion before hue bucketing. The cached factory owns its 0.1-degree
 hue table. These are approximations, with separate policy and geometric accuracy
 checks; see [the Bottosson port](MILESTONE-4.md#step-three-bottosson).
+The JavaScript mapper body is emitted by
+`node scripts/generate-bottosson-kernel.mjs` (`--check` verifies freshness).
+The existing `generate-bottosson.mjs` command also generates/checks this body.
+Edit `scripts/templates/bottosson-mapper.js` and the shared intersection
+fragment to change the algorithm; the optional precheck arithmetic comes from
+`src/rgb-convert.js`. Emitting the hot bodies avoids helper-call overhead while
+keeping one maintained copy of the equations. Hue caches still fill at runtime.
 
 `createEdgeSeeker(space)` and `createEdgeSeekerIndexed(space)` in
 `src/edge-seeker/factory.js` generate each target's table at runtime using the

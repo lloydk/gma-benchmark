@@ -1212,3 +1212,111 @@ pass, setup sample, bundle measurement, source hash, compatibility/parity result
 validation log and reproduction script. This production layout is measured
 separately from the earlier P3-only scratch experiment; its gains should not be
 assumed identical across workloads, runtimes or module layouts.
+
+### Final P3 comparison against the pre-port implementation
+
+The [direct P3 comparison](reports/milestone-4-p3-baseline-comparison.md)
+measures `be03abd` against `7d6c9e0`, the last committed tree before the JS
+multi-gamut ports. This compares all thirteen methods with the original P3
+implementations, rather than estimating recovery by combining historical
+measurements. Two ABBA blocks cover both runtimes and both benchmark modes:
+32 full-harness processes, four per version/runtime/mode, plus 16 isolated
+Dualray processes. The original and current workloads and timed loops match.
+
+Dualray is back near the original throughput on these workloads. Node's
+full-harness medians improve 1.7–2.7%; Bun's are 0.7–1.6% slower with overlapping
+process ranges. Isolated Bun is nearly flat (-0.2% grid, +0.6% random), so this
+does not establish exact performance equality or a general runtime speedup.
+
+The clearest remaining regressions are Bottosson: checked cached mapping is
+14.9–21.6% slower, checked uncached mapping 8.0–21.4% slower, and plain uncached
+mapping 4.5–8.3% slower. Plain cached Node improves about 6%; Bun's cached grid
+regresses 10.6%. Node Raytrace is 8.3–10.1% slower; Bun Raytrace improves.
+These are complete-implementation comparisons, including correctness changes,
+not isolated measurements of abstraction overhead. Bottosson is the next
+targeted investigation; Node Raytrace is a separate follow-up.
+
+Current P3 validation passes under Node and Bun in both modes. A separate
+comparison checks 1,853,280 before/after output pairs per runtime, including
+return-buffer identity and finite in-gamut outputs. The largest encoded
+difference on the timed inputs is 2.4206e-14 (Dualray: 6.6614e-16). Boundary
+corrections outside the timed workloads remain documented in earlier sections.
+No mapper code changed in this measurement pass. The report records all tables,
+raw samples, source/dependency hashes, limitations and reproduction commands;
+Rust, other gamuts and cold setup were not re-measured.
+
+### Bottosson slowdown investigation
+
+The [Bottosson investigation](reports/milestone-4-bottosson-investigation.md)
+separates the canonical-check cost from avoidable work. Warm cached checked
+mapping now performs an authored-hue conversion, including one sine/cosine
+pair; the old quantized membership test cannot replace it without changing
+outputs. Uncached checked mapping currently computes the direction twice after
+a failed precheck. The prototype reuses the first direction without changing
+the canonical arithmetic or membership predicate.
+
+V8 also leaves the saturation and intersection helpers out of line. Its
+disassembly shows scalar-call boxing; the old implementation already had some
+of this overhead. Restoring only the old uncached helper interface helps Bun
+but not consistently Node. No guard-removal or literal-coefficient experiment
+establishes a consistent cross-runtime recovery. The remaining plain-path
+regression is partly runtime/code-layout dependent, rather than one identified
+universal instruction cost.
+
+A scratch prototype combines direction reuse with inlined intersection math
+and saturation math inside cusp calculation. In a 16-process paired full-harness
+comparison against `be03abd`, checked uncached mapping improves 12.1–16.9% in
+Node and 10.3–16.1% in Bun. Other Bottosson rows improve 1.7–10.4%. The candidate
+is bit-identical to current output in 1,717,812 sample comparisons per runtime
+across all three gamuts and both modes, including aliased output buffers.
+
+The recommendation is to integrate that behavior-preserving layout with one
+maintained source for the equations and canonical conversion, keeping target
+factories, fitted data, guards and runtime caches. Production mapping code is
+unchanged by the investigation. The report includes the complete tables,
+counterfactual limitations, source, traces, raw measurements and reproduction
+scripts. Full independent tests/parity and setup/code-size measurements remain
+part of a future implementation step.
+
+### Bottosson optimization integration
+
+The default benchmark remains unchecked: Bottosson may project an in-gamut
+input to its fitted boundary. `--in-gamut-check` opts into the original-color
+check before hue rounding. This distinction was already wired correctly;
+the implementation change reduces mapping cost without changing either mode.
+A new regression uses the in-gamut Rec.2020 grid input `[0.85, 0.4, 148]` to
+verify both behaviors against an independent canonical conversion.
+
+Uncached checked mapping now reuses its first sine/cosine direction after a
+rejected precheck. Saturation evaluation lives inside cusp calculation, and
+both mapper bodies contain their intersection math. The equations have one
+maintained source in `scripts/templates/bottosson-*.js`; the canonical precheck
+arithmetic comes from the marked block in `src/rgb-convert.js`.
+`generate-bottosson.mjs --check` checks both fits and the emitted mapper, with
+`generate-bottosson-kernel.mjs` available independently. Hue caches still fill
+at runtime; fits, contact guards, target factories and Rust code are unchanged.
+
+The [integration report](reports/milestone-4-bottosson-optimization.md) compares
+the integrated source with `be03abd` in 16 serial full-harness P3 processes:
+before/after/after/before, both modes, Node 26.10.0 and Bun 1.4.2, CPU 2 on the
+Ryzen 7 9800X3D. Default-mode Node improvements range from 4.5% to 8.1% across
+the two mappers and grid/random workloads. Bun ranges from effectively flat
+(-0.2%/-0.4% rows) to 4.7% faster. Checked uncached mapping improves 13.3–16.1%
+in Node and 8.3–10.3% in Bun; checked cached mapping improves 3.0–5.0%.
+These are sampled immediate-before/after results, not archive recovery or
+other-target performance claims. Raw process values are retained in the report.
+
+The minified browser bundle grows 9,883 → 10,899 bytes, or 4,960 → 5,454 gzip
+bytes. Eight fresh-process setup samples per version/runtime give median
+import-plus-factory times of 3.048 → 3.390 ms in Node and 2.715 → 2.845 ms in
+Bun. Filesystem caches are warm; process startup and hue-cache filling are
+excluded. These small setup timings are noisy.
+
+Outputs are bit-identical in 1,717,812 comparisons per runtime across all three
+gamuts and both modes, including signed zeros, return-buffer identity and
+aliased inputs. Node passes all 95 tests; Bun passes the original 94-test suite
+and the final 10-test Bottosson file including the new regression. Independent
+approximation-policy tests, Node/Bun JS–Rust parity, all-gamut validation in
+both modes and generator freshness pass. Sandboxed Node subprocess checks
+encountered `EPERM`; they passed outside the sandbox, where both benchmark
+versions also ran. No Rust mapping changes required a Rust-suite rerun.
