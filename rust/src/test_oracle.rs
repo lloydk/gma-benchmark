@@ -163,6 +163,24 @@ impl BoundaryOracle {
         }
     }
 
+    pub fn iterative_chroma(&self, l: f64, c: f64, h: f64) -> f64 {
+        if !self.in_fold(h) {
+            return c.min(self.boundary(l, h));
+        }
+        if self
+            .reference
+            .linear_rgb([l, c, h])
+            .iter()
+            .all(|v| *v >= 0.0 && *v <= 1.0)
+        {
+            return c;
+        }
+        self.fold_boundaries(l, h, 2e-14, false)
+            .into_iter()
+            .filter(|&exit| exit <= c)
+            .fold(0.0, f64::max)
+    }
+
     pub fn in_fold(&self, h: f64) -> bool {
         // Share only the authored policy window; the root geometry above is
         // independent of the production solvers.
@@ -411,7 +429,7 @@ pub(crate) fn raytrace(
             target = reference.linear_rgb([l, lab[1].hypot(lab[2]), h]);
         }
         let direction = std::array::from_fn::<_, 3, _>(|j| target[j] - anchor[j]);
-        let convergence = 8.0
+        let convergence = (if single { 8.0 } else { 32.0 })
             * if single {
                 f64::from(f32::EPSILON)
             } else {
@@ -430,7 +448,7 @@ pub(crate) fn raytrace(
         let mut distance = f64::INFINITY;
         for j in 0..3 {
             let d = direction[j];
-            if d == 0.0 || (!single && d.abs() <= 1e-12) {
+            if d == 0.0 {
                 continue;
             }
             let face = if d > 0.0 { 1.0 } else { 0.0 };

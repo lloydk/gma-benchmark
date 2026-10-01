@@ -81,45 +81,14 @@ pub(super) fn lms_slopes_to_clipped_rgb<G: RgbGamut>(
 }
 
 // ── Raytrace constants ──
-const RAYTRACE_EPSILON: Float = 1e-12;
 const RAYTRACE_LOW: Float = if SINGLE { 8.0 * Float::EPSILON } else { 1e-12 };
 const RAYTRACE_HIGH: Float = 1.0 - RAYTRACE_LOW;
 
-// Exit distance of a ray from a point strictly inside the unit box:
-// min over axes of max((1 - a) / d, -a / d). The raytrace anchor always
-// satisfies "strictly inside" (it starts at gray (L^3, L^3, L^3) with
-// 0 < L < 1, and anchor updates are gated on RAYTRACE_LOW..RAYTRACE_HIGH),
-// so the slab method always resolves to this exit distance. |d| <= epsilon
-// is flushed to 0 so that axis contributes max(-inf, +inf) = +inf (no
-// constraint), matching the slab method's parallel-axis skip; if all three
-// axes are parallel the result is +inf, which the caller treats as "no hit".
+// Keep small, nonzero directions: flushing them can ignore the nearest face
+// close to white or black in either precision.
 #[inline(always)]
 fn exit_t(ar: Float, ag: Float, ab: Float, dr: Float, dg: Float, db: Float) -> Float {
-    if SINGLE {
-        return stable_exit_t(ar, ag, ab, dr, dg, db);
-    }
-    let dr = if dr <= RAYTRACE_EPSILON && dr >= -RAYTRACE_EPSILON {
-        0.0
-    } else {
-        dr
-    };
-    let dg = if dg <= RAYTRACE_EPSILON && dg >= -RAYTRACE_EPSILON {
-        0.0
-    } else {
-        dg
-    };
-    let db = if db <= RAYTRACE_EPSILON && db >= -RAYTRACE_EPSILON {
-        0.0
-    } else {
-        db
-    };
-    let ir = 1.0 / dr;
-    let ig = 1.0 / dg;
-    let ib = 1.0 / db;
-    let tr = ((1.0 - ar) * ir).max(-ar * ir);
-    let tg = ((1.0 - ag) * ig).max(-ag * ig);
-    let tb = ((1.0 - ab) * ib).max(-ab * ib);
-    tr.min(tg).min(tb)
+    stable_exit_t(ar, ag, ab, dr, dg, db)
 }
 
 // ── Method 2: oklch-cubic (cached) ──────────────────────────────────────────
@@ -557,7 +526,7 @@ pub(crate) fn in_blue_fold_id(id: crate::rgb_spaces::SpaceId, h: Float) -> bool 
 
 // Every monotone face interval is bracketed separately. This finds re-entries
 // as well as first exits, without assuming ray membership is monotone.
-fn outer_fold_boundary<G: RgbGamut>(l: Float, q: [Float; 3]) -> Float {
+fn outer_fold_boundary<G: RgbGamut>(l: Float, q: [Float; 3], input_c: Float) -> Float {
     let polynomials = G::LMS_TO_RGB.map(|w| {
         [
             w[0] * q[0] * q[0] * q[0] + w[1] * q[1] * q[1] * q[1] + w[2] * q[2] * q[2] * q[2],
@@ -567,7 +536,16 @@ fn outer_fold_boundary<G: RgbGamut>(l: Float, q: [Float; 3]) -> Float {
         ]
     });
     let white = 1.0 / (l * l * l);
-    let limit = 0.5 / l;
+    let cap = input_c.min(0.5);
+    let limit = cap / l;
+    // A chroma-reducing policy: retain valid re-entry colors, but an input
+    // in a gap must map to the preceding feasible exit, not be clipped.
+    if polynomials.iter().all(|&p| {
+        let value = fold_eval(p, limit);
+        value >= 0.0 && value <= white
+    }) {
+        return cap;
+    }
     let mut best: Float = 0.0;
     for [a, b, c, d] in polynomials {
         let mut points = [0.0, limit, limit, limit];
@@ -599,7 +577,9 @@ fn outer_fold_boundary<G: RgbGamut>(l: Float, q: [Float; 3]) -> Float {
                 } {
                     continue;
                 }
-                for _ in 0..(Float::MANTISSA_DIGITS + 2) {
+                // The initial bracket scales as 1/L. Near black it can need
+                // more than one mantissa of halvings before adjacent floats.
+                for _ in 0..(Float::MAX_EXP as u32 + Float::MANTISSA_DIGITS) {
                     let mid = lo + (hi - lo) * 0.5;
                     if mid == lo || mid == hi {
                         break;
@@ -750,9 +730,16 @@ fn solve_halley_iteration<G: RgbGamut>(
 }
 
 #[inline(always)]
-fn solve_halley<G: RgbGamut>(l: Float, h: Float, q0: Float, q1: Float, q2: Float) -> Float {
+fn solve_halley<G: RgbGamut>(
+    l: Float,
+    h: Float,
+    q0: Float,
+    q1: Float,
+    q2: Float,
+    input_c: Float,
+) -> Float {
     if in_blue_fold::<G>(h) {
-        outer_fold_boundary::<G>(l, [q0, q1, q2])
+        outer_fold_boundary::<G>(l, [q0, q1, q2], input_c)
     } else {
         solve_halley_iteration::<G>(l, q0, q1, q2, Float::NAN, 0.0, 0.5)
     }
@@ -798,7 +785,7 @@ impl<G: RgbGamut> OklchHalley<G> {
         let q0 = KA0 * cos + KB0 * sin;
         let q1 = KA1 * cos + KB1 * sin;
         let q2 = KA2 * cos + KB2 * sin;
-        let mapped_c = c.min(solve_halley::<G>(l, h, q0, q1, q2));
+        let mapped_c = c.min(solve_halley::<G>(l, h, q0, q1, q2, c));
         lms_slopes_to_clipped_rgb::<G>(l, mapped_c, q0, q1, q2, out);
     }
 }
@@ -938,9 +925,16 @@ fn solve_ostrowski_iteration<G: RgbGamut>(
 }
 
 #[inline(always)]
-fn solve_ostrowski<G: RgbGamut>(l: Float, h: Float, q0: Float, q1: Float, q2: Float) -> Float {
+fn solve_ostrowski<G: RgbGamut>(
+    l: Float,
+    h: Float,
+    q0: Float,
+    q1: Float,
+    q2: Float,
+    input_c: Float,
+) -> Float {
     if in_blue_fold::<G>(h) {
-        outer_fold_boundary::<G>(l, [q0, q1, q2])
+        outer_fold_boundary::<G>(l, [q0, q1, q2], input_c)
     } else {
         solve_ostrowski_iteration::<G>(l, q0, q1, q2, Float::NAN, 0.0, 0.5)
     }
@@ -986,7 +980,7 @@ impl<G: RgbGamut> OklchOstrowski<G> {
         let q0 = KA0 * cos + KB0 * sin;
         let q1 = KA1 * cos + KB1 * sin;
         let q2 = KA2 * cos + KB2 * sin;
-        let mapped_c = c.min(solve_ostrowski::<G>(l, h, q0, q1, q2));
+        let mapped_c = c.min(solve_ostrowski::<G>(l, h, q0, q1, q2, c));
         lms_slopes_to_clipped_rgb::<G>(l, mapped_c, q0, q1, q2, out);
     }
 }
@@ -1049,8 +1043,7 @@ impl<G: RgbGamut> Raytrace<G> {
 
         let anchor = l * l * l;
         // If L^3 underflows in the current precision, the anchor sits on
-        // the cube corner, breaking the strictly-inside invariant exit_t
-        // relies on (a flushed-parallel axis would yield -0 * inf = NaN).
+        // the cube corner, so there is no interior ray anchor.
         // Lightness that underflows in linear space is black, same as the
         // l <= 0 early-return.
         if anchor == 0.0 {
@@ -1080,12 +1073,16 @@ impl<G: RgbGamut> Raytrace<G> {
             // ULPs. Casting that noise can select the opposite cube face.
             if i != 0
                 && ((mr - ar).abs().max((mg - ag).abs()).max((mb - ab).abs())
-                    <= 8.0 * Float::EPSILON * ar.abs().max(ag.abs()).max(ab.abs())
+                    <= (if SINGLE { 8.0 } else { 32.0 })
+                        * Float::EPSILON
+                        * ar.abs().max(ag.abs()).max(ab.abs())
                     || (mr - last_r)
                         .abs()
                         .max((mg - last_g).abs())
                         .max((mb - last_b).abs())
-                        <= 8.0 * Float::EPSILON * last_r.abs().max(last_g.abs()).max(last_b.abs()))
+                        <= (if SINGLE { 8.0 } else { 32.0 })
+                            * Float::EPSILON
+                            * last_r.abs().max(last_g.abs()).max(last_b.abs()))
             {
                 mr = last_r;
                 mg = last_g;

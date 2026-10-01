@@ -1,7 +1,7 @@
 {
   "name": "gma-benchmark",
   "version": "1.0.0",
-  "description": "Benchmark of OKLCh→Display-P3 gamut-mapping methods (clip, oklch-cubic cached, edge-seeker cached) with hand-rolled conversions and no color library.",
+  "description": "Benchmark of OKLCh-to-RGB gamut mapping for Display-P3, sRGB and Rec.2020, with no color-library dependency.",
   "type": "module",
   "scripts": {
     "test": "node --test",

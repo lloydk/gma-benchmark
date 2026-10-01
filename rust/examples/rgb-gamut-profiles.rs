@@ -30,18 +30,23 @@ fn profile<G: gamut::RgbGamut>() {
     ];
     let samples = [0.0, 0.001, 0.0031308, 0.01, 0.1, 0.5, 1.0];
     let config = dualray_config::config(G::ID);
+    let blue_fold = rgb_spaces::blue_fold_window(G::ID).map_or("null".to_owned(), |[lo, hi]| {
+        format!("[{},{}]", f64::from(lo), f64::from(hi))
+    });
     let fold = config.fold.map_or("null".to_owned(), |v| format!("{v:?}"));
     let lab_samples = samples.map(|x| {
         let lab = color::LinearRgb::<G>::new([x, 0.25, 0.75]).to_oklab();
         [lab.l, lab.a, lab.b]
     });
     print!(
-        "{{\"name\":{:?},\"encoding\":{encoding:?},\"rgbToLms\":{:?},\"lmsToRgb\":{:?},\"oklabToLms\":{oklab_to_lms:?},\"linearSamples\":{samples:?},\"encodedSamples\":{:?},\"labSamples\":{lab_samples:?},\"dualray\":{{\"rootLimit\":{},\"foldWindow\":{fold}}}}}",
+        "{{\"name\":{:?},\"encoding\":{encoding:?},\"rgbToXyz\":{rgb_to_xyz:?},\"xyzToRgb\":{xyz_to_rgb:?},\"rgbToLms\":{:?},\"lmsToRgb\":{:?},\"oklabToLms\":{oklab_to_lms:?},\"linearSamples\":{samples:?},\"encodedSamples\":{:?},\"labSamples\":{lab_samples:?},\"blueFoldWindow\":{blue_fold},\"dualray\":{{\"rootLimit\":{},\"foldWindow\":{fold}}}}}",
         G::DEFINITION.name,
         G::RGB_TO_LMS,
         G::LMS_TO_RGB,
         samples.map(G::Transfer::encode_clamped),
         config.root_limit,
+        rgb_to_xyz = G::DEFINITION.rgb_to_xyz,
+        xyz_to_rgb = G::DEFINITION.xyz_to_rgb,
     );
 }
 

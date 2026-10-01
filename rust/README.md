@@ -93,7 +93,12 @@ The f32 mappers, including cube roots, powers, trigonometry and CSS MINDE
 comparisons, stay entirely f32. Only benchmark checksums/statistics and
 validation/reference calculations widen values, outside the mapper kernels.
 All three existing P3 JavaScript cubics share the conditioned root helper;
-the direct cubic also receives the Newton-refinement fix. JavaScript multi-gamut ports remain a later milestone.
+the direct cubic also receives the Newton-refinement fix. JavaScript Clip,
+CSS MINDE and all six matrix solvers now support all three targets; the fitted
+and table-based ports are tracked
+in [milestone four](../MILESTONE-4.md). That port also exposed and fixed
+f64 Raytrace near-white direction flushing and premature dark-fold bisection
+termination in both languages.
 
 ## Multi-gamut numerical validation
 
@@ -119,8 +124,9 @@ Validation separates conversion arithmetic from MINDE stopping decisions:
   (`2e-5` f32, `1e-8` f64).
 - **Halley and Ostrowski:** the same linear and perceptual workload limits.
   Within the padded blue windows `[264.03, 264.23]` for sRGB and
-  `[245.04, 245.31]` for Rec.2020, they select the outer feasible face
-  intersection. Stationary intervals isolate each crossing, and all channels
+  `[245.04, 245.31]` for Rec.2020, they select the greatest feasible chroma at or below the input; a gap input
+  maps to the preceding exit and valid re-entry colors retain their chroma.
+  Stationary intervals isolate each crossing, and all channels
   must be feasible within arithmetic roundoff. This replaces the upstream
   second iteration, which can stall at an out-of-gamut corner. P3 has no fold
   solve. Shared binary32 endpoints make both lanes classify rounded input hues
@@ -205,8 +211,8 @@ encoded-output difference separately. It does not introduce a membership epsilon
 geometric oracle splits all six face polynomials at stationary points and
 bisects crossings. The first-exit reference skips tangencies that stay inside;
 it uses normalized `C/L` and a polynomial root bound. The iterative reference
-selects the outer feasible intersection inside the fold windows and the first
-exit elsewhere. It does not copy Halley/Ostrowski iterations or stopping rules.
+selects the greatest feasible chroma no larger than the input inside fold
+windows and the first exit elsewhere. Gap inputs cannot be retained and clipped. It does not copy Halley/Ostrowski iterations or stopping rules.
 
 Near a blue primary, floating-point rounding can change whether the outer
 island touches the RGB cube. A first-exit result and a vivid outer result can
@@ -246,7 +252,9 @@ snapshot. The final implementation intentionally includes these targeted fixes:
   double-root regression fixed without duplicate unbracketed refinement.
 - The blue-fold second iteration can stop off the boundary at an active-face
   corner. Geometric solving is restricted to the fold windows and retains
-  valid outer islands; the rest of the iterative path is unchanged.
+  valid outer islands. The search is bounded by input chroma so colors in
+  a disconnected gap map to the preceding feasible exit rather than being
+  clipped. The rest of the iterative path is unchanged.
 - Raytrace checks reprojection against the last hit as well as the anchor in
   both precisions. This prevents roundoff from casting to the opposite face.
   Its independent reference has the same convergence protection, plus a

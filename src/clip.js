@@ -1,10 +1,11 @@
-import { oklchToClippedP3 } from "./convert.js";
+import { DISPLAY_P3 } from "./rgb-spaces.js";
+import { getRgbConversions } from "./rgb-convert.js";
 
-// Naïve clip: convert OKLCh straight to P3 and clamp each channel into gamut.
-// This is the theoretical floor — the cost of the conversion every method must do
-// anyway — so it's the baseline the gamut-mapping methods are measured against.
-//
-// `oklch` is [L, C, H]; the clipped Display-P3 result is written into `out`.
-export function clip (oklch, out) {
-	return oklchToClippedP3(oklch[0], oklch[1], oklch[2], out);
+// The target is selected at setup. The returned mapper reuses the caller's out.
+export function createClip (space) {
+	const { oklchToClippedRgb } = getRgbConversions(space);
+	return function clip (oklch, out) {
+		return oklchToClippedRgb(oklch[0], oklch[1], oklch[2], out);
+	};
 }
+export const clip = createClip(DISPLAY_P3);

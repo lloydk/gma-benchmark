@@ -92,8 +92,8 @@ fn exact_boundaries<G: RgbGamut>() -> [f64; 3] {
         ];
         let actual = [
             max_chroma_cubic_direct::<G>(l, q[0], q[1], q[2]),
-            solve_halley::<G>(l, h, q[0], q[1], q[2]),
-            solve_ostrowski::<G>(l, h, q[0], q[1], q[2]),
+            solve_halley::<G>(l, h, q[0], q[1], q[2], 0.5),
+            solve_ostrowski::<G>(l, h, q[0], q[1], q[2], 0.5),
         ];
         let alternatives = oracle.fold_boundaries(
             f64::from(l),
@@ -208,14 +208,11 @@ fn mapped_outputs<G: RgbGamut + crate::validation::ValidationProfile>() {
             .map(|v| v.clamp(0.0, 1.0));
         expected[1] = expected[0];
         for i in [3, 4] {
-            expected[i] = oracle
-                .reference
-                .linear_rgb([
-                    physical[0],
-                    physical[1].min(oracle.iterative_boundary(physical[0], physical[2], i == 4)),
-                    physical[2],
-                ])
-                .map(|v| v.clamp(0.0, 1.0));
+            expected[i] = oracle.reference.linear_rgb([
+                physical[0],
+                oracle.iterative_chroma(physical[0], physical[1], physical[2]),
+                physical[2],
+            ]);
         }
 
         expected[5] = crate::test_oracle::raytrace(&oracle.reference, physical, SINGLE);
@@ -443,8 +440,8 @@ fn stable_outer_branch<G: RgbGamut>(h: Float) {
             "test must contain a disconnected island"
         );
         for actual in [
-            solve_halley::<G>(l, h, q[0], q[1], q[2]),
-            solve_ostrowski::<G>(l, h, q[0], q[1], q[2]),
+            solve_halley::<G>(l, h, q[0], q[1], q[2], 0.5),
+            solve_ostrowski::<G>(l, h, q[0], q[1], q[2], 0.5),
         ] {
             assert!(
                 (f64::from(actual) - outer).abs() < if SINGLE { 2e-5 } else { 1e-8 },
@@ -547,8 +544,8 @@ fn fold_sweeps_require_feasible_geometric_intersections() {
                     true,
                 );
                 for actual in [
-                    solve_halley::<G>(l, h, q[0], q[1], q[2]),
-                    solve_ostrowski::<G>(l, h, q[0], q[1], q[2]),
+                    solve_halley::<G>(l, h, q[0], q[1], q[2], 0.5),
+                    solve_ostrowski::<G>(l, h, q[0], q[1], q[2], 0.5),
                 ] {
                     let error = alternatives
                         .iter()
@@ -648,4 +645,102 @@ fn zero_root_face_direction_is_explicit() {
     assert_eq!(first_face_root(0.0, 1.0, -1.0, 0.0, 2.0, true), 1.0);
     assert_eq!(first_face_root(0.0, -1.0, 1.0, 0.0, 2.0, true), 0.0);
     assert_eq!(first_face_root(0.0, -1.0, 1.0, 0.0, 2.0, false), 1.0);
+}
+
+#[test]
+fn raytrace_keeps_tiny_near_white_directions_in_both_precisions() {
+    fn check<G: RgbGamut>() {
+        let mut map = Raytrace::<G>::new();
+        let exponents: &[i32] = if SINGLE {
+            &[14, 18, 20, 22, 23, 24]
+        } else {
+            &[14, 23, 30, 42, 52, 53]
+        };
+        for &exponent in exponents {
+            let l = (1.0 - 2.0_f64.powi(-exponent)) as Float;
+            assert!(l > 0.0 && l < 1.0, "near-white probe must reach the solver");
+            for h in [18.5, 30.0, 104.0, 117.75, 150.0, 245.1, 264.05, 301.75] {
+                let mut out = [0.0; 3];
+                map.map(&[l, 0.4, h], &mut out);
+                assert!(
+                    out.iter().all(|v| v.is_finite() && *v > 0.998 && *v <= 1.0),
+                    "{l} {h}: {out:?}"
+                );
+            }
+        }
+    }
+    check::<Srgb>();
+    check::<DisplayP3>();
+    check::<Rec2020>();
+}
+
+#[test]
+fn dark_fold_search_keeps_the_same_normalized_outer_boundary() {
+    fn check<G: RgbGamut>(h: Float) {
+        let mut map = OklchHalley::<G>::new();
+        let mut out = [0.0; 3];
+        map.map(&[0.1, 0.4, h], &mut out);
+        let oracle = BoundaryOracle::new(G::ID);
+        let decode = |rgb: [Float; 3]| rgb.map(|v| oracle.reference.decode(f64::from(v)));
+        let expected = decode(out).map(|v| v / 0.001);
+        for exponent in [14, 15, 20] {
+            let l = 2.0_f64.powi(-exponent) as Float;
+            map.map(&[l, 0.4, h], &mut out);
+            for (a, b) in decode(out)
+                .map(|v| v / f64::from(l * l * l))
+                .into_iter()
+                .zip(expected)
+            {
+                assert!(
+                    (a - b).abs() < if SINGLE { 2e-4 } else { 2e-10 },
+                    "{l} {h}: {a} != {b}"
+                );
+            }
+        }
+    }
+    check::<Srgb>(264.05);
+    check::<Rec2020>(245.1);
+}
+
+#[test]
+fn iterative_fold_gap_reduces_chroma_and_preserves_the_authored_line() {
+    fn check<G: RgbGamut>(l: Float, h: Float, lo: Float, hi: Float) {
+        let oracle = BoundaryOracle::new(G::ID);
+        let mut halley = OklchHalley::<G>::new();
+        let mut ostrowski = OklchOstrowski::<G>::new();
+        let mut gap_count = 0;
+        for i in 0..=300 {
+            let c = lo + (hi - lo) * i as Float / 300.0;
+            let input = [l, c, h];
+            let physical = input.map(f64::from);
+            let expected_c = oracle.iterative_chroma(physical[0], physical[1], physical[2]);
+            let expected = oracle
+                .reference
+                .linear_rgb([physical[0], expected_c, physical[2]]);
+            assert!(expected.iter().all(|v| *v >= -2e-14 && *v <= 1.0 + 2e-14));
+            if expected_c < physical[1] {
+                gap_count += 1;
+            }
+            let mut outputs = [[0.0; 3]; 4];
+            halley.map(&input, &mut outputs[0]);
+            ostrowski.map(&input, &mut outputs[1]);
+            halley.map_with_in_gamut_check(&input, &mut outputs[2]);
+            ostrowski.map_with_in_gamut_check(&input, &mut outputs[3]);
+            let expected_lab = oracle.reference.linear_to_lab(expected);
+            for rgb in outputs {
+                let linear = rgb.map(|v| oracle.reference.decode(f64::from(v)));
+                let lab = oracle.reference.linear_to_lab(linear);
+                for (a, b) in lab.into_iter().zip(expected_lab) {
+                    assert!(
+                        (a - b).abs() < if SINGLE { 2e-5 } else { 2e-10 },
+                        "{input:?}: {rgb:?}, {lab:?} vs {expected_lab:?}"
+                    );
+                }
+                assert!(lab[1].hypot(lab[2]) <= physical[1] + if SINGLE { 2e-5 } else { 2e-10 });
+            }
+        }
+        assert!(gap_count > 0);
+    }
+    check::<Srgb>(0.3, 264.053, 0.17, 0.215);
+    check::<Rec2020>(0.2, 245.067, 0.15, 0.185);
 }

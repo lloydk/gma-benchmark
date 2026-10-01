@@ -1,7 +1,8 @@
-// Benchmarks OKLCh → Display-P3 gamut mapping over the grid shape used by
+import { buildWorkloads, CHROMA, HUE_STEP, LIGHTNESS_STEP } from "./benchmark-workloads.js";
+// Benchmarks OKLCh → target RGB gamut mapping over the grid shape used by
 // color.js-org/apps/gamut-mapping/benchmark: oklch(L 0.4 H), H = 0..359 step 1,
 // L = 0.99..0.01 step 0.01. Each method takes [L, C, H] and writes the clipped
-// Display-P3 result into a reused 3-vector (no allocation per call).
+// target RGB result into a reused 3-vector (no allocation per call).
 //
 //   npm run bench   (or: node bench.js / bun bench.js)
 //   Validation and timing run in separate processes by default.
@@ -11,24 +12,25 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { bench, run, summary } from "mitata";
 
-import { clip } from "./src/clip.js";
-import { cssMinde } from "./src/css-minde.js";
-import { oklchCubic } from "./src/oklch-cubic.js";
-import { oklchCubicNoCache } from "./src/oklch-cubic-no-cache.js";
-import { oklchCubicDirect } from "./src/oklch-cubic-direct.js";
-import { oklchHalley } from "./src/oklch-halley.js";
-import { oklchOstrowski } from "./src/oklch-ostrowski.js";
-import { bottossonLightness, bottossonLightnessCached } from "./src/bottosson-lightness.js";
-import { edgeSeeker, edgeSeekerIndexed } from "./src/edge-seeker/index.js";
-import { raytrace } from "./src/raytrace.js";
-import { dualray } from "./src/dualray.js";
+import { clip as p3Clip, createClip } from "./src/clip.js";
+import { cssMinde as p3CssMinde, createCssMinde } from "./src/css-minde.js";
+
+import { getRgbSpace } from "./src/rgb-spaces.js";
 
 const { values } = parseArgs({ options: {
 	"in-gamut-check": { type: "boolean", default: false },
 	"validate-only": { type: "boolean", default: false },
 	"timing-only": { type: "boolean", default: false },
+	gamut: { type: "string", default: "display-p3" },
+	help: { type: "boolean", short: "h", default: false },
 	warmup: { type: "string", default: "50" },
 } });
+if (values.help) {
+	console.log("Usage: node bench.js [--gamut display-p3|srgb|rec2020|all] [--validate-only|--timing-only] [--in-gamut-check] [--warmup 50]\nDefault: display-p3, all 13 methods. sRGB and Rec.2020: 8 methods (Clip, CSS MINDE and six matrix solvers).\nEach target runs in a separate process; validation is separate from timing.");
+	process.exit(0);
+}
+const gamut = values.gamut;
+if (gamut !== "all") getRgbSpace(gamut);
 const validateOnly = values["validate-only"];
 const timingOnly = values["timing-only"];
 const inGamutCheck = values["in-gamut-check"];
@@ -40,12 +42,30 @@ if (!/^\d+$/.test(values.warmup) || !Number.isSafeInteger(warmup) || warmup < 1)
 	throw new Error("--warmup must be a positive safe integer (complete workload passes)");
 }
 
+// Isolate targets too: one target's factory calls must not train another's
+// inline caches. Child flags preserve the caller's mode and warmup settings.
+if (gamut === "all") {
+	for (const target of ["display-p3", "srgb", "rec2020"]) {
+		const args = ["--gamut", target, "--warmup", String(warmup)];
+		for (const flag of ["validate-only", "timing-only", "in-gamut-check"]) if (values[flag]) args.push(`--${flag}`);
+		const result = spawnSync(process.execPath, [...(process.versions.bun ? [] : ["--expose-gc"]), fileURLToPath(import.meta.url), ...args], { stdio: "inherit" });
+		if (result.error) throw result.error;
+		if (result.signal) { process.kill(process.pid, result.signal); process.exit(1); }
+		if (result.status !== 0) process.exit(result.status ?? 1);
+	}
+	process.exit(0);
+}
+const space = getRgbSpace(gamut);
+const clip = gamut === "display-p3" ? p3Clip : createClip(space);
+const cssMinde = gamut === "display-p3" ? p3CssMinde : createCssMinde(space);
+console.log(`gamut: ${gamut}`);
+
 // Never let validation's checked/unchecked calls or rare probes prepare the
 // timing process. Direct invocations and npm scripts use the same entry point.
 if (!validateOnly && !timingOnly) {
 	const flags = process.versions.bun ? [] : ["--expose-gc"];
 	const script = fileURLToPath(import.meta.url);
-	const args = ["--warmup", String(warmup)];
+	const args = ["--warmup", String(warmup), "--gamut", gamut];
 	if (inGamutCheck) args.push("--in-gamut-check");
 	for (const mode of ["--validate-only", "--timing-only"]) {
 		console.log(mode === "--validate-only"
@@ -62,65 +82,20 @@ if (!validateOnly && !timingOnly) {
 	process.exit(0);
 }
 
-const CHROMA = 0.4;
-const HUE_STEP = 1;
-const LIGHTNESS_STEP = 0.01;
+const { createMatrixMappers } = await import("./src/matrix-mappers.js");
+const matrixMappers = createMatrixMappers(space);
+const {
+ "oklch-cubic": oklchCubic, "oklch-cubic-no-cache": oklchCubicNoCache,
+ "oklch-cubic-direct": oklchCubicDirect, "oklch-halley": oklchHalley,
+ "oklch-ostrowski": oklchOstrowski, raytrace,
+} = matrixMappers;
+const { bottossonLightness, bottossonLightnessCached } = gamut === "display-p3" ? await import("./src/bottosson-lightness.js") : {};
+const { edgeSeeker, edgeSeekerIndexed } = gamut === "display-p3" ? await import("./src/edge-seeker/index.js") : {};
+const { dualray } = gamut === "display-p3" ? await import("./src/dualray.js") : {};
 
-// Small deterministic PRNG so the random workload is reproducible run to run.
-function mulberry32 (a) {
-	return function () {
-		a |= 0;
-		a = (a + 0x6D2B79F5) | 0;
-		let t = Math.imul(a ^ (a >>> 15), 1 | a);
-		t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-	};
-}
-
-// `count` stratified/jittered values evenly covering [min, min+range) — one
-// random sample per equal bin — then Fisher–Yates shuffled so they don't arrive
-// in sorted order. Deterministic via `seed`.
-function stratifiedShuffled (count, min, range, seed) {
-	const rand = mulberry32(seed);
-	const values = new Array(count);
-	for (let i = 0; i < count; i++) {
-		values[i] = min + (i + rand()) * (range / count);
-	}
-	for (let i = count - 1; i > 0; i--) {
-		const j = Math.floor(rand() * (i + 1));
-		const tmp = values[i];
-		values[i] = values[j];
-		values[j] = tmp;
-	}
-	return values;
-}
-
-// Build the grid (lightest first, as the reference benchmark does).
-const samples = [];
-const den = Math.round(1 / LIGHTNESS_STEP);
-const hi = Math.round((1 - LIGHTNESS_STEP) * den);
-const lo = Math.round(LIGHTNESS_STEP * den);
-for (let li = hi; li >= lo; li--) {
-	const l = li / den;
-	for (let h = 0; h < 360; h += HUE_STEP) {
-		samples.push([l, CHROMA, h]);
-	}
-}
+const { samples, randomSamples } = buildWorkloads();
 const n = samples.length;
 console.log(`dataset: ${n.toLocaleString()} OKLCh colors, C=${CHROMA}, H=0..359 step ${HUE_STEP}, L=0.99..0.01 step ${LIGHTNESS_STEP}`);
-
-// Build a random workload: same sample count as the grid, but every lightness
-// and hue is an independent stratified/jittered fractional value (even coverage
-// of its range, shuffled). The grid repeats just 360 integer hues and 99 fixed
-// lightness steps, which keeps the gamut-edge lookup cache-hot and the dark/
-// bright branches predictable; arbitrary non-repeating input is closer to real-
-// world gamut mapping. Lightness covers the same 0.01..0.99 range as the grid.
-const randHues = stratifiedShuffled(n, 0, 360, 0x9e3779b9);
-const randLightness = stratifiedShuffled(n, LIGHTNESS_STEP, 1 - 2 * LIGHTNESS_STEP, 0x85ebca6b);
-const randomSamples = [];
-for (let i = 0; i < n; i++) {
-	randomSamples.push([randLightness[i], CHROMA, randHues[i]]);
-}
 console.log(`random:  ${randomSamples.length.toLocaleString()} OKLCh colors, C=${CHROMA}, H=stratified/jittered 0..360, L=stratified/jittered 0.01..0.99 (both shuffled)`);
 
 const oklchCubicChecked = (oklch, out) => oklchCubic(oklch, out, true);
@@ -138,36 +113,22 @@ const raytraceChecked = (oklch, out) => raytrace(oklch, out, true);
 // of the plain one, so a run shows one mode at a time rather than both mixed.
 console.log(`in-gamut precheck: ${inGamutCheck ? "ENABLED (--in-gamut-check)" : "disabled (pass --in-gamut-check to enable)"}\n`);
 
-const methods = inGamutCheck ? [
+const methods = [
 	["clip", clip],
-	// CSS MINDE includes the spec's in-gamut check in both modes.
-	["css-minde", cssMinde],
-	["oklch-cubic (cached)", oklchCubicChecked],
-	["oklch-cubic (no cache)", oklchCubicNoCacheChecked],
-	["oklch-cubic-direct", oklchCubicDirectChecked],
-	["oklch-halley", oklchHalleyChecked],
-	["oklch-ostrowski", oklchOstrowskiChecked],
-	// Dualray uses intrinsic boundary checks in both modes.
-	["dualray", dualray],
-	["bottosson-lightness", bottossonLightnessChecked],
-	["bottosson-lightness (cached)", bottossonLightnessCachedChecked],
-	["edge-seeker", edgeSeekerChecked],
-	["edge-seeker (indexed)", edgeSeekerIndexedChecked],
-	["raytrace", raytraceChecked],
-] : [
-	["clip", clip],
-	["css-minde", cssMinde],
-	["oklch-cubic (cached)", oklchCubic],
-	["oklch-cubic (no cache)", oklchCubicNoCache],
-	["oklch-cubic-direct", oklchCubicDirect],
-	["oklch-halley", oklchHalley],
-	["oklch-ostrowski", oklchOstrowski],
-	["dualray", dualray],
-	["bottosson-lightness", bottossonLightness],
-	["bottosson-lightness (cached)", bottossonLightnessCached],
-	["edge-seeker", edgeSeeker],
-	["edge-seeker (indexed)", edgeSeekerIndexed],
-	["raytrace", raytrace],
+	["css-minde", cssMinde], // intrinsic membership check in both modes
+	["oklch-cubic (cached)", inGamutCheck ? oklchCubicChecked : oklchCubic, "oklch-cubic"],
+	["oklch-cubic (no cache)", inGamutCheck ? oklchCubicNoCacheChecked : oklchCubicNoCache, "oklch-cubic-no-cache"],
+	["oklch-cubic-direct", inGamutCheck ? oklchCubicDirectChecked : oklchCubicDirect],
+	["oklch-halley", inGamutCheck ? oklchHalleyChecked : oklchHalley],
+	["oklch-ostrowski", inGamutCheck ? oklchOstrowskiChecked : oklchOstrowski],
+	...(gamut === "display-p3" ? [
+		["dualray", dualray], // intrinsic checks in both modes
+		["bottosson-lightness", inGamutCheck ? bottossonLightnessChecked : bottossonLightness],
+		["bottosson-lightness (cached)", inGamutCheck ? bottossonLightnessCachedChecked : bottossonLightnessCached],
+		["edge-seeker", inGamutCheck ? edgeSeekerChecked : edgeSeeker],
+		["edge-seeker (indexed)", inGamutCheck ? edgeSeekerIndexedChecked : edgeSeekerIndexed],
+	] : []),
+	["raytrace", inGamutCheck ? raytraceChecked : raytrace],
 ];
 
 const out = [0, 0, 0];
@@ -182,12 +143,21 @@ if (validateOnly) {
 			for (const s of dataset) {
 				fn(s, out);
 				if (!inGamut(out)) {
-					throw new Error(`${name} produced out-of-gamut P3 at oklch(${s.join(" ")}) -> ${out.join(" ")}`);
+					throw new Error(`${name} produced out-of-gamut ${gamut} at oklch(${s.join(" ")}) -> ${out.join(" ")}`);
 				}
 			}
 		}
 	}
-	console.log("sanity: all methods produce in-gamut Display-P3 ✓\n");
+	console.log(`sanity: all methods produce in-gamut ${gamut} ✓\n`);
+	const { validateRgbMethods } = await import("./tests/helpers/validate-rgb-methods.js");
+	const registered = Object.fromEntries(methods.map(([label,map,id = label]) => [id,map]));
+	console.log(validateRgbMethods(space, [samples, randomSamples], { clip: registered.clip, "css-minde": registered["css-minde"] }));
+	const { validateMatrixMethods } = await import("./tests/helpers/validate-matrix-methods.js");
+	const { mappingProbes } = await import("./tests/helpers/matrix-samples.js");
+	const selected = Object.fromEntries(Object.keys(matrixMappers).map(name => [name,registered[name]]));
+	const opposite = Object.fromEntries(Object.entries(matrixMappers).map(([name,map]) => [name,(input,out) => map(input,out,!inGamutCheck)]));
+	console.log(validateMatrixMethods(space, [samples, randomSamples, mappingProbes()], inGamutCheck, selected, opposite));
+	if (gamut !== "display-p3") process.exit(0);
 
 	const uncheckedOut = [0, 0, 0];
 	const checkedOut = [0, 0, 0];
@@ -391,7 +361,7 @@ summary(() => {
 				sink += out[0] + out[1] + out[2];
 			}
 		};
-		bench(name, function* () { yield* warmed(batch); });
+		bench(`${gamut} / ${name}`, function* () { yield* warmed(batch); });
 	}
 });
 
@@ -404,7 +374,7 @@ summary(() => {
 				sink += out[0] + out[1] + out[2];
 			}
 		};
-		bench(`${name} (random hues)`, function* () { yield* warmed(batch); });
+		bench(`${gamut} / ${name} (random hues)`, function* () { yield* warmed(batch); });
 	}
 });
 

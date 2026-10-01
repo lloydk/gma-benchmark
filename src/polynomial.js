@@ -35,7 +35,6 @@ export function faceExit (a, b, c, upper, hi) {
 // Smallest real root of a·t³ + b·t² + c·t + d in (lo, hi), or Infinity if none.
 export function firstRoot (a, b, c, d, lo, hi) {
 	if (lo === 0) {
-		if (d === 0) return faceExit(a, b, c, true, hi);
 		const root = conditionedFirstRoot(a, b, c, d, hi);
 		if (root !== undefined) return root;
 	}
@@ -92,4 +91,9 @@ export function firstRoot (a, b, c, d, lo, hi) {
 		best = r2;
 	}
 	return best;
+}
+
+// Face roots distinguish an outward exit at zero from an inward/tangent start.
+export function firstFaceRoot (a, b, c, d, hi, upper) {
+ return d === 0 ? faceExit(a, b, c, upper, hi) : firstRoot(a, b, c, d, 0, hi);
 }
