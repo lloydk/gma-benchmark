@@ -1111,3 +1111,104 @@ or establish that its P3 slowdown has been eliminated. Rust f32 is unchanged
 and was not re-benchmarked. [The follow-up report](reports/milestone-4-dualray-review.json)
 records all passes, source hashes, validation logs, parity, compatibility,
 planted mutations and reproduction scripts.
+
+### P3 performance investigation after checkpoint `99cc900`
+
+The committed port still shows a P3 regression against `1c06277`. Instrumented
+workloads have identical seed, shortcut, retry and fallback counts. V8 refuses
+to inline the new 1,200-bytecode seed helper and boxes its floating-point
+arguments and result. A scratch variant embedding the same seed expression in
+the mapper improves throughput without changing sampled outputs. Descriptor
+capture alone did not show the same consistent effect.
+
+See [the investigation](reports/milestone-4-p3-dualray-investigation.md) for
+controlled variants, assembly evidence, repeated focused measurements and full
+harness confirmation. The experiments do not change production code. The
+recommended next implementation is generated inline seeds from one shared
+solver template, preserving current target data, arithmetic and guards.
+
+### Inline seed generation
+
+The recommendation is now implemented for all three gamuts. The maintained
+mapper body lives in `scripts/templates/dualray-mapper.js`; the existing Dualray
+generator inserts each target's balanced seed expression into that template.
+Generated modules are `src/generated/dualray-{srgb,display-p3,rec2020}.js`.
+`src/generated/dualray.js` contains the frozen basis/sector data and factory
+registry, with no separate seed evaluator. `createDualray(space)` selects the
+target once and returns its mapper; public imports and default P3 behavior are
+unchanged.
+
+Root isolation, fold mapping, polynomial evaluation and Halley polishing stay
+shared in `src/dualray-kernel.js`. Physical target descriptors, current arithmetic,
+near-white/first-exit guards, exact face snapping and the output-buffer contract
+are retained. This adds no runtime fitting, LUT generation or dynamic code
+evaluation. The generator requires exactly one explicit seed insertion point,
+checks every emitted file with `--check`, and avoids rewriting unchanged files.
+Rust source and generated files remain byte-identical to `99cc900`.
+
+Before/after comparisons against `99cc900` are bit-identical on all **290,206
+inputs per runtime** (109,576 sRGB, 71,054 P3 and 109,576 Rec.2020), including
+boundary neighbours, folds, hue wraps and extreme lightness. **94/94 Node** and
+**94/94 Bun** tests pass; all-gamut CLI validation passes in both entry modes.
+Strict Rust parity remains at most **1.69e-14 linear** in Node and exactly equal
+in Bun. Generator freshness passes, including its existing Rust f32 fold-window
+edge regression. The full Rust suite was not rerun for this JS-only change.
+
+V8's trace confirms that there is no separate seed evaluator to call or box
+arguments for; the small shared numerical helpers still inline. Code-size
+measurement with `bun build src/dualray.js --minify --target=browser` includes
+the default P3 export and all-gamut factory. Its payload grows from **18,340 to
+25,576 bytes**; gzip grows **8,575 → 8,876 bytes**, and Brotli **7,108 → 7,216
+bytes**. Those are bundle payload measurements, separate from the unbundled
+module timings below.
+
+Performance is compared directly with `99cc900` on Ryzen 7 9800X3D / WSL2,
+Node 26.10.0 and Bun 1.4.2. CPU 2, fresh processes, common script path,
+before/after/after/before, no concurrent tests/builds. Focused kernels use
+50 warmup and 25 measured passes, reused output buffers and all-channel
+checksums. All corresponding checksums and workload hashes match exactly.
+Tables report medians of two process results, in ns per mapping; full-harness
+values come from Mitata's rounded batch averages.
+
+| P3 full harness | Before ns | After ns | Change |
+| --- | ---: | ---: | ---: |
+| Node grid | 79.26 | 73.51 | -7.3% |
+| Node random | 95.82 | 93.29 | -2.6% |
+| Bun grid | 66.50 | 64.53 | -3.0% |
+| Bun random | 81.93 | 79.12 | -3.4% |
+
+| Focused target / workload | Node before → after ns | Bun before → after ns |
+| --- | ---: | ---: |
+| display-p3 grid | 71.91 → 67.98 (-5.5%) | 63.66 → 61.75 (-3.0%) |
+| display-p3 random | 87.50 → 81.84 (-6.5%) | 79.54 → 76.08 (-4.4%) |
+| srgb grid | 73.64 → 67.94 (-7.7%) | 65.10 → 60.75 (-6.7%) |
+| srgb random | 87.70 → 85.23 (-2.8%) | 82.18 → 77.36 (-5.9%) |
+| rec2020 grid | 76.89 → 70.67 (-8.1%) | 68.38 → 64.66 (-5.4%) |
+| rec2020 random | 87.59 → 83.31 (-4.9%) | 81.72 → 80.14 (-1.9%) |
+
+One Bun Rec.2020 fold-interior process was slower in the initial comparison,
+yielding an 8.7% median increase from only two process medians. A targeted
+three-ABBA repeat (six processes per version, identical workloads) did not
+reproduce it: fold-interior **98.63 → 96.71 ns**, fold-mapped **425.38 → 425.99 ns**.
+The original passes and the follow-up are both retained in the report.
+
+Import plus selected-factory setup excludes process launch and uses a warm
+filesystem, with six fresh-process samples per version/target:
+
+| Target | Node before → after ms | Bun before → after ms |
+| --- | ---: | ---: |
+| display-p3 | 2.04 → 4.50 | 2.52 → 3.19 |
+| srgb | 3.70 → 4.53 | 2.44 → 3.34 |
+| rec2020 | 2.92 → 4.26 | 2.55 → 3.16 |
+
+The hot-path improvement therefore has a cold-setup cost, about 0.6–2.5 ms in
+this comparison. A separate twelve-sample-per-version experiment packed the
+three generated kernels into one module: it reduced Node setup but increased
+Bun setup, so that layout was not adopted. Import-time samples vary; these
+numbers do not include process startup, network loading or bundled execution.
+
+[The inline-seed report](reports/milestone-4-dualray-inline.json) records every
+pass, setup sample, bundle measurement, source hash, compatibility/parity result,
+validation log and reproduction script. This production layout is measured
+separately from the earlier P3-only scratch experiment; its gains should not be
+assumed identical across workloads, runtimes or module layouts.

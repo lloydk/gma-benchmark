@@ -63,7 +63,10 @@ such method links to the original it was derived from.
   fits, one lower Halley step, two upper Householder steps, a guarded
   upper-first shortcut, a competing upper-face retry, and stationary-interval
   first-root recovery. Uses exact input hues without a LUT or per-hue cache.
-  The shared implementation is in [`src/dualray-factory.js`](src/dualray-factory.js);
+  The shared implementation is maintained in
+  [`scripts/templates/dualray-mapper.js`](scripts/templates/dualray-mapper.js),
+  which generates each target's mapper with its seed expression inline.
+  [`src/dualray-factory.js`](src/dualray-factory.js) selects the target;
   [`src/dualray.js`](src/dualray.js) retains the default P3 export.
 - **bottosson-lightness** — Bjorn Ottosson's constant-lightness gamut clipping,
   specialized at factory creation for OKLCh → target RGB, with generated
@@ -281,7 +284,10 @@ NaN/Infinity semantics are not harmonized between JS and Rust.
 
 `createDualray(space)` in `src/dualray-factory.js` binds a supported target's
 basis, fitted seed coefficients and transfer function without building a hue
-lookup table. Both benchmark modes use its intrinsic first-exit comparisons.
+lookup table. The generator emits each target's seed expression inside the
+shared mapper template to avoid a hot helper call; runtime code needs neither
+code generation nor `eval`. Common root/fold helpers live in
+`src/dualray-kernel.js`. Both benchmark modes use intrinsic first-exit comparisons.
 Folded regions retain first-exit isolation and exact output-face channels;
 see [the Dualray port](MILESTONE-4.md#step-five-dualray).
 
