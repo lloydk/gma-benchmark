@@ -30,6 +30,20 @@ export function evaluateFoldPolynomial (p, x) {
 	return value + error;
 }
 
+// Explicit face orientation remains valid when the starting residual is zero.
+export function bisectFoldExit(p, lo, hi, lowerFace) {
+ // The 1/L bracket needs exponent-range halvings near black, then a mantissa
+ // of refinement; normally floating-point adjacency stops the loop early.
+ for (let n = 0; n < 1077; n++) {
+  const mid = lo + (hi - lo) * 0.5;
+  if (mid === lo || mid === hi) break;
+  const v = evaluateFoldPolynomial(p, mid);
+  if (lowerFace ? v >= 0 : v <= 0) lo = mid;
+  else hi = mid;
+ }
+ return lo + (hi - lo) * 0.5;
+}
+
 // Port of Rust's outer_fold_boundary. Partition at derivative roots, then
 // consider outward face crossings up to the input, retaining the last feasible one.
 // The ordinary iteration stays allocation-free; this rare fold path uses
@@ -63,18 +77,10 @@ export function outerFoldBoundary (rows, L, q0, q1, q2, inputC = 0.5) {
 		for (const face of [0, white]) {
 			const p = [a, b, c, d - face];
 			for (let i = 1; i < points.length; i++) {
-				let lo = points[i - 1], hi = points[i];
+				const lo = points[i - 1], hi = points[i];
 				const fl = evaluateFoldPolynomial(p, lo), fh = evaluateFoldPolynomial(p, hi);
 				if (face === 0 ? !(fl >= 0 && fh < 0) : !(fl <= 0 && fh > 0)) continue;
-				// The 1/L bracket needs exponent-range halvings near black,
-				// then a mantissa of refinement; normally adjacency stops early.
-				for (let n = 0; n < 1077; n++) {
-					const mid = lo + (hi - lo) * 0.5;
-					if (mid === lo || mid === hi) break;
-					if ((evaluateFoldPolynomial(p, mid) < 0) === (fl < 0)) lo = mid;
-					else hi = mid;
-				}
-				const x = lo + (hi - lo) * 0.5;
+				const x = bisectFoldExit(p, lo, hi, face === 0);
 				if (polynomials.every(p => {
 					const v = evaluateFoldPolynomial(p, x);
 					const scale = ((Math.abs(p[0]) * x + Math.abs(p[1])) * x + Math.abs(p[2])) * x + Math.abs(p[3]);

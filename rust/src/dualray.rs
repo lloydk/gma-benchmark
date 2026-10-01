@@ -388,6 +388,26 @@ impl<G: DualrayData> Dualray<G> {
             .into_iter()
             .all(|v| v >= 0.0 && v <= target)
         {
+            // Endpoint membership alone permits disconnected re-entry islands.
+            // Bernstein controls certify the entire neutral-to-input segment.
+            // Keep rounding-scale contacts on the isolation/snapping path.
+            let margin = 32.0 * Float::EPSILON * target;
+            if [
+                value(rd, rb, ra, input_u),
+                value(gd, gb, ga, input_u),
+                value(bd, bb, ba, input_u),
+            ]
+            .into_iter()
+            .all(|v| v > margin && v < target - margin)
+                && interior_within(ra, rb, input_u, target)
+                && interior_within(ga, gb, input_u, target)
+                && interior_within(ba, bb, input_u, target)
+            {
+                out[0] = G::Transfer::encode_clamped(l3 * value(rd, rb, ra, input_u));
+                out[1] = G::Transfer::encode_clamped(l3 * value(gd, gb, ga, input_u));
+                out[2] = G::Transfer::encode_clamped(l3 * value(bd, bb, ba, input_u));
+                return;
+            }
             // An inside endpoint may lie beyond a first exit/re-entry. Bound
             // isolation by the input; do not treat it as proof of pass-through.
             map_fold::<G>(

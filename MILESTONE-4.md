@@ -4,8 +4,8 @@ Step one adds sRGB and Rec.2020 conversions, Clip and CSS MINDE.
 [Step two](#step-two-matrix-solvers) adds the six matrix solvers. All thirteen
 existing P3 methods retain their exports. [Step three](#step-three-bottosson)
 ports both Bottosson variants. [Step four](#step-four-edge-seeker) adds both
-Edge Seeker variants. Only Dualray remains P3-only. Earlier measurements below
-are historical.
+Edge Seeker variants. [Step five](#step-five-dualray) adds Dualray, completing
+all thirteen methods across all three gamuts. Earlier measurements below are historical.
 
 ## Architecture
 
@@ -740,11 +740,9 @@ baseline; their numbers report final throughput only. Small changes remain
 subject to JIT/process variation. Rust mapping code is unchanged and its
 timings were not repeated.
 
-## Next step
+## Next step at the Edge Seeker checkpoint
 
-Port Dualray with JavaScript data emitted by the existing generator and
-independent policy/parity validation, completing all thirteen methods for
-all three gamuts.
+Dualray was the remaining port; it is implemented in [step five](#step-five-dualray).
 
 
 ### Runtime table generation follow-up
@@ -916,3 +914,200 @@ timing changes span −24.5% to +4.6%; the largest measured slowdown is Node P3
 indexed Edge Seeker grid, 64.24 → 67.22 ns. The report retains every raw pass and
 all per-method summaries. These isolated measurements do not attribute gains
 to a particular JIT mechanism or replace full-harness timing evidence.
+
+
+## Step five: Dualray
+
+`createDualray(space)` in `src/dualray-factory.js` supports all three exported
+RGB descriptors. `src/dualray.js` retains the default P3 instance and re-exports
+the factory. Factories bind scalar basis coefficients, sectors, root limit,
+seed function and transfer function once; custom descriptors borrowing a known
+id are rejected. The benchmark now runs **all thirteen methods for every gamut**.
+
+The existing generator emits JavaScript seed functions with the same balanced
+expression trees as Rust, plus deeply frozen basis/sector data. P3 data remains
+pinned to the incumbent coefficients. These are fixed polynomial coefficients,
+not hue-indexed LUTs; there is no per-hue cache or runtime fitting. Rust mapping
+code and generated coefficient files are unchanged.
+
+The shared kernel retains the guarded upper-first shortcut, one lower Halley
+step, two upper Householder steps, competing-face retry and stationary-interval
+first-root fallback. Horner intermediates follow Rust f64. A stationary touch
+is not an exit; exact endpoint roots require an outward derivative. The
+sRGB/Rec.2020 fold windows use Rust's first-exit isolation policy, tracking the
+smallest root. Interior endpoints are searched only up to the authored chroma;
+re-entry does not authorize passing through the first exit. The selected exit
+channel is assigned exactly 0 or 1 before encoding the remaining channels.
+Ordinary calls allocate no arrays; fold/fallback paths use small temporary
+arrays. Target selection and data binding stay outside mapping.
+
+Dualray's checked row deliberately invokes the same intrinsic boundary policy
+as its plain row. It does not add the canonical input-conversion precheck used
+by the other optional-check methods. The parity runner has an explicit intrinsic
+mode that checks plain/checked equality on both sides, while retaining the
+existing canonical branch validation for Bottosson and Edge Seeker.
+
+Independent tests use uncomposed XYZ conversions and first-exit geometry,
+including input chroma in folded gaps and re-entry regions, exact face identity,
+primary/boundary neighbours, fold-window edges and negative wraps, stationary
+touches, large finite hue, extreme lightness and aliasing. They also check
+interleaved factories and reject wrong-target/NaN callbacks. Runtime CLI
+validation invokes the actual timed callback with two arguments in every gamut.
+
+One reference defect was found while adding near-white probes: a neutral point
+rounded exactly onto an upper face left the initial residual at zero. The old
+bisection used that residual's sign and moved its lower endpoint outside.
+The independent reference now uses the explicit face orientation to select the
+inside half, with a direct regression at Rec.2020 `L=1-2^-53`, hue 80 degrees.
+This changes the test oracle, not mapping policy.
+
+Initial port validation (before the follow-up below): **89/89 Node**,
+**89/89 Bun**, **117/117 Rust release** tests;
+all-gamut `--validate-only` in both modes and runtimes; Dualray generator
+`--check`; Bottosson, Edge Seeker and Dualray parity in both runtimes. The
+Dualray parity corpus contains 109,576 sRGB, 71,054 P3 and 109,576 Rec.2020
+inputs (580,412 plain/checked mappings per runtime). Its maximum JS/Rust linear
+difference is **1.69e-14** in Node; Bun agrees exactly on this corpus. Both
+linear and DeltaEOK parity gates are 2e-11, with no membership-branch exemptions.
+Independent first-exit comparisons stay below **6.6e-12 linear**. Rec.2020's
+encoded maximum against that reference is 5.83e-7: encoding magnifies tiny
+linear residuals near zero. These are sampled results, not full-domain bounds.
+
+Against checkpoint `1c06277`, P3 changes on 125 of 71,054 Node inputs and 122
+Bun inputs, by at most **6.67e-16 encoded**. These last-bit changes follow the
+Rust f64 arithmetic grouping. The report preserves compatibility inputs,
+metrics, checksums and source hashes.
+
+Performance was measured against `1c06277` on Ryzen 7 9800X3D / WSL2,
+Node 26.10.0 and Bun 1.4.2. CPU 2, fresh processes, common script path,
+before/after/after/before, no concurrent tests/builds. Focused kernels use
+50 warmup and 25 measured passes, reused output buffers and all-channel
+checksums. Numbers below are medians of two process results, in ns per mapping.
+
+| P3 workload | Node before → after | Bun before → after |
+| --- | ---: | ---: |
+| Focused grid | 67.74 → 71.21 (+5.1%) | 63.08 → 67.37 (+6.8%) |
+| Focused random | 86.74 → 89.10 (+2.7%) | 76.82 → 80.47 (+4.7%) |
+| Full harness grid | 77.30 → 77.16 (−0.2%) | 64.67 → 69.87 (+8.0%) |
+| Full harness random | 93.57 → 99.33 (+6.1%) | 79.69 → 84.88 (+6.5%) |
+
+The P3 throughput regression remains. A separate balanced scratch experiment
+split the seed evaluator's sector branches into smaller named functions; it
+did not improve throughput consistently, so it was not adopted. These timings
+do not establish whether the remaining cost comes from function calls, captured
+target data or JIT code layout. No other method in the full harness slowed by
+more than 5% in this run.
+
+| New target / workload | Node ns | Bun ns |
+| --- | ---: | ---: |
+| sRGB grid / random | 70.35 / 90.65 | 64.08 / 83.76 |
+| Rec.2020 grid / random | 74.90 / 89.28 | 68.66 / 84.27 |
+| sRGB ordinary interior / mapped | 95.56 / 86.24 | 83.45 / 80.30 |
+| sRGB fold interior / mapped | 239.19 / 536.08 | 207.12 / 414.00 |
+| Rec.2020 ordinary interior / mapped | 94.61 / 91.79 | 88.03 / 82.60 |
+| Rec.2020 fold interior / mapped | 237.75 / 568.37 | 255.60 / 448.21 |
+
+The dedicated ordinary/fold workloads contain 4,096 fractional-hue inputs each;
+interior chroma is `0.01*L`, mapped chroma is 0.6. They expose the cost of
+first-exit isolation that integer-hue grid timings would miss. New targets have
+no prior JS Dualray implementation to use as a before measurement.
+
+Import plus factory setup, excluding process launch, uses medians of six fresh
+processes per version/target with a warm filesystem. P3 is 1.98 → 1.80 ms in
+Node and 2.43 → 2.68 ms in Bun. New sRGB/Rec.2020 setup is 2.50/2.07 ms in
+Node and 2.41/2.38 ms in Bun. All three seed functions are imported; only the
+selected target's mapper is created. No runtime table or cache is allocated.
+
+[The Dualray report](reports/milestone-4-dualray.json) contains raw passes,
+full-harness logs, setup measurements, the rejected seed-split experiment,
+reproduction scripts and validation evidence. This completes the JavaScript
+ports for milestone four: all thirteen methods support all three gamuts.
+
+### Dualray review follow-up
+
+Validation now enforces the benchmark's output-buffer contract: the callback
+must return the supplied buffer, write every channel, and the validator reads
+that buffer. The shared parity runner uses the same check for all three ported
+families. A deliberately correct replacement array and an unwritten buffer are
+both rejected.
+
+The independent first-exit oracle now enforces exact selected-face values for
+mapped inputs away from primary ties and rounding-scale neutral contacts.
+Interior fold cases have their own numerical and strict-interior assertions.
+A synthetic fold-kernel regression has a positive residual at its isolated
+root, so deleting the snap cannot hide behind clipping or a numerical tolerance.
+Separate regressions preserve exact upper-face snaps at rounding-scale contacts.
+
+Dualray's Node parity limits are now **1e-13 linear and DeltaEOK**; Bun requires
+**exact encoded equality** with Rust. Intrinsic parity invokes the JS function
+once with the same two arguments as timing and reports one intrinsic category.
+It still checks Rust's two distinct entry methods agree. It no longer calls
+the same JS function with an ignored third argument or emits an empty boundary
+disagreement category. Grey accuracy expectations use the independent XYZ
+reference; exact neutrality remains a separate output contract.
+
+Six scratch mutations are rejected: returning a fresh fold buffer, removing
+ordinary face snapping, removing fold snapping, making Bernstein certification
+unconditional, restoring the zero-residual bisection bug, and reducing the
+Householder loop to one step. The last fails Node parity at sRGB
+`[0.49,0.4,280]` (1.55e-13 linear and 1.74e-13 DeltaEOK).
+
+The near-white Bernstein rejection branch still lacks a supported-gamut
+reproducer. Its predicate is now shared with the fold shortcut and directly
+tested with synthetic cubics whose endpoints are inside but whose interiors
+cross a lower or upper face. This checks the certificate's mathematics, not
+end-to-end reachability of the near-white fallback. The defensive guard remains.
+
+JavaScript and Rust f64 now skip fold isolation when endpoint checks and
+Bernstein controls certify the entire neutral-to-input interval. Inputs on
+disconnected re-entry islands still use first-exit isolation. Contacts within
+32 machine epsilons of a face also retain isolation/snapping; a first attempt
+without that exclusion changed last-bit outputs at exact upper-face contacts.
+With the exclusion, all 290,206 before/after probes are bit-identical in both JS
+runtimes, and Bun still agrees exactly with Rust. Rust's f32 fold kernel is
+unchanged.
+
+The generator emits Rust and JS directly from the same fit data and expression
+builder, with no source-code regex translation. `--check` confirms all generated
+JS/Rust files are byte-identical to the prior port. Production matrix fold
+bisection now uses explicit face orientation at a zero starting residual,
+matching the reference fix, with a direct bisection regression. The focused
+benchmark resolves the descriptor once and uses a factory-module lookup.
+
+Final checks: **94/94 Node**, **94/94 Bun**, **119/119 Rust release** tests;
+Node/Bun all-gamut CLI validation in both modes; Rust all-gamut validation;
+all three shared parity scripts in Node/Bun; generator freshness and formatting.
+The measured Node Dualray parity maximum remains 1.69e-14 linear; Bun is exact.
+
+Follow-up timings compare the reviewed, uncommitted port with these fixes,
+not checkpoint `1c06277`. Ryzen 7 9800X3D / WSL2, Node 26.10.0, Bun 1.4.2;
+CPU 2, fresh processes, common JS script path, before/after/after/before,
+no concurrent tests/builds. Each process uses 50 warmup and 25 measured passes,
+reuses output buffers and consumes all channels. Values below are medians of
+two process medians, in ns per mapping. Rust f64 uses portable release-equivalent
+flags (`opt-level=3`, LTO, one codegen unit, panic abort) and `black_box`.
+
+| Interior fold workload | Before ns | After ns | Change |
+| --- | ---: | ---: | ---: |
+| Node sRGB | 236.66 | 64.47 | −72.8% |
+| Node Rec.2020 | 237.72 | 65.45 | −72.5% |
+| Bun sRGB | 251.26 | 99.66 | −60.3% |
+| Bun Rec.2020 | 215.01 | 96.70 | −55.0% |
+| Rust f64 sRGB | 87.74 | 47.88 | −45.4% |
+| Rust f64 Rec.2020 | 89.58 | 48.89 | −45.4% |
+
+The fold workloads use the same 4,096-input manifest as the initial port's
+dedicated measurements. Mapped fold workloads still isolate roots; their timing
+changes range from −1.9% to +2.0% across the three runtimes. All corresponding
+before/after checksums match exactly.
+
+| Focused P3 workload | Node before → after ns | Bun before → after ns |
+| --- | ---: | ---: |
+| Grid | 72.22 → 70.87 (−1.9%) | 63.93 → 66.21 (+3.6%) |
+| Random | 88.91 → 88.56 (−0.4%) | 80.78 → 79.06 (−2.1%) |
+
+These focused measurements do not supersede the initial full-harness comparison
+or establish that its P3 slowdown has been eliminated. Rust f32 is unchanged
+and was not re-benchmarked. [The follow-up report](reports/milestone-4-dualray-review.json)
+records all passes, source hashes, validation logs, parity, compatibility,
+planted mutations and reproduction scripts.

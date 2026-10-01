@@ -26,7 +26,7 @@ const { values } = parseArgs({ options: {
 	warmup: { type: "string", default: "50" },
 } });
 if (values.help) {
-	console.log("Usage: node bench.js [--gamut display-p3|srgb|rec2020|all] [--validate-only|--timing-only] [--in-gamut-check] [--warmup 50]\nDefault: display-p3, all 13 methods. sRGB and Rec.2020: 12 methods (Clip, CSS MINDE, six matrix solvers, both Bottosson and both Edge Seeker variants).\nEach target runs in a separate process; validation is separate from timing.");
+	console.log("Usage: node bench.js [--gamut display-p3|srgb|rec2020|all] [--validate-only|--timing-only] [--in-gamut-check] [--warmup 50]\nDefault: display-p3, all 13 methods. sRGB and Rec.2020: all 13 methods.\nEach target runs in a separate process; validation is separate from timing.");
 	process.exit(0);
 }
 const gamut = values.gamut;
@@ -95,7 +95,8 @@ const { "bottosson-lightness": bottossonLightness, "bottosson-lightness-cached":
 const { createEdgeSeekerMappers } = await import("./src/edge-seeker/factory.js");
 const edgeSeekerMappers = createEdgeSeekerMappers(space);
 const { "edge-seeker": edgeSeeker, "edge-seeker-indexed": edgeSeekerIndexed } = edgeSeekerMappers;
-const { dualray } = gamut === "display-p3" ? await import("./src/dualray.js") : {};
+const { createDualray } = await import("./src/dualray-factory.js");
+const dualray = createDualray(space);
 
 const { samples, randomSamples } = buildWorkloads();
 const n = samples.length;
@@ -125,7 +126,7 @@ const methods = [
 	["oklch-cubic-direct", inGamutCheck ? oklchCubicDirectChecked : oklchCubicDirect],
 	["oklch-halley", inGamutCheck ? oklchHalleyChecked : oklchHalley],
 	["oklch-ostrowski", inGamutCheck ? oklchOstrowskiChecked : oklchOstrowski],
-	...(gamut === "display-p3" ? [["dualray", dualray]] : []), // intrinsic checks
+	["dualray", dualray], // intrinsic checks in both modes
 	["bottosson-lightness", inGamutCheck ? bottossonLightnessChecked : bottossonLightness],
 	["bottosson-lightness (cached)", inGamutCheck ? bottossonLightnessCachedChecked : bottossonLightnessCached, "bottosson-lightness-cached"],
 	["edge-seeker", inGamutCheck ? edgeSeekerChecked : edgeSeeker],
@@ -169,6 +170,9 @@ if (validateOnly) {
 		const selected = Object.fromEntries(Object.keys(maps).map(name => [name,registered[name]]));
 		console.log(validate(space,[samples,randomSamples,probes],inGamutCheck,selected,bindMapperMode(maps,!inGamutCheck)));
 	}
+	const { validateDualrayMethod } = await import("./tests/helpers/validate-dualray-method.js");
+	const { dualrayProbes } = await import("./tests/helpers/dualray-samples.js");
+	console.log(validateDualrayMethod(space,[samples,randomSamples,dualrayProbes(gamut)],registered.dualray));
 	if (gamut !== "display-p3") process.exit(0);
 
 	const uncheckedOut = [0, 0, 0];

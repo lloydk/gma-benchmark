@@ -8,6 +8,7 @@ const { values } = parseArgs({ options: {
 	method: { type: "string", default: "clip" },
 } });
 const names = {
+ "dualray": ["dualray", "createDualray"],
  "edge-seeker": ["edgeSeeker", "createEdgeSeeker"],
  "edge-seeker-indexed": ["edgeSeekerIndexed", "createEdgeSeekerIndexed"],
  "bottosson-lightness": ["bottossonLightness", "createBottossonLightness"],
@@ -21,11 +22,15 @@ const names = {
  "raytrace": ["raytrace", "createRaytrace"],
 };
 if (!Object.hasOwn(names, values.method)) throw new RangeError("unsupported method");
+const { getRgbSpace } = await import("../src/rgb-spaces.js");
+const space = getRgbSpace(values.gamut);
 let moduleName = values.method.startsWith("edge-seeker") ? "edge-seeker/index"
  : values.method === "bottosson-lightness-cached" ? "bottosson-lightness" : values.method;
 if (values.gamut !== "display-p3") {
- if (values.method.startsWith("edge-seeker")) moduleName = "edge-seeker/factory";
- if (values.method.startsWith("bottosson-lightness")) moduleName = "bottosson-factory";
+ const factoryModules = { dualray: "dualray-factory", "edge-seeker": "edge-seeker/factory",
+  "edge-seeker-indexed": "edge-seeker/factory", "bottosson-lightness": "bottosson-factory",
+  "bottosson-lightness-cached": "bottosson-factory" };
+ moduleName = factoryModules[values.method] ?? moduleName;
 }
 const module = await import(`../src/${moduleName}.js`);
 const [name, factory] = names[values.method];
@@ -33,13 +38,24 @@ let map;
 // The P3 branch also runs against the pre-factory baseline unchanged.
 if (values.gamut === "display-p3") map = module[name];
 else {
- const { getRgbSpace } = await import("../src/rgb-spaces.js");
- map = module[factory](getRgbSpace(values.gamut));
+ map = module[factory](space);
 }
 const { samples, randomSamples } = buildWorkloads();
 
+const workloads = [["grid",samples],["random",randomSamples]];
+if(values.method === "dualray" && values.gamut !== "display-p3") {
+ const {blueFoldWindow}=await import("../src/matrix-solver-policy.js");
+ const [lo,hi]=blueFoldWindow(space);
+ for(const fold of [false,true])for(const interior of [true,false]) {
+  const inputs=Array.from({length:4096},(_,i)=>{
+   const l=.1+.8*((i*.7548776662466927)%1);
+   return [l,interior?.01*l:.6,lo+(hi-lo)*(i+.37)/4096+(fold?0:15)];
+  });
+  workloads.push([`${fold?'fold':'ordinary'}-${interior?'interior':'mapped'}`,inputs]);
+ }
+}
 const rows = [];
-for (const [workload, inputs] of [["grid", samples], ["random", randomSamples]]) {
+for (const [workload, inputs] of workloads) {
 	const out = [0, 0, 0];
 	let sink = 0;
 	function batch () {

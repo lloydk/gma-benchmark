@@ -149,28 +149,41 @@ function sectors(profile) {
         return [(d-b)/(a*d-b*c),(a-c)/(a*d-b*c)];
     });
 }
-function fitCode(f) {
+function fitCode(f, language) {
+    const declaration = language === "js" ? "const" : "let";
     const sin=rust(f.sin ?? Math.sin(f.ref*DEG)), cos=rust(f.cos ?? Math.cos(f.ref*DEG));
-    const v=f.fold===undefined ? `(b * ${cos} - a * ${sin})` : `(a * ${sin} - b * ${cos}).max(0.0).sqrt()`;
+    const v=f.fold===undefined ? `(b * ${cos} - a * ${sin})`
+        : language === "js" ? `Math.sqrt(Math.max(0, a * ${sin} - b * ${cos}))`
+        : `(a * ${sin} - b * ${cos}).max(0.0).sqrt()`;
     const p=i => `(${rust(f.coef[i])} + ${rust(f.coef[i+1])} * t)`;
     const group=i => `(${p(i)} + ${p(i+2)} * t2) + (${p(i+4)} + ${p(i+6)} * t2) * t4`;
     const tail=f.coef.length===18 ? p(16) : `(${p(16)} + ${p(18)} * t2 + ${p(20)} * t4)`;
-    return `let t = (${v} - ${rust(f.centre)}) * ${rust(f.invHalf)};
-let t2=t*t;
-let t4=t2*t2;
-let t8=t4*t4;
-let low=${group(0)};
-let high=${group(8)};
+    return `${declaration} t = (${v} - ${rust(f.centre)}) * ${rust(f.invHalf)};
+${declaration} t2=t*t;
+${declaration} t4=t2*t2;
+${declaration} t8=t4*t4;
+${declaration} low=${group(0)};
+${declaration} high=${group(8)};
 return low + (high + ${tail} * t8) * t8;
 `;
 }
+function seedCode(fits, split, name, language) {
+    const signature = language === "js" ? `function ${name}(a, b, face)` : "pub fn seed(a: Float, b: Float, face: u8) -> Float";
+    const conditions = [language === "js" ? "face === 1" : "face == 1",
+        language === "js" ? "face === 2" : "face == 2",
+        `a * ${rust(split[0])} - b * ${rust(split[1])} > 0.0`];
+    return `${signature} {\n` + conditions.map((condition,i) =>
+        `if ${language === "js" ? `(${condition})` : condition} {\n${fitCode(fits[i],language)}}\n`).join("")
+        + `${fitCode(fits[3],language)}}\n`;
+}
+const jsSeeds = [], jsData = [];
 for (const profile of await loadProfiles()) {
     const id=profile.name, lines=id==='display-p3' ? pinned.sectors : sectors(profile);
     const basis=id==='display-p3' ? pinned.basis : [0,1,2].map(i => channelBasis(profile,i));
-    let seed;
+    let fits, seedSplit;
     if(id==='display-p3') {
-        const fits=pinned.fits.map((f,i)=>({sin:f[0],cos:f[1],centre:f[2],invHalf:f[3],coef:f.slice(4),fold:i===3?true:undefined}));
-        seed=`pub fn seed(a: Float, b: Float, face: u8) -> Float {\nif face == 1 {\n${fitCode(fits[0])}}\nif face == 2 {\n${fitCode(fits[1])}}\nif a * ${rust(pinned.split[0])} - b * ${rust(pinned.split[1])} > 0.0 {\n${fitCode(fits[2])}}\n${fitCode(fits[3])}}\n`;
+        fits=pinned.fits.map((f,i)=>({sin:f[0],cos:f[1],centre:f[2],invHalf:f[3],coef:f.slice(4),fold:i===3?true:undefined}));
+        seedSplit=pinned.split;
     }
     else {
         const [redStart,redEnd]=arc(...lines[0]),[,blueStart]=arc(...lines[1]);
@@ -180,6 +193,7 @@ for (const profile of await loadProfiles()) {
         const fold=(lo+hi)/2;
         assert(Array.isArray(profile.dualray.foldWindow) && profile.dualray.foldWindow.length === 2, `${id} requires a fold window`);
         const [redEndFit,greenStart]=profile.dualray.foldWindow, split=redEndFit-14;
+        seedSplit=[Math.sin(split*DEG),Math.cos(split*DEG)];
         // Empirical safety margin, paired with Rust's exhaustive f32 edge-hue
         // regression. This guards configuration drift, not arbitrary gamuts.
         const margin=0.02;
@@ -187,7 +201,7 @@ for (const profile of await loadProfiles()) {
             assert(redEndFit + margin < h && h + margin < greenStart, `${id} ${name} ${h} requires ${margin} degrees inside fold window`);
         }
         console.log(`${id}: sector ${redEnd}, fold ${fold}, minimum window margin ${Math.min(redEnd-redEndFit,greenStart-redEnd,fold-redEndFit,greenStart-fold)}`);
-        const fits=[makeFit(profile,1,greenStart,blueStart+360),makeFit(profile,2,blueStart,redStart),
+        fits=[makeFit(profile,1,greenStart,blueStart+360),makeFit(profile,2,blueStart,redStart),
             makeFit(profile,0,redStart,split),makeFit(profile,0,split,redEndFit,fold)];
         let worstRoot=0,worstResidual=0;
         for(const f of fits) for(let i=0;i<=65536;i++) {
@@ -201,15 +215,7 @@ for (const profile of await loadProfiles()) {
         }
         assert(worstRoot<1e-13&&worstResidual<1e-13,`${id} convergence ${worstRoot}, ${worstResidual}`);
         console.log(`${check?'Checked':'Generated'} ${id}: 262148 held-out directions, root error ${worstRoot}, residual ${worstResidual}`);
-        seed=`pub fn seed(a: Float, b: Float, face: u8) -> Float {
-if face == 1 {
-${fitCode(fits[0])}}
-if face == 2 {
-${fitCode(fits[1])}}
-if a * ${rust(Math.sin(split*DEG))} - b * ${rust(Math.cos(split*DEG))} > 0.0 {
-${fitCode(fits[2])}}
-${fitCode(fits[3])}}
-`;
+
     }
     // Verify normalized basis independently of its algebraic expansion.
     let maxBasis=0, maxRoot=0;
@@ -227,16 +233,31 @@ ${fitCode(fits[3])}}
     }
     assert(maxBasis<2e-14,`${id} basis ${maxBasis}`);
     console.log(`${id}: max basis difference ${maxBasis}, sampled lower-root maximum ${maxRoot}`);
+    const seed=seedCode(fits,seedSplit,"seed","rust");
     const content=`// Generated by scripts/generate-dualray.mjs; do not edit.
 // ${id}: ${id==='display-p3'?'pinned incumbent data':'target-fitted lower-root seeds'}.
 pub const BASIS: [[f64; 9]; 3] = ${array(basis)};
 pub const SECTORS: [[Float; 2]; 2] = ${array(lines)};
 #[inline(always)]
 ${seed}`;
+    const seedName = `seed_${id.replaceAll('-', '_')}`;
+    // Emit the same balanced expression tree as Rust, without a runtime
+    // coefficient loop or an evaluator built with Function/eval.
+    const jsSeed = seedCode(fits,seedSplit,seedName,"js");
+    jsSeeds.push(jsSeed);
+    jsData.push(`${JSON.stringify(id)}: { basis: ${JSON.stringify(basis)}, sectors: ${JSON.stringify(lines)}, rootLimit: ${profile.dualray.rootLimit}, seed: ${seedName} }`);
     const file=new URL(`../rust/src/generated/dualray_${id.replaceAll('-','_')}.rs`,import.meta.url);
     if(check) assert.equal(readFileSync(file,'utf8'),content,`${file.pathname} stale`);
     else writeFileSync(file,content);
 }
+
+const jsFile = new URL('../src/generated/dualray.js', import.meta.url);
+const jsContent = '// Generated by scripts/generate-dualray.mjs; do not edit.\n'
+    + jsSeeds.join('\n') + '\nconst data = {\n' + jsData.join(',\n') + '\n};\n'
+    + 'for (const entry of Object.values(data)) { for (const rows of [entry.basis,entry.sectors]) { rows.forEach(Object.freeze); Object.freeze(rows); } Object.freeze(entry); }\n'
+    + 'export const dualrayData = Object.freeze(data);\n';
+if (check) assert.equal(readFileSync(jsFile,'utf8'),jsContent,'JS Dualray data stale');
+else writeFileSync(jsFile,jsContent);
 
 // Exercise the actual emitted f32 kernel, including both sides of the window
 // cutovers. A JavaScript approximation would miss Rust/libm rounding changes.

@@ -3,11 +3,4 @@
 include!("support/mapping-probes.rs");
 #[path = "../src/edge_seeker.rs"]
 mod edge_seeker;
-mapping_probe_main!(
-    edge_seeker,
-    EdgeSeekerData,
-    EdgeSeeker,
-    EdgeSeekerIndexed,
-    "edge-seeker",
-    "edge-seeker-indexed"
-);
+mapping_probe_main!(edge_seeker, EdgeSeekerData, direct: EdgeSeeker => "edge-seeker", cached: EdgeSeekerIndexed => "edge-seeker-indexed");

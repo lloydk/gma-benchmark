@@ -37,7 +37,10 @@ export function createBoundaryReference (id) {
 					for (let k = 0; k < 100; k++) {
 						const mid = (lo+hi)/2;
 						if (mid === lo || mid === hi) break;
-						if ((evalP(p, mid) < 0) === (fl < 0)) lo = mid; else hi = mid;
+						// Face orientation determines the inside half even when fl is
+						// exactly zero (neutral can round onto an upper face).
+						const value = evalP(p, mid);
+						if (face === 0 ? value >= 0 : value <= 0) lo = mid; else hi = mid;
 					}
 					const chroma = (lo+hi)/2;
 					const feasible = polys.every(p => {

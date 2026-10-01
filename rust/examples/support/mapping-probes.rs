@@ -24,10 +24,9 @@ mod rgb_solvers;
 
 // Shared transport and native membership metadata for JS parity checks.
 macro_rules! mapping_probe_main {
-    ($module:ident, $bound:ident, $direct:ident, $cached:ident, $direct_name:literal, $cached_name:literal) => {
+    ($module:ident, $bound:ident, $( $mapper:ident : $kind:ident => $name:literal ),+ $(,)?) => {
         fn run<G: $module::$bound>() {
-            let mut direct = $module::$direct::<G>::new();
-            let mut cached = $module::$cached::<G>::new();
+            $(let mut $mapper = $module::$kind::<G>::new();)+
             for line in io::stdin().lock().lines() {
                 let line = line.unwrap();
                 let mut fields = line.split(',');
@@ -37,14 +36,18 @@ macro_rules! mapping_probe_main {
                 print!("{{\"membership\":{{\"inside\":{},\"linear\":{:?},\"encoded\":{:?}}},\"negativeZeroHue\":{},\"methods\":{{",
                     rgb.in_gamut(), rgb.channels, rgb.encode_clamped().channels,
                     input[2] == 0.0 && input[2].is_sign_negative());
-                let mut plain = [0.0; 3];
-                let mut checked = [0.0; 3];
-                direct.map(&input, &mut plain);
-                direct.map_with_in_gamut_check(&input, &mut checked);
-                print!("\"{}\":{{\"plain\":{:?},\"checked\":{:?}}},", $direct_name, plain, checked);
-                cached.map(&input, &mut plain);
-                cached.map_with_in_gamut_check(&input, &mut checked);
-                println!("\"{}\":{{\"plain\":{:?},\"checked\":{:?}}}}}}}", $cached_name, plain, checked);
+                let methods = [$({
+                    let mut plain = [0.0; 3];
+                    let mut checked = [0.0; 3];
+                    $mapper.map(&input, &mut plain);
+                    $mapper.map_with_in_gamut_check(&input, &mut checked);
+                    ($name, plain, checked)
+                }),+];
+                for (i, (name, plain, checked)) in methods.into_iter().enumerate() {
+                    if i > 0 { print!(","); }
+                    print!("\"{}\":{{\"plain\":{:?},\"checked\":{:?}}}", name, plain, checked);
+                }
+                println!("}}}}");
             }
         }
         fn main() {

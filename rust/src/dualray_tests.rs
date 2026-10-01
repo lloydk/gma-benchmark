@@ -418,3 +418,12 @@ fn fold_tangent_regressions_use_native_conditioning() {
     verify::<Srgb>(264.207763671875, 0.45);
     verify::<Rec2020>(245.28399658203125, 0.414);
 }
+#[test]
+fn bernstein_controls_reject_inside_endpoints_with_outside_interiors() {
+    // 1 - 6x + 6x² dips below zero; 1 + 6x - 6x² rises above two.
+    // Both have endpoints equal to one on [0, 1].
+    assert!(!super::interior_within(-6.0, 6.0, 1.0, 2.0));
+    assert!(!super::interior_within(6.0, -6.0, 1.0, 2.0));
+    assert!(super::interior_within(-6.0, 6.0, 0.01, 2.0));
+    assert!(super::interior_within(0.0, 0.0, 1.0, 1.0));
+}
