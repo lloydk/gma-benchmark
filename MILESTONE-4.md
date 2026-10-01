@@ -2,8 +2,10 @@
 
 Step one adds sRGB and Rec.2020 conversions, Clip and CSS MINDE.
 [Step two](#step-two-matrix-solvers) adds the six matrix solvers. All thirteen
-existing P3 methods retain their exports. Fitted/table-based JavaScript ports
-remain the next step. The step-one measurements below are historical.
+existing P3 methods retain their exports. [Step three](#step-three-bottosson)
+ports both Bottosson variants. [Step four](#step-four-edge-seeker) adds both
+Edge Seeker variants. Only Dualray remains P3-only. Earlier measurements below
+are historical.
 
 ## Architecture
 
@@ -50,7 +52,7 @@ profiles from algorithm policy and setup-time conversion selection. No Spectre
 source was copied, and its registry, conversion graph, ColorSpace/Gma classes
 and missing-component handling are unnecessary for these fixed-target kernels.
 
-## Harness and verification
+## Step-one harness and verification
 
 `node bench.js --gamut display-p3|srgb|rec2020|all` selects targets; Bun accepts
 the same flags. P3 remains the default and runs all thirteen methods. sRGB and
@@ -166,9 +168,9 @@ there is no target lookup in a mapping call. Cached cubic tables belong to
 individual factory instances. The ordinary mapping paths reuse the caller's
 output array; the rare outer-fold solve allocates small temporary arrays.
 
-The benchmark now runs eight methods for sRGB/Rec.2020 and thirteen for P3,
+At the step-two checkpoint, the benchmark ran eight methods for sRGB/Rec.2020 and thirteen for P3,
 with the same ordering, inputs, precheck flag and separate-process timing.
-P3-only fitted/table methods are still dynamically imported only for P3.
+At that checkpoint, fitted/table methods were still dynamically imported only for P3.
 Importing a matrix module also creates its legacy P3 instance; a new-target
 run therefore has an unused P3 cubic cache, but never trains it with mappings.
 
@@ -451,7 +453,466 @@ An experiment with factory-local copies of the shared Oklab coefficients
 did not improve paired Bun timings; the final implementation keeps direct
 immutable imports. The experiment is retained separately from final estimates.
 
+## Step three: Bottosson
+
+The initial corpus and measurements below are historical. The
+[review follow-up](#review-follow-up-validation-and-boundary-parity) expands
+boundary coverage and supersedes the original parity and compatibility maxima.
+
+Both `createBottossonLightness(space)` and
+`createBottossonLightnessCached(space)` now support all three targets. Legacy
+exports remain P3 instances. `scripts/generate-bottosson.mjs` emits immutable
+JavaScript fit data alongside the existing Rust files from the same fit result.
+The Rust files are unchanged; P3 seed coefficients remain pinned. Algorithm
+fits and primary-sector boundaries stay separate from physical RGB descriptors.
+
+Factories capture scalar matrix coefficients, transfer functions and shared
+conversion kernels. Cached instances own a 3,601-entry Float64Array of
+`[cuspL,cuspC,q0,q1,q2]`; plain factories do not allocate that table. Neither
+mapping path allocates a new output or temporary color array per call.
+
+The port follows the Rust f64 policy:
+
+- Plain Bottosson evaluates the authored hue. Cached Bottosson uses 0.1-degree
+  hue buckets for its fitted cusp, intersection and output conversion.
+- Without a precheck, even an interior color is projected to the approximate
+  boundary. This deliberately differs from the first-exit matrix solvers.
+- With a precheck, canonical conversion uses the original coordinates before
+  consulting the cached hue. A successful check preserves its exact output.
+- A five-term saturation seed receives one Halley correction. The upper
+  intersection receives one further correction. Final clipping belongs to this
+  approximation; it is not evidence of first-exit or exact-line accuracy.
+- Primary-sector contacts use Rust's authored-hue tie handling. The lightness
+  blend uses `l0 + t*(l-l0)`, retaining constant lightness exactly when `l0=l`.
+
+Compared with legacy P3 JavaScript, checked cached colors now retain their
+original hue instead of a quantized hue. Checked zero/tiny/negative chroma also
+uses canonical input conversion when it is in gamut; the unchecked gray policy
+remains unchanged. The radian arithmetic and lightness blend now match Rust,
+so last-bit differences are expected in ordinary P3 mappings too.
+
+The independent policy reference recovers channel cubics from four XYZ
+conversions and differentiates those polynomials. It shares only the fitted
+seed parameters, not production matrices, sector selection or derivative code.
+Within 1e-10 degrees of a primary, independently rounded geometry may select
+either adjacent face; the test accepts only those two policies, at the usual
+error limits. Separate geometry tests measure saturation, first-exit chroma
+and clipping-induced Oklab error. They retain the existing Rust approximation
+envelopes, rather than weakening the arithmetic parity limit to fit them.
+
+Tests cover both modes, endpoints, mixed chroma, primary contacts and wraps,
+blue folds, near-white/black, output aliasing, exact pass-through and alternating
+target caches. A wrong supplied callback or NaN is rejected. The CLI validates
+its actual timed callbacks and ran ten methods for sRGB/Rec.2020 at this
+checkpoint; Edge Seeker and Dualray were still P3-only. Both Node and Bun smoke tests require the
+new cached Bottosson timing row from the normal validation-to-timing flow.
+
+```sh
+node scripts/generate-bottosson.mjs --check
+node --test tests/bottosson.test.js
+bun test tests/bottosson.test.js
+node scripts/check-bottosson-parity.mjs
+bun scripts/check-bottosson-parity.mjs
+node scripts/bench-rgb-kernels.mjs --method bottosson-lightness-cached --gamut srgb
+```
+
+### Validation results
+
+Node and Bun each pass **53 tests**; Rust release passes **117 tests**.
+All-gamut CLI validation passes in both runtimes and both entry modes. Both
+profile and Bottosson generators pass their freshness checks. The independent
+policy and Rust parity corpora each contain **56,641 inputs per target**, or
+679,692 mapped outputs per runtime across two methods and two entry modes.
+
+The policy gates remain `2e-11` in both linear RGB and DeltaEOK. Node's maximum
+independent policy linear error is `3.39e-14`; its maximum Rust parity linear
+error is `6.44e-15` (DeltaEOK `1.79e-15`). Bun matches Rust exactly on this
+corpus. Encoded Node/Rust differences reach `2.23e-8` near zero in Rec.2020.
+These are corpus/runtime-specific observations, not full-domain guarantees.
+
+The separate quality sweep uses 4,001 hues per target, with dense blue-primary
+contacts and nine lightness positions per non-ambiguous hue. The following
+Node results measure the fitted policy, independently of porting error:
+
+| Target | Saturation error | First-exit chroma error | Clipping DeltaEOK |
+| --- | ---: | ---: | ---: |
+| srgb | 0.000384 | 0.0471 | 0.000159 |
+| display-p3 | 0.028 | 0.00839 | 5.18e-05 |
+| rec2020 | 0.000168 | 0.0513 | 9.59e-05 |
+
+P3 compatibility compares all thirteen methods over 56,641 inputs in both
+modes. The eleven methods outside Bottosson remain bit-identical in both
+runtimes. Bottosson changes include the canonical-check corrections described
+above, primary-sector contacts, and ordinary arithmetic rounding. Counts and
+worst inputs by mode/chroma category are retained in the report.
+
+The original 56,641-input comparison observed 0.03169 encoded for uncached
+positive-chroma output and 0.00422 for cached checked output. Those were sampled
+maxima, not limits. The expanded 221,721-input comparison now observes **0.15141**
+uncached at `[0.412,0.4,-95.94797738363006]`, a blue-primary sector contact, and
+**0.03423** cached checked at a boundary near that primary. Cached unchecked
+changes remain below `1.84e-13`. The largest negative-chroma change remains
+0.26753 at `[0.5,-0.1,-95.9]`. See the review follow-up for the corpus and report.
+
+### Performance results
+
+[The Bottosson report](reports/milestone-4-bottosson.json) records source and
+input hashes, validation maxima, raw timings and reproduction scripts. The
+baseline is commit `c0a5715`. Balanced before/after/after/before runs use the
+Ryzen 7 9800X3D under WSL2, Node 26.10.0 and Bun 1.4.2, CPU 2, fresh processes
+and a common script path, without concurrent tests/builds/benchmarks. Focused
+runs use 50 workload warmups and 25 measured passes; every output channel is
+consumed. Cache/factory setup is excluded. Values are medians of two process
+medians; full-harness values below use two Mitata process averages.
+
+| Isolated P3 runtime / method | Grid ns, before → after | Random ns, before → after |
+| --- | ---: | ---: |
+| node / bottosson-lightness | 110.07 → 111.84 (+1.6%) | 121.35 → 125.60 (+3.5%) |
+| node / bottosson-lightness-cached | 62.01 → 54.77 (-11.7%) | 84.24 → 79.87 (-5.2%) |
+| bun / bottosson-lightness | 100.76 → 108.62 (+7.8%) | 117.07 → 126.74 (+8.3%) |
+| bun / bottosson-lightness-cached | 46.43 → 50.41 (+8.6%) | 66.24 → 71.38 (+7.8%) |
+
+| Full-harness P3 runtime / method | Grid ns, before → after | Random ns, before → after |
+| --- | ---: | ---: |
+| node / bottosson-lightness | 116.02 → 124.44 (+7.3%) | 133.14 → 141.84 (+6.5%) |
+| node / bottosson-lightness (cached) | 66.22 → 64.53 (-2.5%) | 90.49 → 87.12 (-3.7%) |
+| bun / bottosson-lightness | 104.10 → 113.64 (+9.2%) | 120.65 → 131.17 (+8.7%) |
+| bun / bottosson-lightness (cached) | 51.77 → 57.94 (+11.9%) | 72.95 → 77.02 (+5.6%) |
+
+The full harness measures an uncached P3 regression of 6.5–9.2% across the
+two runtimes/workloads. Cached P3 improves 2.5–3.7% in Node but regresses
+5.6–11.9% in Bun. These costs remain a performance follow-up; they are not
+treated as equivalent to the faster isolated Node results.
+
+| New target / runtime | Plain grid / random, ns | Cached grid / random, ns |
+| --- | ---: | ---: |
+| srgb / node | 111.66 / 129.20 | 54.68 / 80.80 |
+| rec2020 / node | 121.08 / 129.70 | 62.13 / 77.55 |
+| srgb / bun | 112.57 / 131.71 | 50.34 / 71.70 |
+| rec2020 / bun | 122.15 / 143.12 | 59.76 / 73.65 |
+
+The comparison includes numerical/canonical corrections as well as factory
+conversion; it does not isolate the cost of abstraction or any single check.
+sRGB/Rec.2020 have no prior JS Bottosson implementation, so their table reports
+final throughput only. Small changes remain subject to JIT/process variation.
+Rust mapping code is unchanged; Rust timings were not repeated.
+
+## Step four: Edge Seeker
+
+The initial generated-table implementation and its measurements are recorded
+below. The [runtime-generation follow-up](#runtime-table-generation-follow-up)
+supersedes its JavaScript setup and cross-runtime parity claims.
+
+`createEdgeSeeker(space)` and `createEdgeSeekerIndexed(space)` now support
+sRGB, Display-P3 and Rec.2020. Existing `edgeSeeker`/`edgeSeekerIndexed` exports
+remain P3 instances. The benchmark runs twelve methods for sRGB/Rec.2020 and
+thirteen for P3, with actual timed callbacks included in validation.
+
+`scripts/generate-edge-seeker.mjs` emits immutable JavaScript rows alongside
+the existing Rust tables from the same `makeLut(..., 400)` result. Rust table
+files and runtime code are unchanged. Rows are algorithm data, separate from
+physical RGB descriptors. Table counts are 695 / 710 / 790 for sRGB / P3 /
+Rec.2020. JavaScript uses the binary64 knots directly; it does not need Rust's
+f32 split-hue conditioning around the repaired folds.
+
+The lookup kernels retain parallel numeric columns. A private WeakMap shares
+those columns by table identity, and indexed factories share a lazily built
+3,600-entry Uint16 interval index (~7 KiB per target). Arrays are never exposed
+through the returned mapper. Runtime factory creation performs no gamut-edge
+sampling; the original converter-based builders remain available for tests and
+experiments. Mapping reuses the supplied output and allocates no color arrays.
+The generated row arrays and shared runtime columns are both retained; this
+trades additional data storage for deterministic tables and the existing hot
+lookup layout. Setup and import costs are excluded from warm timing below.
+
+Both variants preserve the existing policy: interpolate cusp lightness,
+chroma and curvature at the exact normalized hue, use a straight lower edge
+and a rationalized circle arc above the cusp, cap input chroma, then convert
+and clip. The index only finds the interval; it never rounds the hue. Negative
+chroma follows the incumbent signed conversion policy. Checked calls preserve
+canonical authored-coordinate conversion before table lookup or endpoint
+handling, matching Rust f64.
+
+Validation uses a separate linear scan, difference-form interpolation,
+bisection of the circle residual, and independent XYZ conversions. It shares
+table rows as policy parameters, not production lookup or arc formulas.
+Separate tests compare the approximation with geometric first exit and measure
+clipping error under the existing Rust envelopes. In particular, the table's
+repaired blue fold is an approximation, not an exact first-exit solver.
+
+Coverage includes every knot and its adjacent floats, negative and repeated
+hues, cusp and white neighbours, dense samples inside the ~0.0001-degree fold
+ramps, mixed/negative/zero chroma, canonical pass-through, aliased outputs and
+interleaved targets. Both lookup variants must agree exactly. Wrong callbacks,
+a wrong target and NaN are rejected. CLI smoke tests require the new indexed
+row from each target's real validation-to-timing child flow.
+
+```sh
+node scripts/generate-edge-seeker.mjs --check
+node --test tests/edge-seeker.test.js tests/edge-seeker-targets.test.js
+bun test tests/edge-seeker.test.js tests/edge-seeker-targets.test.js
+node scripts/check-edge-seeker-parity.mjs
+bun scripts/check-edge-seeker-parity.mjs
+node scripts/bench-rgb-kernels.mjs --method edge-seeker-indexed --gamut rec2020
+```
+
+### Validation results
+
+Node and Bun each pass **65 tests**; Rust release passes **117 tests**.
+All-gamut CLI validation passes in both runtimes and both entry modes. The
+RGB, Bottosson and Edge Seeker generators all pass freshness checks.
+
+| Target | Policy/parity inputs | Lookup endpoint probes |
+| --- | ---: | ---: |
+| srgb | 152,075 | 43,785 |
+| display-p3 | 151,559 | 44,730 |
+| rec2020 | 164,900 | 49,770 |
+
+Each runtime checks **1,874,136 mapping outputs** across three targets, two
+variants and two modes. The independent policy limit is `3e-12` in linear RGB
+and DeltaEOK; the maximum Node linear error is `8.47e-15`. The Rust
+f64 parity maximum is `3.11e-15` linear (`3.9e-07` encoded); Bun matches Rust
+exactly on this corpus. Lookup chroma error is independently limited to
+`2e-12`. These are sampled, runtime-specific regression results.
+
+Approximation results from the Node geometry sweep are separate from those
+arithmetic limits:
+
+| Target | Quality inputs | First-exit chroma error | First-exit DeltaEOK | Clipping DeltaEOK |
+| --- | ---: | ---: | ---: | ---: |
+| srgb | 40,464 | 0.0471 | 0.0471 | 0.0028 |
+| display-p3 | 38,790 | 0.0217 | 0.0206 | 0.00258 |
+| rec2020 | 41,319 | 0.0513 | 0.0513 | 0.00403 |
+
+P3 compatibility covers all thirteen methods over 151,559 inputs in both
+entry modes. The other eleven methods are bit-identical in Node and Bun. In
+Node, both Edge Seeker variants change only sixteen checked-white samples
+(`[1,0,h]`, including repeated inputs): canonical conversion produces channels
+within `3.33e-16` of one instead of the old exact-white shortcut. Unchecked
+Node output remains bit-identical.
+
+Bun previously built its LUT using its own runtime math. Its table differs
+from the recorded Node-generated table by at most `2.27e-13` per component.
+Using the fixed table changes 45,805 outputs per variant on this corpus,
+including checked white, with maximum encoded difference `5.38e-14`. This
+keeps the runtime table identical to Rust's generated binary64 data.
+
+### Performance results
+
+[The Edge Seeker report](reports/milestone-4-edge-seeker.json) records hashes,
+raw measurements, validation evidence, reproduction scripts and a baseline
+patch. The baseline is the completed **uncommitted Bottosson snapshot**, not
+commit `c0a5715` directly; its patch from that commit is included.
+
+Before/after/after/before measurements use the Ryzen 7 9800X3D under WSL2,
+Node 26.10.0 and Bun 1.4.2, CPU 2, fresh processes and a common script path.
+No tests/builds/other benchmarks run concurrently. Focused runs warm 50 full
+workload passes and measure 25; each output channel is consumed. Setup, table
+generation/import and index construction are excluded from warm timing.
+Focused results are medians of two process medians; full-harness results
+are medians of two rendered Mitata process averages.
+
+| Isolated P3 runtime / method | Grid ns, before → after | Random ns, before → after |
+| --- | ---: | ---: |
+| node / edge-seeker | 92.72 → 92.64 (-0.1%) | 149.88 → 149.23 (-0.4%) |
+| node / edge-seeker-indexed | 63.91 → 60.79 (-4.9%) | 78.83 → 78.57 (-0.3%) |
+| bun / edge-seeker | 95.71 → 95.98 (+0.3%) | 144.39 → 145.29 (+0.6%) |
+| bun / edge-seeker-indexed | 59.14 → 60.25 (+1.9%) | 74.21 → 75.55 (+1.8%) |
+
+| Full-harness P3 runtime / method | Grid ns, before → after | Random ns, before → after |
+| --- | ---: | ---: |
+| node / edge-seeker | 105.22 → 101.01 (-4.0%) | 164.70 → 160.21 (-2.7%) |
+| node / edge-seeker (indexed) | 76.74 → 73.37 (-4.4%) | 89.79 → 88.66 (-1.3%) |
+| bun / edge-seeker | 103.54 → 104.24 (+0.7%) | 149.97 → 148.01 (-1.3%) |
+| bun / edge-seeker (indexed) | 60.19 → 61.73 (+2.6%) | 78.70 → 79.69 (+1.2%) |
+
+| New target / runtime | Binary grid / random, ns | Indexed grid / random, ns |
+| --- | ---: | ---: |
+| srgb / node | 93.77 / 151.35 | 63.20 / 78.37 |
+| rec2020 / node | 98.27 / 152.05 | 64.45 / 80.18 |
+| srgb / bun | 107.23 / 148.42 | 62.06 / 78.15 |
+| rec2020 / bun | 125.67 / 153.77 | 66.48 / 79.66 |
+
+The comparison measures the complete generated-table/factory implementation,
+including shared lookup setup and the canonical endpoint correction. It does
+not isolate a cost for any single change. sRGB/Rec.2020 have no prior JS
+baseline; their numbers report final throughput only. Small changes remain
+subject to JIT/process variation. Rust mapping code is unchanged and its
+timings were not repeated.
+
 ## Next step
 
-Emit JavaScript Bottosson, Edge Seeker and Dualray data from the existing
-Rust generators, then port and validate each mapping policy separately.
+Port Dualray with JavaScript data emitted by the existing generator and
+independent policy/parity validation, completing all thirteen methods for
+all three gamuts.
+
+
+### Runtime table generation follow-up
+
+JavaScript now builds tables at runtime, as requested. `makeLut(..., 400)`
+runs once per conversion-function identity, supplied by the descriptor-keyed
+conversion cache. Binary and indexed factories share the sampled rows and
+parallel numeric columns. The index is still allocated only on first indexed
+use. Repeated factories do not resample; separate descriptors with identical
+names do not share data. Mapping has no additional cache lookup or generation.
+
+The default P3 exports build once at import, preserving the original lifecycle.
+sRGB and Rec.2020 build on their first factory call. The roughly 220 KiB static
+JS table moved out of production source into `tests/fixtures/edge-seeker.js`;
+the generator maintains this Rust-parity fixture, while Rust tables and runtime
+code remain unchanged. Sampled rows and lookup columns are both retained.
+
+Node and Bun each pass **67 tests**, including counted conversion calls proving
+one build per descriptor in either factory order, and independent checks of
+runtime knots against the fixed fixtures. Lookup/arc checks rebuild the table
+in the current runtime, then use independent scan/interpolation/arc math;
+their existing `3e-12` linear RGB and DeltaEOK limits remain unchanged. Every
+runtime knot and its adjacent floats are covered. The same geometric
+approximation envelopes still pass.
+
+The recorded Node runtime reproduces the fixture rows. Bun's maximum knot
+component difference is `2.27e-13`; steep repaired fold intervals amplify it.
+On the 1,874,136-output parity corpus per runtime, Bun versus Rust reaches
+`1.42e-10` linear RGB and `3.01e-11` DeltaEOK (sRGB). Rec.2020 reaches
+`6.77e-11` linear and `2.49e-5` encoded near zero. P3 remains within `9.66e-15`
+linear and `5.38e-14` encoded. Node's maximum remains `3.11e-15` linear.
+These measured differences arise from runtime table generation. The parity
+script allows `2e-10` linear / `5e-11` DeltaEOK only inside the existing blue-fold
+windows, retaining `3e-12` elsewhere. This is separate from same-runtime lookup
+accuracy and from the much larger geometric approximation envelopes.
+
+[The runtime-generation report](reports/milestone-4-edge-seeker-runtime.json)
+records the preceding uncommitted generated-table baseline, source hashes,
+measurement script, all raw passes, and parity results. This is a new comparison,
+not a replacement for the earlier port report. Ryzen 7 9800X3D / WSL2,
+Node 26.10.0 and Bun 1.4.2, CPU 2, before/after/after/before fresh processes at a
+common script path, with no concurrent tests or builds. Warm results are medians
+of two process medians, each with 50 warmup and 25 measured output-consuming
+passes. Imports, generation and index construction are excluded here.
+
+| Runtime / target / method | Grid ns, fixed → runtime | Random ns, fixed → runtime |
+| --- | ---: | ---: |
+| node / display-p3 / edge-seeker | 91.15 → 94.07 (+3.2%) | 152.62 → 151.97 (-0.4%) |
+| node / display-p3 / edge-seeker-indexed | 64.68 → 64.48 (-0.3%) | 79.90 → 79.15 (-0.9%) |
+| node / srgb / edge-seeker | 95.05 → 93.62 (-1.5%) | 153.75 → 156.19 (+1.6%) |
+| node / srgb / edge-seeker-indexed | 65.32 → 63.82 (-2.3%) | 80.73 → 80.51 (-0.3%) |
+| node / rec2020 / edge-seeker | 103.87 → 102.91 (-0.9%) | 156.11 → 154.76 (-0.9%) |
+| node / rec2020 / edge-seeker-indexed | 70.00 → 66.75 (-4.6%) | 81.62 → 79.92 (-2.1%) |
+| bun / display-p3 / edge-seeker | 98.42 → 95.44 (-3.0%) | 147.24 → 150.95 (+2.5%) |
+| bun / display-p3 / edge-seeker-indexed | 61.15 → 61.44 (+0.5%) | 78.52 → 74.85 (-4.7%) |
+| bun / srgb / edge-seeker | 110.37 → 110.44 (+0.1%) | 148.52 → 149.82 (+0.9%) |
+| bun / srgb / edge-seeker-indexed | 65.03 → 63.50 (-2.4%) | 76.85 → 77.94 (+1.4%) |
+| bun / rec2020 / edge-seeker | 129.24 → 126.30 (-2.3%) | 159.90 → 155.07 (-3.0%) |
+| bun / rec2020 / edge-seeker-indexed | 68.79 → 67.95 (-1.2%) | 80.58 → 80.24 (-0.4%) |
+
+Warm changes span −4.7% to +3.2%; this does not establish an improvement from
+runtime generation. Lookup kernels are unchanged. Startup was measured
+separately over ten fresh processes per runtime/version (warm filesystem,
+process launch excluded). Median import including P3 setup rose from 7.87 to
+16.58 ms in Node and 7.25 to 15.19 ms in Bun. First sRGB/Rec.2020 binary factory
+calls take 5.11/3.83 ms in Node and 4.67/6.95 ms in Bun, in that target order
+after P3 setup. Following indexed factories take about 0.015–0.049 ms and reuse
+the sampled table. These startup costs are paid once per descriptor.
+
+All-gamut `--validate-only` also passes in Node and Bun with and without
+`--in-gamut-check`; the generator freshness check passes.
+
+
+### Review follow-up: validation and boundary parity
+
+Validators now invoke registered callbacks as `(input, out)`, exactly like the
+timing loop. The checked flag controls the expected policy, never the invocation.
+Default test mappers are explicitly bound to their mode. The benchmark selects
+the actual timing callbacks by name through one shared family-validation loop.
+A planted raw Bottosson mapper in the checked timing slot now makes
+`--validate-only` fail. Direct regression tests cover all three mapper families.
+
+Canonical membership and pass-through expectations no longer call production
+conversion functions. A native-operation-order reference uses the descriptor's
+coefficients with its own arithmetic, encoding and strict membership predicate;
+a separate XYZ calculation constrains the physical result. This preserves exact
+canonical-coordinate checks while detecting a tolerance added to production
+membership. The planted ±1e-7 predicate now fails Bottosson and Edge Seeker policy
+tests, rather than being accepted by both actual and expected paths.
+
+The Edge Seeker reference still shares edge sampling/filtering as algorithm
+parameters, but independently recovers curvature from the circle equation and
+uses separate lookup and arc evaluation. It no longer calls `makeLut` or
+`calculateCurvature`. A planted curvature multiplier of `1+1e-6` fails all three
+target policy tests as well as the fixture check. Fixtures are explicitly
+**recorded shared-generator data**, not an independent Rust implementation.
+Runtime tables are validated once before column/index construction: finite
+values, physical cusp/curvature ranges, strictly increasing hue, matching wrap
+endpoints at 0/360, and an indexable size. Invalid tables throw during setup.
+
+Bottosson parity now includes independently located first-exit boundaries,
+adjacent chroma floats, points just inside/outside, primary neighbours and hue
+wraps: **71,871 inputs per target**, 862,452 outputs per runtime. Rust probes
+return each runtime's membership decision and canonical channels. Shared parity
+code verifies both checked outputs against their own runtime's branch; unchecked
+output and same-branch checked output must still meet `2e-11` linear RGB and
+DeltaEOK. A branch disagreement is accepted only when native linear conversions
+agree within `3e-14` and independent XYZ places the input at a rounding-scale
+gamut face. These events are counted and their output differences reported,
+not folded into a looser numerical threshold.
+
+Node/Rust Bottosson membership differs on 15 / 21 / 12 inputs for sRGB / P3 /
+Rec.2020 in this corpus. The largest checked difference is **0.00262 linear**
+for cached sRGB. Plain and same-branch checked errors remain below `6.56e-15`
+linear. Bun/Rust has no membership disagreements and matches these outputs
+exactly on this machine. These are runtime/corpus observations, not a claim of
+full-domain cross-runtime equivalence. NaN and Infinity behavior remains outside
+the finite-input parity contract and has not been harmonized.
+
+Edge Seeker's parity allowance now follows its own steep table intervals,
+derived from runtime and fixture knots, instead of matrix-solver fold windows.
+The `2e-10` linear / `5e-11` DeltaEOK allowance applies only there; ordinary
+regions retain `3e-12`. Wrapped knot neighbours are computed **after** adding the
+hue offset, and probe serialization preserves negative zero. The shared Rust
+transport confirms its sign. Both new parity scripts share their transport,
+branch checks and reporting; both Rust examples share their probe implementation.
+
+Bottosson factories reject arbitrary descriptors borrowing a known gamut id:
+pre-fitted data is supported only for the exported physical descriptors. Edge
+Seeker continues to support descriptors by runtime sampling. New factory-only
+modules (`bottosson-factory.js` and `edge-seeker/factory.js`) perform no default P3
+setup. The benchmark and parity tools import these modules, creating only their
+selected target. Legacy modules retain default P3 instances and re-export the
+factories. Their import-time P3 behavior is intentional compatibility behavior;
+the repeated P3-special-case registry branches have been removed from both ports.
+
+[The review evidence report](reports/milestone-4-review.json) records expanded Node/Bun compatibility and parity
+results, source hashes, and the three planted mutations. No finite-input mapping
+formula changed in this follow-up; production changes are setup validation,
+descriptor checks and module organization.
+
+
+Final checks: **79/79 Node**, **79/79 Bun**, **117/117 Rust release** tests;
+all-gamut `--validate-only` in both entry modes and both JS runtimes; both
+parity scripts in Node/Bun; all four generator `--check` commands; formatting
+and whitespace checks. The scratch mutations each exit nonzero. The new
+P3 compatibility maximum was also compared directly with Rust f64.
+
+Factory separation was measured against the immediately preceding uncommitted
+snapshot (including the validation fixes), not HEAD. Ryzen 7 9800X3D / WSL2,
+Node 26.10.0, Bun 1.4.2; CPU 2, fresh processes, common script path,
+before/after/after/before, no concurrent tests/builds. Setup is import plus
+selected-target factory creation, excluding process launch, with a warm
+filesystem; values are medians of six fresh processes per version/target.
+
+| Family / target | Node setup ms, before → after | Bun setup ms, before → after |
+| --- | ---: | ---: |
+| bottosson / display-p3 | 2.37 → 1.64 | 2.47 → 2.56 |
+| bottosson / srgb | 2.38 → 2.30 | 2.62 → 2.38 |
+| bottosson / rec2020 | 2.13 → 2.20 | 2.46 → 2.43 |
+| edge-seeker / display-p3 | 15.57 → 16.21 | 16.25 → 13.94 |
+| edge-seeker / srgb | 22.90 → 15.61 | 20.78 → 14.35 |
+| edge-seeker / rec2020 | 22.56 → 15.55 | 21.52 → 13.45 |
+
+Warm throughput uses two process medians per version, 50 warmup and 25 measured
+passes, reused output buffers and all-channel checksums. Checksums agree exactly
+before/after. Across four methods, three gamuts, two runtimes and both workloads,
+timing changes span −24.5% to +4.6%; the largest measured slowdown is Node P3
+indexed Edge Seeker grid, 64.24 → 67.22 ns. The report retains every raw pass and
+all per-method summaries. These isolated measurements do not attribute gains
+to a particular JIT mechanism or replace full-harness timing evidence.

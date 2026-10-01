@@ -5,13 +5,32 @@ const SLICES = 400;
 const HUE_INDEX_SCALE = 10;
 const HUE_INDEX_BUCKETS = 360 * HUE_INDEX_SCALE;
 
+// getRgbConversions supplies a stable converter per descriptor. Share the
+// sampled table across both lookup variants and repeated factory calls.
+// Distinct descriptors (even with the same name) keep independent tables.
+const tablesByConverter = new WeakMap();
+function tableForConverter (rgbToOklch) {
+	let rows = tablesByConverter.get(rgbToOklch);
+	if (!rows) {
+		rows = makeLut(rgbToOklch, SLICES).map(({l,c,h,curvature}) => [l,c,h,curvature]);
+		tablesByConverter.set(rgbToOklch, rows);
+	}
+	return rows;
+}
+
 /**
  * Creates a function that returns the maximum chroma for a given lightness and hue
  * @param rgbToOklch converter from RGB to OKLCH
  * @returns function that returns the maximum chroma for a given lightness and hue
  */
 export function makeEdgeSeeker (rgbToOklch) {
-	const { lutLength, lutL, lutC, lutH, lutCurvature } = makeLutColumns(rgbToOklch);
+	return makeEdgeSeekerFromTable(tableForConverter(rgbToOklch));
+}
+
+// Table construction and column/index allocation happen only at setup time.
+// Private runtime rows are shared by every factory for a target.
+export function makeEdgeSeekerFromTable (rows) {
+	const { lutLength, lutL, lutC, lutH, lutCurvature } = tableColumns(rows);
 
 	return function getMaxChroma (l, h = 0) {
 		if (l <= 0 || l >= 1) {
@@ -54,8 +73,17 @@ export function makeEdgeSeeker (rgbToOklch) {
  * @returns function that returns the maximum chroma for a given lightness and hue
  */
 export function makeEdgeSeekerIndexed (rgbToOklch) {
-	const { lutLength, lutL, lutC, lutH, lutCurvature } = makeLutColumns(rgbToOklch);
-	const intervalByBucket = makeIntervalIndex(lutH, lutLength);
+	return makeEdgeSeekerIndexedFromTable(tableForConverter(rgbToOklch));
+}
+
+export function makeEdgeSeekerIndexedFromTable (rows) {
+	const columns = tableColumns(rows);
+	const { lutLength, lutL, lutC, lutH, lutCurvature } = columns;
+	let intervalByBucket = indexes.get(columns);
+	if (!intervalByBucket) {
+		intervalByBucket = makeIntervalIndex(lutH, lutLength);
+		indexes.set(columns, intervalByBucket);
+	}
 
 	return function getMaxChroma (l, h = 0) {
 		if (l <= 0 || l >= 1) {
@@ -87,8 +115,12 @@ export function makeEdgeSeekerIndexed (rgbToOklch) {
 	};
 }
 
-function makeLutColumns (rgbToOklch) {
-	const lut = makeLut(rgbToOklch, SLICES);
+const columnsByTable = new WeakMap();
+const indexes = new WeakMap();
+function tableColumns (lut) {
+	const existing = columnsByTable.get(lut);
+	if (existing) return existing;
+	validateEdgeSeekerTable(lut);
 	const lutLength = lut.length;
 	// Parallel numeric columns. Keeping the hue column contiguous makes the
 	// binary search cache-friendly for arbitrary (non-repeating) hues, where an
@@ -99,12 +131,14 @@ function makeLutColumns (rgbToOklch) {
 	const lutCurvature = new Array(lutLength).fill(0);
 	for (let i = 0; i < lutLength; i++) {
 		const item = lut[i];
-		lutL[i] = item.l;
-		lutC[i] = item.c;
-		lutH[i] = item.h;
-		lutCurvature[i] = item.curvature;
+		lutL[i] = item[0];
+		lutC[i] = item[1];
+		lutH[i] = item[2];
+		lutCurvature[i] = item[3];
 	}
-	return { lutLength, lutL, lutC, lutH, lutCurvature };
+	const columns = { lutLength, lutL, lutC, lutH, lutCurvature };
+	columnsByTable.set(lut, columns);
+	return columns;
 }
 
 function makeIntervalIndex (lutH, lutLength) {
@@ -156,4 +190,18 @@ export function intersectionWithArc (x, curvature) {
 	const d = x * (t + curvature * (1 - x));
 	const disc = Math.max(0, b * b + 4 * curvature * d);
 	return Math.max(0, Math.min(1, 2 * d / (b + Math.sqrt(disc))));
+}
+
+// Invalid sampled data must fail at setup, never become NaN in interpolation.
+export function validateEdgeSeekerTable(rows) {
+	const invalid = () => { throw new RangeError("Invalid Edge Seeker table: expected finite, strictly increasing hue knots spanning 0..360"); };
+	if (!Array.isArray(rows) || rows.length < 2 || rows.length > 65535) invalid();
+	if (rows[0]?.[2] !== 0 || rows.at(-1)?.[2] !== 360) invalid();
+	for (let i = 0; i < rows.length; i++) {
+		const row = rows[i];
+		if (!Array.isArray(row) || row.length !== 4 || !row.every(Number.isFinite)
+			|| !(row[0] > 0 && row[0] < 1) || !(row[1] > 0) || !(Math.abs(row[3]) < 1)
+			|| (i && !(row[2] > rows[i - 1][2]))) invalid();
+	}
+	for (const column of [0,1,3]) if (rows[0][column] !== rows.at(-1)[column]) invalid();
 }

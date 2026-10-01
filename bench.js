@@ -26,7 +26,7 @@ const { values } = parseArgs({ options: {
 	warmup: { type: "string", default: "50" },
 } });
 if (values.help) {
-	console.log("Usage: node bench.js [--gamut display-p3|srgb|rec2020|all] [--validate-only|--timing-only] [--in-gamut-check] [--warmup 50]\nDefault: display-p3, all 13 methods. sRGB and Rec.2020: 8 methods (Clip, CSS MINDE and six matrix solvers).\nEach target runs in a separate process; validation is separate from timing.");
+	console.log("Usage: node bench.js [--gamut display-p3|srgb|rec2020|all] [--validate-only|--timing-only] [--in-gamut-check] [--warmup 50]\nDefault: display-p3, all 13 methods. sRGB and Rec.2020: 12 methods (Clip, CSS MINDE, six matrix solvers, both Bottosson and both Edge Seeker variants).\nEach target runs in a separate process; validation is separate from timing.");
 	process.exit(0);
 }
 const gamut = values.gamut;
@@ -89,8 +89,12 @@ const {
  "oklch-cubic-direct": oklchCubicDirect, "oklch-halley": oklchHalley,
  "oklch-ostrowski": oklchOstrowski, raytrace,
 } = matrixMappers;
-const { bottossonLightness, bottossonLightnessCached } = gamut === "display-p3" ? await import("./src/bottosson-lightness.js") : {};
-const { edgeSeeker, edgeSeekerIndexed } = gamut === "display-p3" ? await import("./src/edge-seeker/index.js") : {};
+const { createBottossonMappers } = await import("./src/bottosson-factory.js");
+const bottossonMappers = createBottossonMappers(space);
+const { "bottosson-lightness": bottossonLightness, "bottosson-lightness-cached": bottossonLightnessCached } = bottossonMappers;
+const { createEdgeSeekerMappers } = await import("./src/edge-seeker/factory.js");
+const edgeSeekerMappers = createEdgeSeekerMappers(space);
+const { "edge-seeker": edgeSeeker, "edge-seeker-indexed": edgeSeekerIndexed } = edgeSeekerMappers;
 const { dualray } = gamut === "display-p3" ? await import("./src/dualray.js") : {};
 
 const { samples, randomSamples } = buildWorkloads();
@@ -121,13 +125,11 @@ const methods = [
 	["oklch-cubic-direct", inGamutCheck ? oklchCubicDirectChecked : oklchCubicDirect],
 	["oklch-halley", inGamutCheck ? oklchHalleyChecked : oklchHalley],
 	["oklch-ostrowski", inGamutCheck ? oklchOstrowskiChecked : oklchOstrowski],
-	...(gamut === "display-p3" ? [
-		["dualray", dualray], // intrinsic checks in both modes
-		["bottosson-lightness", inGamutCheck ? bottossonLightnessChecked : bottossonLightness],
-		["bottosson-lightness (cached)", inGamutCheck ? bottossonLightnessCachedChecked : bottossonLightnessCached],
-		["edge-seeker", inGamutCheck ? edgeSeekerChecked : edgeSeeker],
-		["edge-seeker (indexed)", inGamutCheck ? edgeSeekerIndexedChecked : edgeSeekerIndexed],
-	] : []),
+	...(gamut === "display-p3" ? [["dualray", dualray]] : []), // intrinsic checks
+	["bottosson-lightness", inGamutCheck ? bottossonLightnessChecked : bottossonLightness],
+	["bottosson-lightness (cached)", inGamutCheck ? bottossonLightnessCachedChecked : bottossonLightnessCached, "bottosson-lightness-cached"],
+	["edge-seeker", inGamutCheck ? edgeSeekerChecked : edgeSeeker],
+	["edge-seeker (indexed)", inGamutCheck ? edgeSeekerIndexedChecked : edgeSeekerIndexed, "edge-seeker-indexed"],
 	["raytrace", inGamutCheck ? raytraceChecked : raytrace],
 ];
 
@@ -136,7 +138,7 @@ const out = [0, 0, 0];
 let sink = 0;
 
 if (validateOnly) {
-	// Sanity: every method must yield an in-gamut Display-P3 color.
+	// Sanity: every registered method must yield an in-gamut target color.
 	const inGamut = v => v[0] >= -1e-6 && v[0] <= 1 + 1e-6 && v[1] >= -1e-6 && v[1] <= 1 + 1e-6 && v[2] >= -1e-6 && v[2] <= 1 + 1e-6;
 	for (const [name, fn] of methods) {
 		for (const dataset of [samples, randomSamples]) {
@@ -154,9 +156,19 @@ if (validateOnly) {
 	console.log(validateRgbMethods(space, [samples, randomSamples], { clip: registered.clip, "css-minde": registered["css-minde"] }));
 	const { validateMatrixMethods } = await import("./tests/helpers/validate-matrix-methods.js");
 	const { mappingProbes } = await import("./tests/helpers/matrix-samples.js");
-	const selected = Object.fromEntries(Object.keys(matrixMappers).map(name => [name,registered[name]]));
-	const opposite = Object.fromEntries(Object.entries(matrixMappers).map(([name,map]) => [name,(input,out) => map(input,out,!inGamutCheck)]));
-	console.log(validateMatrixMethods(space, [samples, randomSamples, mappingProbes()], inGamutCheck, selected, opposite));
+	const { bindMapperMode } = await import("./tests/helpers/canonical-reference.js");
+	const { validateBottossonMethods } = await import("./tests/helpers/validate-bottosson-methods.js");
+	const { bottossonProbes } = await import("./tests/helpers/bottosson-samples.js");
+	const { validateEdgeSeekerMethods } = await import("./tests/helpers/validate-edge-seeker-methods.js");
+	const { edgeSeekerProbes } = await import("./tests/helpers/edge-seeker-samples.js");
+	for (const [maps,validate,probes] of [
+		[matrixMappers,validateMatrixMethods,mappingProbes()],
+		[bottossonMappers,validateBottossonMethods,bottossonProbes(gamut)],
+		[edgeSeekerMappers,validateEdgeSeekerMethods,edgeSeekerProbes(gamut)],
+	]) {
+		const selected = Object.fromEntries(Object.keys(maps).map(name => [name,registered[name]]));
+		console.log(validate(space,[samples,randomSamples,probes],inGamutCheck,selected,bindMapperMode(maps,!inGamutCheck)));
+	}
 	if (gamut !== "display-p3") process.exit(0);
 
 	const uncheckedOut = [0, 0, 0];

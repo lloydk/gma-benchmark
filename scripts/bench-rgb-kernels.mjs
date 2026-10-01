@@ -8,6 +8,10 @@ const { values } = parseArgs({ options: {
 	method: { type: "string", default: "clip" },
 } });
 const names = {
+ "edge-seeker": ["edgeSeeker", "createEdgeSeeker"],
+ "edge-seeker-indexed": ["edgeSeekerIndexed", "createEdgeSeekerIndexed"],
+ "bottosson-lightness": ["bottossonLightness", "createBottossonLightness"],
+ "bottosson-lightness-cached": ["bottossonLightnessCached", "createBottossonLightnessCached"],
  "clip": ["clip", "createClip"], "css-minde": ["cssMinde", "createCssMinde"],
  "oklch-cubic": ["oklchCubic", "createOklchCubic"],
  "oklch-cubic-no-cache": ["oklchCubicNoCache", "createOklchCubicNoCache"],
@@ -17,7 +21,13 @@ const names = {
  "raytrace": ["raytrace", "createRaytrace"],
 };
 if (!Object.hasOwn(names, values.method)) throw new RangeError("unsupported method");
-const module = await import(`../src/${values.method}.js`);
+let moduleName = values.method.startsWith("edge-seeker") ? "edge-seeker/index"
+ : values.method === "bottosson-lightness-cached" ? "bottosson-lightness" : values.method;
+if (values.gamut !== "display-p3") {
+ if (values.method.startsWith("edge-seeker")) moduleName = "edge-seeker/factory";
+ if (values.method.startsWith("bottosson-lightness")) moduleName = "bottosson-factory";
+}
+const module = await import(`../src/${moduleName}.js`);
 const [name, factory] = names[values.method];
 let map;
 // The P3 branch also runs against the pre-factory baseline unchanged.

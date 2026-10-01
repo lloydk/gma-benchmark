@@ -1,3 +1,4 @@
+import { bindMapperMode } from "./helpers/canonical-reference.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { RGB_SPACES } from "../src/rgb-spaces.js";
@@ -121,7 +122,7 @@ test("validation uses supplied callbacks and named policies even in reverse orde
  const space = RGB_SPACES.srgb;
  const maps = createMatrixMappers(space), probes = [[.3,.177897,264.053],[.5,.01,31.123]];
  const reversed = Object.fromEntries(Object.entries(maps).reverse());
- validateMatrixMethods(space,[probes],true,reversed);
+ validateMatrixMethods(space,[probes],true,bindMapperMode(reversed,true));
  assert.throws(() => validateMatrixMethods(space,[probes],false,{ ...maps, "oklch-halley": (input,out) => { out[0]=out[1]=out[2]=0; return out; } }), /oklch-halley/);
  const wrongTarget = createMatrixMappers(RGB_SPACES.rec2020);
  assert.throws(() => validateMatrixMethods(space,[probes],false,wrongTarget));

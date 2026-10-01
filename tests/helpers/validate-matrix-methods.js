@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createMatrixMappers } from "../../src/matrix-mappers.js";
-import { createRgbConversions } from "../../src/rgb-convert.js";
+import { createCanonicalReference, bindMapperMode } from "./canonical-reference.js";
 import { blueFoldWindow, inBlueFold } from "../../src/matrix-solver-policy.js";
 import { createBoundaryReference } from "./matrix-reference.js";
 
@@ -11,16 +11,17 @@ const POLICIES = Object.freeze({
  "oklch-cubic-direct": "first", "oklch-halley": "fold",
  "oklch-ostrowski": "fold", raytrace: "raytrace",
 });
-export function validateMatrixMethods (space, datasets, checked = false, registered = createMatrixMappers(space), oppositeMode) {
+export function validateMatrixMethods (space, datasets, checked = false, registered = bindMapperMode(createMatrixMappers(space),checked), oppositeMode) {
 	assert.deepEqual(Object.keys(registered).sort(), Object.keys(POLICIES).sort());
 	const maps = Object.entries(registered), ref = createBoundaryReference(space.id);
-	const conversion = createRgbConversions(space), window = blueFoldWindow(space);
+	const conversion = createCanonicalReference(space), window = blueFoldWindow(space);
 	const maxima = maps.map(([method]) => ({ method, linear: 0, delta: 0, encoded: 0, limit: POLICIES[method] === "bucket" ? 1e-6 : 2e-8 }));
 	let count = 0;
 	for (const samples of datasets) for (const input of samples) {
-		const [L,C,H] = input, canonical = [];
+		const [L,C,H] = input;
+		const {inside,encoded:canonical} = conversion(input);
 		const achromatic = L <= 0 || L >= 1 || C <= 0;
-		const preserve = !achromatic && checked && conversion.oklchToRgbIfInGamut(L,C,H,canonical);
+		const preserve = !achromatic && checked && inside;
 		let normalized = H % 360;
 		if (normalized < 0) normalized += 360;
 		const bucket = Math.round(normalized*10)/10;
@@ -28,7 +29,7 @@ export function validateMatrixMethods (space, datasets, checked = false, registe
 		const quantized = achromatic || preserve ? null : ref.boundaries(L,bucket);
 		const outputs = {};
 		for (let m = 0; m < maps.length; m++) {
-			const [name,map] = maps[m], policy = POLICIES[name], actual = map(input,[],checked);
+			const [name,map] = maps[m], policy = POLICIES[name], actual = map(input,[]);
 			outputs[name] = actual;
 			assert.ok(actual.every(v => Number.isFinite(v) && v >= 0 && v <= 1), `${space.id} ${name} ${input}: ${actual}`);
 			let expected;
@@ -53,7 +54,7 @@ export function validateMatrixMethods (space, datasets, checked = false, registe
 			max.encoded = Math.max(max.encoded,...actual.map((v,i) => Math.abs(v-encoded[i])));
 			// Compare the selected timed callback with the other entry mode only
 			// outside gamut; bucketed policies may intentionally differ inside.
-			if (oppositeMode && !conversion.oklchToRgbIfInGamut(L,Math.max(0,C),H,[])) {
+			if (oppositeMode && !conversion([L,Math.max(0,C),H]).inside) {
 				assert.deepEqual(actual, oppositeMode[name](input,[]), `${space.id} ${name} checked/plain ${input}`);
 			}
 		}
