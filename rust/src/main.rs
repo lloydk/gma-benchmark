@@ -183,6 +183,8 @@ where
         + float32::bottosson::BottossonData
         + float64::dualray::DualrayData
         + float32::dualray::DualrayData
+        + float64::dualray_fast::DualrayFastData
+        + float32::dualray_fast::DualrayFastData
         + validation::ValidationProfile,
 {
     let Workloads {
@@ -192,7 +194,7 @@ where
         random32,
     } = workloads;
     let is_p3 = G::ID == rgb_spaces::SpaceId::DisplayP3;
-    println!("target: {} ({})", G::DEFINITION.name, "all 13 methods");
+    println!("target: {} ({})", G::DEFINITION.name, "all 15 methods");
     println!(
         "dataset: {} OKLCh colors per workload (grid + random)\n",
         grid.len()

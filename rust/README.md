@@ -4,7 +4,8 @@ A native point of reference for the JS `gma-benchmark`, timed over the same two
 35,640-color workloads: the canonical grid (`oklch(L 0.4 H)`) and a random
 hue/lightness workload (stratified/jittered, shuffled).
 
-Display-P3 remains the default target with all 13 methods. Milestone two adds
+Display-P3 remains the default target with all 15 methods: the 13 shared with
+JavaScript plus two Rust-only Dualray Fast rows. Milestone two adds
 sRGB and Rec.2020 versions of the matrix-driven solvers in native f64 and f32:
 clip, CSS MINDE, cached/uncached cubic, direct cubic, Halley, Ostrowski and Raytrace.
 Milestone three adds both Edge Seeker variants, both constant-lightness
@@ -14,9 +15,9 @@ cusp fits and lower-root seeds. See the
 
 | Target | Methods |
 | --- | --- |
-| `display-p3` (default) | All 13 |
-| `srgb` | All 13 |
-| `rec2020` | All 13 |
+| `display-p3` (default) | All 15 |
+| `srgb` | All 15 |
+| `rec2020` | All 15 |
 
 ```sh
 ./target/release/gma-bench --gamut srgb
@@ -57,7 +58,7 @@ other implementations must use the same encoding.
   conversion, clipping and encoding are explicit operations.
 - `clip::Clip<G>`, `css_minde::CssMinde<G>` and the six `rgb_solvers` types use
   static gamut dispatch. The single ordered method registry contains all
-  thirteen generic methods. A cubic cache belongs to its gamut type;
+  fifteen generic methods. A cubic cache belongs to its gamut type;
   buckets retain 13 native scalars with no runtime gamut tag. Cached cubic
   borrows its hue entry after lazy initialization, avoiding the full-record
   stack copy whose native f64 timing depended on caller stack alignment.
@@ -305,12 +306,13 @@ The numerical tests retain these existing input policies.
 ## `gma-bench` — scalar, apples-to-apples
 
 For the default P3 target: one color per call, with native f64 and f32
-implementations of all 13 methods.
+implementations of all 15 methods.
 Each timing run prints validation, both precisions' checksums, then four
 sorted timing tables (`--validate-only` omits them): f64 grid/random and f32
 grid/random. No precision flag is needed. `--in-gamut-check` selects the prechecked path in both precisions;
-`dualray` retains its intrinsic boundary checks in either mode, and `css-minde`
-retains the in-gamut check required by CSS Color 4 in either mode.
+`dualray` retains its intrinsic boundary checks in either mode, both
+`dualray fast` rows always include their canonical in-gamut check, and
+`css-minde` retains the in-gamut check required by CSS Color 4 in either mode.
 The f64 lane retains the JS conversion math. Rust also has native f32
 conditioning and the target-specific iterative blue-fold policy described above.
 
@@ -318,7 +320,7 @@ conditioning and the target-specific iterative blue-fold policy described above.
 RUSTFLAGS="-C target-cpu=native" cargo build --release --bin gma-bench
 ./target/release/gma-bench
 
-# time the in-gamut-precheck variants (css-minde and dualray retain their checks):
+# time the in-gamut-precheck variants (css-minde, dualray and dualray fast keep their checks):
 ./target/release/gma-bench --in-gamut-check
 ```
 
@@ -347,7 +349,7 @@ The generator exports the Rust gamut profiles, then reuses the existing JS
 Rust benchmark does not require Node. Recorded generation uses Node 26.10.0;
 platform math-library differences can change the final bits of generated data.
 
-`methods.rs` supplies one ordered registry of all thirteen generic methods for both
+`methods.rs` supplies one ordered registry of all fifteen generic methods for both
 lanes and validation. This keeps algorithm and benchmark coverage aligned.
 
 `css_minde.rs` implements the [CSS Color 4 Local MINDE search](https://www.w3.org/TR/css-color-4/#binsearch)
@@ -393,6 +395,36 @@ in-gamut island beyond the first exit. Its checked entry point is the same
 algorithm; it does not add the canonical precheck used by the other exact-hue
 mappers. This distinction is tested and remains visible in the benchmark.
 
+`dualray_fast.rs` (rows `dualray fast` and `dualray fast (poly encode)`, Rust
+only) is an approximate, cache-free constant-lightness/hue mapper for OKLCh
+input. It does not call Dualray. Below the cusp, per-sector hue polynomials give
+the lower-face boundary ratio and the two nonzero linear channels directly, so
+about three quarters of the out-of-gamut workload colors need no trigonometry,
+conversion or root solve. Other colors take, in order: the canonical in-gamut
+check (an in-gamut color returns that conversion, including colors in a
+blue-fold re-entry island); the fitted lower output for the margin band just
+beyond the lower face; above the cusp, the chord seed and two Householder steps
+on the brighter lower channel, retried on a channel that exceeds one; and for
+the rest (mostly blue-fold hues, at most about 0.1% of colors) an exact first
+exit by bisection between the channels' stationary points. Its checked entry
+point is the same algorithm. The poly-encode row replaces the transfer
+function's `pow` with a polynomial on out-of-gamut results only.
+
+Its target is a deltaEOK of at most `1e-3`, and `1e-4` at the 99th percentile,
+from the constant-lightness/hue first exit. Measured maxima are about `2.7e-4`
+with a p99 of `3e-5` to `5e-5` in all three gamuts and both precisions, against
+exact Dualray and gma-accuracy's certified reference. These are sampled
+results, not bounds. The f32 lane is pure f32: at the red fold, where rounding
+cannot decide whether the red channel's tangent dip is an exit, the binary64
+fold hue (stored as two f32 constants) decides. `node scripts/generate-dualray-fast.mjs`
+fits the per-gamut data from exact roots; add `--check` to verify freshness.
+Validation compares the lanes against per-gamut regression ceilings, checks
+exact canonical pass-through in both modes, and keeps the f64 rows within the
+`1e-3` deltaEOK design budget of Dualray outside blue-fold windows.
+`cargo run --release --example dualray-fast` runs the full accuracy sweep,
+path statistics and paired timing; `scripts/dualray-fast-oracle.py` runs the
+same checks against gma-accuracy's independent oracle.
+
 `conditioning.rs` contains the f32 numerical adjustments, selected at compile
 time: stationary-interval validation and bisection recovery for Cardano roots,
 sign-directed Raytrace intersections with a representable interior margin,
@@ -421,7 +453,7 @@ its new linear/perceptual gates for all targets. Bottosson now uses the separate
 its cache's hue quantization is kept separate from arithmetic error.
 
 The independent tests separately check conversion and transfer arithmetic,
-MINDE output error, and exact canonical pass-through. All thirteen methods are
+MINDE output error, and exact canonical pass-through. All fifteen methods are
 validated on mixed chroma and RGB boundary neighbours in all three gamuts.
 
 Run the numerical tests with:

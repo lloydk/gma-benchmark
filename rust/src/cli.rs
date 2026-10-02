@@ -59,8 +59,8 @@ impl Options {
 
 pub(crate) const HELP: &str =
     "Usage: gma-bench [--gamut display-p3|srgb|rec2020|all] [--in-gamut-check] [--validate-only]
-Default: display-p3, all 13 methods, native f64 and f32.
-All three gamuts support all 13 methods.
+Default: display-p3, all 15 methods, native f64 and f32.
+All three gamuts support all 15 methods.
 --validate-only runs workload checks without timing; cargo test runs the independent oracle tests.";
 
 #[cfg(test)]

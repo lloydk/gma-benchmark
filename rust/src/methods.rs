@@ -40,6 +40,13 @@ macro_rules! for_each_rgb_method {
             EdgeSeeker
         );
         $core!("raytrace", rgb_solvers, Raytrace, Raytrace);
+        $core!("dualray fast", dualray_fast, DualrayFast, DualrayFast);
+        $core!(
+            "dualray fast (poly encode)",
+            dualray_fast,
+            DualrayFastEncode,
+            DualrayFast
+        );
     };
 }
 

@@ -10,6 +10,10 @@ pub(crate) mod dualray {
     include!("dualray.rs");
 }
 
+pub(crate) mod dualray_fast {
+    include!("dualray_fast.rs");
+}
+
 pub(crate) mod css_minde {
     include!("css_minde.rs");
 }

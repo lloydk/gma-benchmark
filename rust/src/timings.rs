@@ -25,7 +25,10 @@ fn time_method(
 }
 
 pub(crate) fn print_checksums<
-    G: edge_seeker::EdgeSeekerData + bottosson::BottossonData + dualray::DualrayData,
+    G: edge_seeker::EdgeSeekerData
+        + bottosson::BottossonData
+        + dualray::DualrayData
+        + dualray_fast::DualrayFastData,
 >(
     samples: &[[Float; 3]],
 ) {
@@ -50,7 +53,10 @@ pub(crate) fn print_checksums<
 }
 
 pub(crate) fn run_timings<
-    G: edge_seeker::EdgeSeekerData + bottosson::BottossonData + dualray::DualrayData,
+    G: edge_seeker::EdgeSeekerData
+        + bottosson::BottossonData
+        + dualray::DualrayData
+        + dualray_fast::DualrayFastData,
 >(
     label: &str,
     samples: &[[Float; 3]],

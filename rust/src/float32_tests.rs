@@ -1,4 +1,6 @@
 type Dualray = dualray::Dualray<gamut::DisplayP3>;
+type DualrayFast = dualray_fast::DualrayFast<gamut::DisplayP3>;
+type DualrayFastEncode = dualray_fast::DualrayFastEncode<gamut::DisplayP3>;
 type BottossonLightness = bottosson::BottossonLightness<crate::rgb_spaces::DisplayP3>;
 type BottossonLightnessCached = bottosson::BottossonLightnessCached<crate::rgb_spaces::DisplayP3>;
 type EdgeSeeker = edge_seeker::EdgeSeeker<gamut::DisplayP3>;

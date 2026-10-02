@@ -11,6 +11,10 @@ pub(crate) trait ValidationProfile: RgbSpace {
     const DUALRAY_LINEAR_LIMIT: f64;
     const DUALRAY_DELTA_LIMIT: f64;
     const DUALRAY_ENCODED_LIMIT: Option<f64>;
+    // Dualray Fast f32 vs f64: both approximate the same fits, but near a
+    // seam, the cusp test or the red fold the lanes can take different paths.
+    const DUALRAY_FAST_LINEAR_LIMIT: f64;
+    const DUALRAY_FAST_DELTA_LIMIT: f64;
     const BOTTOSSON_LINEAR_LIMIT: f64;
     const BOTTOSSON_DELTA_LIMIT: f64;
     const EDGE_LINEAR_LIMIT: f64;
@@ -24,6 +28,8 @@ pub(crate) trait ValidationProfile: RgbSpace {
     const RAYTRACE_REFERENCE_LINEAR_LIMIT: f64;
 }
 impl ValidationProfile for Srgb {
+    const DUALRAY_FAST_LINEAR_LIMIT: f64 = 5e-4;
+    const DUALRAY_FAST_DELTA_LIMIT: f64 = 1.5e-4;
     const DUALRAY_ENCODED_LIMIT: Option<f64> = None;
     const DUALRAY_LINEAR_LIMIT: f64 = 2e-5;
     const DUALRAY_DELTA_LIMIT: f64 = 5e-6;
@@ -41,6 +47,8 @@ impl ValidationProfile for Srgb {
     const RAYTRACE_REFERENCE_LINEAR_LIMIT: f64 = 5e-4;
 }
 impl ValidationProfile for DisplayP3 {
+    const DUALRAY_FAST_LINEAR_LIMIT: f64 = 3e-4;
+    const DUALRAY_FAST_DELTA_LIMIT: f64 = 2e-4;
     const DUALRAY_ENCODED_LIMIT: Option<f64> = Some(1e-4);
     const DUALRAY_LINEAR_LIMIT: f64 = 2e-5;
     const DUALRAY_DELTA_LIMIT: f64 = 5e-6;
@@ -58,6 +66,8 @@ impl ValidationProfile for DisplayP3 {
     const RAYTRACE_REFERENCE_LINEAR_LIMIT: f64 = 5e-5;
 }
 impl ValidationProfile for Rec2020 {
+    const DUALRAY_FAST_LINEAR_LIMIT: f64 = 4e-4;
+    const DUALRAY_FAST_DELTA_LIMIT: f64 = 2e-4;
     const DUALRAY_ENCODED_LIMIT: Option<f64> = None;
     const DUALRAY_LINEAR_LIMIT: f64 = 2e-5;
     const DUALRAY_DELTA_LIMIT: f64 = 5e-6;
@@ -88,6 +98,7 @@ enum Policy {
     BottossonBucket,
     EdgeSeeker,
     Dualray,
+    DualrayFast,
 }
 impl Policy {
     fn metric(self) -> &'static str {
@@ -97,7 +108,7 @@ impl Policy {
             Self::Boundary | Self::Iterative => "linear RGB",
             Self::Bucket | Self::BottossonBucket => "linear/bucket",
             Self::Raytrace | Self::EdgeSeeker | Self::Bottosson => "linear RGB",
-            Self::Dualray => "linear RGB",
+            Self::Dualray | Self::DualrayFast => "linear RGB",
         }
     }
     fn delta_limit<G: ValidationProfile>(self) -> Option<f64> {
@@ -107,6 +118,7 @@ impl Policy {
             Self::EdgeSeeker => Some(G::EDGE_DELTA_LIMIT),
             Self::Bottosson | Self::BottossonBucket => Some(G::BOTTOSSON_DELTA_LIMIT),
             Self::Dualray => Some(G::DUALRAY_DELTA_LIMIT),
+            Self::DualrayFast => Some(G::DUALRAY_FAST_DELTA_LIMIT),
             _ => None,
         }
     }
@@ -120,6 +132,7 @@ impl Policy {
             Self::EdgeSeeker => G::EDGE_LINEAR_LIMIT,
             Self::Bottosson | Self::BottossonBucket => G::BOTTOSSON_LINEAR_LIMIT,
             Self::Dualray => G::DUALRAY_LINEAR_LIMIT,
+            Self::DualrayFast => G::DUALRAY_FAST_LINEAR_LIMIT,
         }
     }
 }
@@ -191,12 +204,14 @@ fn compare<G: ValidationProfile + float32::gamut::RgbGamut + float64::gamut::Rgb
         }
         let input = &input;
         let (mut actual, mut expected) = ([0.0; 3], [0.0; 3]);
+        let mut branch_only = false;
         narrow(input, &mut actual, checked);
         wide(&input.map(f64::from), &mut expected, checked);
         // At a re-entry, tiny conversion roundoff can select different policy
         // branches. Check each accepted color bit-for-bit, then compare the
         // plain solvers separately when the classifications disagree.
-        if checked
+        // Dualray Fast's precheck is part of both modes.
+        if (checked || matches!(policy, Policy::DualrayFast))
             && matches!(
                 policy,
                 Policy::Boundary
@@ -206,6 +221,7 @@ fn compare<G: ValidationProfile + float32::gamut::RgbGamut + float64::gamut::Rgb
                     | Policy::EdgeSeeker
                     | Policy::Bottosson
                     | Policy::BottossonBucket
+                    | Policy::DualrayFast
             )
             && input[0] > 0.0
             && input[0] < 1.0
@@ -254,8 +270,16 @@ fn compare<G: ValidationProfile + float32::gamut::RgbGamut + float64::gamut::Rgb
                     result.branch_encoded = result
                         .branch_encoded
                         .max(max_finite_diff(actual.map(f64::from), expected));
-                    actual = plain32;
-                    expected = plain64;
+                    if matches!(policy, Policy::DualrayFast) {
+                        // Its precheck is part of the method, so there is no
+                        // separate solver to compare. At a re-entry island's
+                        // edge a membership flip switches between the color
+                        // and its first exit; each branch was checked above.
+                        branch_only = true;
+                    } else {
+                        actual = plain32;
+                        expected = plain64;
+                    }
                 }
             }
         }
@@ -265,7 +289,7 @@ fn compare<G: ValidationProfile + float32::gamut::RgbGamut + float64::gamut::Rgb
                 .all(|v| v.is_finite() && (0.0..=1.0).contains(v)),
             "{name}: invalid f32 output at {input:?}: {actual:?}"
         );
-        if checked && matches!(policy, Policy::Dualray) {
+        if checked && matches!(policy, Policy::Dualray | Policy::DualrayFast) {
             let (mut plain32, mut plain64) = ([0.0; 3], [0.0; 3]);
             narrow(input, &mut plain32, false);
             wide(&input.map(f64::from), &mut plain64, false);
@@ -286,6 +310,9 @@ fn compare<G: ValidationProfile + float32::gamut::RgbGamut + float64::gamut::Rgb
                 .all(|v| v.is_finite() && (0.0..=1.0).contains(v)),
             "{name}: invalid f64 reference at {input:?}: {expected:?}"
         );
+        if branch_only {
+            continue;
+        }
         let actual = actual.map(f64::from);
         let encoded = max_finite_diff(actual, expected);
         if matches!(policy, Policy::Dualray) {
@@ -310,7 +337,8 @@ fn compare<G: ValidationProfile + float32::gamut::RgbGamut + float64::gamut::Rgb
             | Policy::EdgeSeeker
             | Policy::Bottosson
             | Policy::BottossonBucket
-            | Policy::Dualray => max_finite_diff(
+            | Policy::Dualray
+            | Policy::DualrayFast => max_finite_diff(
                 actual.map(|v| reference.decode(v)),
                 expected.map(|v| reference.decode(v)),
             ),
@@ -370,6 +398,8 @@ where
         + float32::bottosson::BottossonData
         + float64::dualray::DualrayData
         + float32::dualray::DualrayData
+        + float64::dualray_fast::DualrayFastData
+        + float32::dualray_fast::DualrayFastData
         + ValidationProfile,
 {
     let reference = Reference::new(G::ID);
@@ -480,7 +510,8 @@ where
 pub(crate) fn validate_solver_agreement<
     G: float64::edge_seeker::EdgeSeekerData
         + float64::bottosson::BottossonData
-        + float64::dualray::DualrayData,
+        + float64::dualray::DualrayData
+        + float64::dualray_fast::DualrayFastData,
 >(
     grid: &[[f64; 3]],
     random: &[[f64; 3]],
@@ -505,6 +536,8 @@ pub(crate) fn validate_solver_agreement<
     let mut bottosson_max = 0.0f64;
     let mut dualray = float64::dualray::Dualray::<G>::new();
     let mut dualray_max = 0.0f64;
+    let mut fast = float64::dualray_fast::DualrayFast::<G>::new();
+    let mut fast_max = 0.0f64;
     let mut maxima = [0.0f64; 3];
     for (set, samples) in [grid, random].into_iter().enumerate() {
         for input in samples {
@@ -525,6 +558,14 @@ pub(crate) fn validate_solver_agreement<
                 ));
             }
             dualray.map(input, &mut a);
+            // Outside blue-fold windows, where Dualray maps re-entry islands.
+            if !in_blue_fold::<G>(input[2]) {
+                fast.map(input, &mut b);
+                fast_max = fast_max.max(distance(
+                    reference.encoded_to_lab(a),
+                    reference.encoded_to_lab(b),
+                ));
+            }
             let mut out = [[0.0; 3]; 5];
             cached.map(input, &mut out[0]);
             uncached.map(input, &mut out[1]);
@@ -566,6 +607,16 @@ pub(crate) fn validate_solver_agreement<
         "{} f64 Dualray/direct linear maximum: {dualray_max:e}",
         G::DEFINITION.name
     );
+    // The approximation's design budget, not a measured ceiling.
+    assert!(
+        fast_max <= 1e-3,
+        "{} Dualray Fast/Dualray deltaEOK {fast_max:e}",
+        G::DEFINITION.name
+    );
+    println!(
+        "{} f64 Dualray Fast/Dualray deltaEOK maximum (outside blue-fold windows): {fast_max:e}",
+        G::DEFINITION.name
+    );
     assert!(
         bottosson_max <= 2e-12,
         "{} Bottosson cached/direct grid error {bottosson_max:e}",
@@ -595,6 +646,7 @@ mod tests {
             Policy::Bottosson,
             Policy::BottossonBucket,
             Policy::Dualray,
+            Policy::DualrayFast,
         ] {
             for checked in [false, true] {
                 for bad in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
@@ -677,6 +729,7 @@ mod tests {
             Policy::Bottosson,
             Policy::BottossonBucket,
             Policy::Dualray,
+            Policy::DualrayFast,
         ] {
             assert!(std::panic::catch_unwind(|| compare::<Rec2020>(
                 "injected dark error",
@@ -706,6 +759,7 @@ mod tests {
             Policy::Bottosson,
             Policy::BottossonBucket,
             Policy::Dualray,
+            Policy::DualrayFast,
         ] {
             assert!(std::panic::catch_unwind(|| compare::<Srgb>(
                 "injected mode mismatch",

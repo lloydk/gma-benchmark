@@ -4,7 +4,8 @@ A self-contained benchmark of OKLCh → RGB gamut-mapping methods, with **no
 color-library dependency** — all color conversions are hand-rolled and optimized.
 
 The [Rust implementation](rust/README.md) also supports **sRGB and Rec.2020**
-for all 13 methods in native f64 and f32. Select them with `--gamut srgb`,
+for all of its methods in native f64 and f32: the 13 shared with JavaScript,
+plus two Rust-only, approximate Dualray Fast rows. Select them with `--gamut srgb`,
 `--gamut rec2020`, or `--gamut all`. JavaScript supports all 13 methods for
 **all three gamuts** (Display-P3, sRGB and Rec.2020): Clip, CSS MINDE,
 cached/uncached/direct cubic, Halley, Ostrowski, Raytrace, both Bottosson variants, both Edge Seeker variants, and Dualray. See
@@ -68,6 +69,14 @@ such method links to the original it was derived from.
   which generates each target's mapper with its seed expression inline.
   [`src/dualray-factory.js`](src/dualray-factory.js) selects the target;
   [`src/dualray.js`](src/dualray.js) retains the default P3 export.
+- **dualray fast** (Rust only) — an approximate, cache-free variant of the
+  Dualray boundary for OKLCh input, with a deltaEOK target of `1e-3` maximum and
+  `1e-4` at the 99th percentile. Per-sector hue polynomials map most
+  out-of-gamut colors below the cusp without trigonometry or a root solve. In-gamut
+  colors return the canonical conversion; the rest take a fitted upper-face solve
+  or an exact first-exit search. **dualray fast (poly encode)** also replaces the
+  transfer function's `pow` with a polynomial for out-of-gamut results. See the
+  [Rust README](rust/README.md).
 - **bottosson-lightness** — Bjorn Ottosson's constant-lightness gamut clipping,
   specialized at factory creation for OKLCh → target RGB, with generated
   per-gamut saturation fits and scalar conversion coefficients.
@@ -229,9 +238,10 @@ A scalar Rust implementation lives in [`rust/`](rust/). Every method has native
 f64 and f32 implementations. Running `gma-bench` prints both precisions over
 the same two 35,640-color workloads, with separate grid and random timing
 tables for each. The existing `--in-gamut-check` option applies to both.
-All three Rust targets support all 13 methods: clip, CSS MINDE,
+All three Rust targets support all 15 methods: clip, CSS MINDE,
 cached/uncached/direct cubic, Halley, Ostrowski, Dualray, Raytrace,
-both Bottosson variants and both Edge Seeker variants.
+both Bottosson variants, both Edge Seeker variants and the two Rust-only Dualray
+Fast rows.
 Rust includes native f32 conditioning and target-specific blue-fold handling,
 so check algorithm policies before
 attributing Rust/JavaScript timing differences to runtime overhead. See
