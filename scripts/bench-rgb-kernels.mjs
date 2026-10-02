@@ -9,6 +9,7 @@ const { values } = parseArgs({ options: {
 } });
 const names = {
  "dualray": ["dualray", "createDualray"],
+ "dualray-fast": ["dualrayFast", "createDualrayFast"],
  "edge-seeker": ["edgeSeeker", "createEdgeSeeker"],
  "edge-seeker-indexed": ["edgeSeekerIndexed", "createEdgeSeekerIndexed"],
  "bottosson-lightness": ["bottossonLightness", "createBottossonLightness"],
@@ -25,7 +26,8 @@ if (!Object.hasOwn(names, values.method)) throw new RangeError("unsupported meth
 const { getRgbSpace } = await import("../src/rgb-spaces.js");
 const space = getRgbSpace(values.gamut);
 let moduleName = values.method.startsWith("edge-seeker") ? "edge-seeker/index"
- : values.method === "bottosson-lightness-cached" ? "bottosson-lightness" : values.method;
+ : values.method === "bottosson-lightness-cached" ? "bottosson-lightness"
+ : values.method;
 if (values.gamut !== "display-p3") {
  const factoryModules = { dualray: "dualray-factory", "edge-seeker": "edge-seeker/factory",
   "edge-seeker-indexed": "edge-seeker/factory", "bottosson-lightness": "bottosson-factory",
@@ -35,15 +37,16 @@ if (values.gamut !== "display-p3") {
 const module = await import(`../src/${moduleName}.js`);
 const [name, factory] = names[values.method];
 let map;
-// The P3 branch also runs against the pre-factory baseline unchanged.
-if (values.gamut === "display-p3") map = module[name];
+// The P3 branch also runs against the pre-factory baseline unchanged; Dualray
+// Fast has only its factory.
+if (values.gamut === "display-p3" && module[name]) map = module[name];
 else {
  map = module[factory](space);
 }
 const { samples, randomSamples } = buildWorkloads();
 
 const workloads = [["grid",samples],["random",randomSamples]];
-if(values.method === "dualray" && values.gamut !== "display-p3") {
+if(values.method.startsWith("dualray") && values.gamut !== "display-p3") {
  const {blueFoldWindow}=await import("../src/matrix-solver-policy.js");
  const [lo,hi]=blueFoldWindow(space);
  for(const fold of [false,true])for(const interior of [true,false]) {

@@ -19,8 +19,8 @@ test("benchmark CLI rejects missing/unsupported gamuts and conflicting modes", (
 	}
 	const help = run(["--help"]);
 	assert.equal(help.status, 0);
-	assert.match(help.stdout, /all 13 methods/);
-	assert.match(help.stdout, /sRGB and Rec.2020: all 13 methods/);
+	assert.match(help.stdout, /all 14 methods/);
+	assert.match(help.stdout, /sRGB and Rec.2020: all 14 methods/);
 });
 
 // Run the real validation -> timing child flow, from an unrelated working
@@ -33,6 +33,7 @@ for (const gamut of ["srgb","rec2020"]) test(`CLI forwards ${gamut} to validatio
 	assert.ok(result.stdout.includes(`${gamut} / oklch-halley`));
 	assert.ok(result.stdout.includes(`${gamut} / raytrace`));
 	assert.ok(result.stdout.includes(`${gamut} / dualray`));
+	assert.ok(result.stdout.includes(`${gamut} / dualray fast`));
 	assert.ok(result.stdout.includes(`${gamut} / bottosson-lightness (cached)`));
 	assert.ok(result.stdout.includes(`${gamut} / edge-seeker (indexed)`));
 	assert.doesNotMatch(result.stdout,/display-p3 \//);

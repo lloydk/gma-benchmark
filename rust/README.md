@@ -4,8 +4,8 @@ A native point of reference for the JS `gma-benchmark`, timed over the same two
 35,640-color workloads: the canonical grid (`oklch(L 0.4 H)`) and a random
 hue/lightness workload (stratified/jittered, shuffled).
 
-Display-P3 remains the default target with all 15 methods: the 13 shared with
-JavaScript plus two Rust-only Dualray Fast rows. Milestone two adds
+Display-P3 remains the default target with all 15 methods: the 14 shared with
+JavaScript plus the Rust-only Dualray Fast poly-encode row. Milestone two adds
 sRGB and Rec.2020 versions of the matrix-driven solvers in native f64 and f32:
 clip, CSS MINDE, cached/uncached cubic, direct cubic, Halley, Ostrowski and Raytrace.
 Milestone three adds both Edge Seeker variants, both constant-lightness
@@ -398,8 +398,8 @@ in-gamut island beyond the first exit. Its checked entry point is the same
 algorithm; it does not add the canonical precheck used by the other exact-hue
 mappers. This distinction is tested and remains visible in the benchmark.
 
-`dualray_fast.rs` (rows `dualray fast` and `dualray fast (poly encode)`, Rust
-only) is an approximate, cache-free constant-lightness/hue mapper for OKLCh
+`dualray_fast.rs` (rows `dualray fast`, also ported to JavaScript, and
+`dualray fast (poly encode)`, Rust only) is an approximate, cache-free constant-lightness/hue mapper for OKLCh
 input. It reuses Dualray's channel basis, upper solve and exact search. Below
 the cusp, per-sector hue polynomials give
 the lower-face boundary ratio and the two nonzero linear channels directly, so

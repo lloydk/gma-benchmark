@@ -26,7 +26,7 @@ const { values } = parseArgs({ options: {
 	warmup: { type: "string", default: "50" },
 } });
 if (values.help) {
-	console.log("Usage: node bench.js [--gamut display-p3|srgb|rec2020|all] [--validate-only|--timing-only] [--in-gamut-check] [--warmup 50]\nDefault: display-p3, all 13 methods. sRGB and Rec.2020: all 13 methods.\nEach target runs in a separate process; validation is separate from timing.");
+	console.log("Usage: node bench.js [--gamut display-p3|srgb|rec2020|all] [--validate-only|--timing-only] [--in-gamut-check] [--warmup 50]\nDefault: display-p3, all 14 methods. sRGB and Rec.2020: all 14 methods.\nEach target runs in a separate process; validation is separate from timing.");
 	process.exit(0);
 }
 const gamut = values.gamut;
@@ -97,6 +97,8 @@ const edgeSeekerMappers = createEdgeSeekerMappers(space);
 const { "edge-seeker": edgeSeeker, "edge-seeker-indexed": edgeSeekerIndexed } = edgeSeekerMappers;
 const { createDualray } = await import("./src/dualray-factory.js");
 const dualray = createDualray(space);
+const { createDualrayFast } = await import("./src/dualray-fast.js");
+const dualrayFast = createDualrayFast(space);
 
 const { samples, randomSamples } = buildWorkloads();
 const n = samples.length;
@@ -127,6 +129,7 @@ const methods = [
 	["oklch-halley", inGamutCheck ? oklchHalleyChecked : oklchHalley],
 	["oklch-ostrowski", inGamutCheck ? oklchOstrowskiChecked : oklchOstrowski],
 	["dualray", dualray], // intrinsic checks in both modes
+	["dualray fast", dualrayFast, "dualray-fast"], // canonical precheck in both modes
 	["bottosson-lightness", inGamutCheck ? bottossonLightnessChecked : bottossonLightness],
 	["bottosson-lightness (cached)", inGamutCheck ? bottossonLightnessCachedChecked : bottossonLightnessCached, "bottosson-lightness-cached"],
 	["edge-seeker", inGamutCheck ? edgeSeekerChecked : edgeSeeker],
@@ -173,6 +176,8 @@ if (validateOnly) {
 	const { validateDualrayMethod } = await import("./tests/helpers/validate-dualray-method.js");
 	const { dualrayProbes } = await import("./tests/helpers/dualray-samples.js");
 	console.log(validateDualrayMethod(space,[samples,randomSamples,dualrayProbes(gamut)],registered.dualray));
+	const { validateDualrayFastMethod } = await import("./tests/helpers/validate-dualray-fast-method.js");
+	console.log(validateDualrayFastMethod(space,[samples,randomSamples,dualrayProbes(gamut)],registered["dualray-fast"]));
 	if (gamut !== "display-p3") process.exit(0);
 
 	const uncheckedOut = [0, 0, 0];
