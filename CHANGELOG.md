@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-02
+
+- Added `dualray fast` to Node, Bun, and Rust f64/f32 benchmarks for sRGB,
+  Display-P3, and Rec.2020. Uses fitted lower-face hue polynomials to bypass
+  trigonometry and root solving, with Dualray's upper solve and exact-search
+  fallback. Preserves canonical in-gamut conversion in both benchmark modes
+  and targets an empirical ΔEOK budget of `1e-3` maximum and `1e-4` at p99.
+  Rust also includes a separate `dualray fast (poly encode)` row that
+  approximates output encoding for mapped colors. Added independent-reference
+  accuracy checks, canonical preservation tests, and JS/Rust parity checks.
+
 ## 2026-09-28
 
 - Added CSS Color 4 Local MINDE as `css-minde` in Node, Bun, and Rust f64/f32

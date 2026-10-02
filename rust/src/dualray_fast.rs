@@ -89,37 +89,29 @@ fn fma(a: Float, b: Float, c: Float) -> Float {
 }
 
 // Grouped powers (Estrin): short dependency chains for these latency-bound fits.
+// Spell out the fixed 9/12-term trees: LLVM retains loops, stack traffic and
+// bounds checks in the generic array reduction. Keep its grouping and FMA
+// operations unchanged so both precision lanes retain the same result bits.
 #[inline(always)]
 fn estrin<const N: usize>(p: &[Float; N], t: Float) -> Float {
-    let mut level = [0.0 as Float; 16];
-    let mut n = 0;
-    let mut i = 0;
-    while i < N {
-        level[n] = if i + 1 < N {
-            fma(p[i + 1], t, p[i])
-        } else {
-            p[i]
-        };
-        n += 1;
-        i += 2;
-    }
-    let mut x = t * t;
-    while n > 1 {
-        let mut j = 0;
-        let mut k = 0;
-        while j < n {
-            level[k] = if j + 1 < n {
-                fma(level[j + 1], x, level[j])
-            } else {
-                level[j]
-            };
-            k += 1;
-            j += 2;
-        }
-        n = k;
-        x = x * x;
-    }
-    level[0]
+    const { assert!(N == 9 || N == 12) };
+    let a0 = fma(p[1], t, p[0]);
+    let a1 = fma(p[3], t, p[2]);
+    let a2 = fma(p[5], t, p[4]);
+    let a3 = fma(p[7], t, p[6]);
+    let a4 = if N == 9 { p[8] } else { fma(p[9], t, p[8]) };
+    let t2 = t * t;
+    let b0 = fma(a1, t2, a0);
+    let b1 = fma(a3, t2, a2);
+    let b2 = if N == 9 {
+        a4
+    } else {
+        fma(fma(p[11], t, p[10]), t2, a4)
+    };
+    let t4 = t2 * t2;
+    let c0 = fma(b1, t4, b0);
+    let t8 = t4 * t4;
+    fma(b2, t8, c0)
 }
 
 // x^(5/12) for normal x in (0, 1]: x = m·2^e with e = 12q + r, so
@@ -399,6 +391,68 @@ pub(crate) type DualrayFastEncode<G> = DualrayFast<G, true>;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Retain the original reduction as a bitwise compatibility reference.
+    // Horner evaluation would change rounding and cannot check this contract.
+    fn estrin_loop<const N: usize>(p: &[Float; N], t: Float) -> Float {
+        let mut level = [0.0 as Float; 16];
+        let mut n = 0;
+        let mut i = 0;
+        while i < N {
+            level[n] = if i + 1 < N {
+                fma(p[i + 1], t, p[i])
+            } else {
+                p[i]
+            };
+            n += 1;
+            i += 2;
+        }
+        let mut x = t * t;
+        while n > 1 {
+            let mut j = 0;
+            let mut k = 0;
+            while j < n {
+                level[k] = if j + 1 < n {
+                    fma(level[j + 1], x, level[j])
+                } else {
+                    level[j]
+                };
+                k += 1;
+                j += 2;
+            }
+            n = k;
+            x = x * x;
+        }
+        level[0]
+    }
+
+    #[test]
+    fn unrolled_fits_preserve_result_bits() {
+        fn check<const N: usize>(p: &[Float; N]) {
+            for i in 0..=20_000 {
+                let t = i as Float / 10_000.0 - 1.0;
+                assert_eq!(
+                    estrin(p, t).to_bits(),
+                    estrin_loop(p, t).to_bits(),
+                    "{N}-term fit at t={t}"
+                );
+            }
+        }
+        fn gamut<G: DualrayFastData>() {
+            for p in G::U {
+                check(&p);
+            }
+            for p in G::G0 {
+                check(&p);
+            }
+            for p in G::G1 {
+                check(&p);
+            }
+        }
+        gamut::<Srgb>();
+        gamut::<DisplayP3>();
+        gamut::<Rec2020>();
+    }
 
     // Out-of-range authored hues: a canonically in-gamut color passes through
     // bit for bit, whatever direction the reduced hue gives the fits.

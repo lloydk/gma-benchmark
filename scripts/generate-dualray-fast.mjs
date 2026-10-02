@@ -314,7 +314,7 @@ function estrinSource (name, n) {
 	return lines.join("\n");
 }
 function emitJs (all, U_TERMS, G_TERMS) {
-	const flat = rows => `[${rows.flat().map(String).join(", ")}]`;
+	const flat = rows => `Object.freeze([${rows.flat().map(String).join(", ")}])`;
 	const entries = all.map(data => {
 		const c = constants(data, U_TERMS, G_TERMS);
 		return `\t${JSON.stringify(data.space.id)}: {\n` + [
