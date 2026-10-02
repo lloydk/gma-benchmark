@@ -25,8 +25,9 @@
 // transfer function's pow for a polynomial on out-of-gamut results only.
 
 use super::color::{KA0, KA1, KA2, KB0, KB1, KB2};
-use super::dualray::first_exit;
-use super::gamut::{DisplayP3, Rec2020, RgbGamut, Srgb};
+use super::dualray::{cubic, first_exit, fold_local, DualrayData};
+use super::gamut::{DisplayP3, Rec2020, Srgb};
+use super::rgb_solvers::in_blue_fold;
 use super::transfer::TransferFunction;
 use super::{Float, PI, SINGLE};
 use crate::rgb_spaces::SpaceId;
@@ -35,14 +36,13 @@ use crate::rgb_spaces::SpaceId;
 const U_TERMS: usize = p3::U_TERMS;
 const G_TERMS: usize = p3::G_TERMS;
 
-pub(crate) trait DualrayFastData: RgbGamut {
+// Dualray's data supplies the fold constants (never its solver).
+pub(crate) trait DualrayFastData: DualrayData {
     const BLUE_START: Float;
     const RED_START: Float;
     const RED_END: Float;
     const GREEN_START: Float;
     const RED_FOLD: Float;
-    // The fold hue's rounding remainder: RED_FOLD + RED_FOLD_LO is binary64.
-    const RED_FOLD_LO: Float;
     const SCALE: [Float; 3];
     const OFFSET: [Float; 3];
     const MARGIN: [Float; 3];
@@ -77,8 +77,6 @@ macro_rules! fitted {
             const RED_END: Float = $module::RED_END as Float;
             const GREEN_START: Float = $module::GREEN_START as Float;
             const RED_FOLD: Float = $module::RED_FOLD as Float;
-            const RED_FOLD_LO: Float =
-                ($module::RED_FOLD - ($module::RED_FOLD as Float) as f64) as Float;
             const SCALE: [Float; 3] = narrow($module::SCALE);
             const OFFSET: [Float; 3] = narrow($module::OFFSET);
             const MARGIN: [Float; 3] = narrow($module::MARGIN);
@@ -247,13 +245,6 @@ enum Decline {
 // Nonzero channels of each sector, in increasing order; the third is zero.
 const NONZERO: [[usize; 2]; 3] = [[0, 1], [1, 2], [0, 2]];
 
-// Channel cubic along the ray, divided by L³: ((d·u + b)·u + a)·u + r, where
-// r is the matrix row sum (the neutral's value).
-#[inline(always)]
-fn value([d, b, a, r]: [Float; 4], u: Float) -> Float {
-    ((d * u + b) * u + a) * u + r
-}
-
 // The three channel cubics at the input hue, from the canonical conversion's
 // matrices: channel_k / L³ = Σ_j M[k][j]·(1 + u·κ_j)³.
 #[inline(always)]
@@ -271,9 +262,6 @@ fn cubics<G: DualrayFastData>(h: Float) -> [[Float; 4]; 3] {
         ]
     })
 }
-
-// Slack for the red channel's floor near its fold (see `search`).
-const FOLD_SLACK: Float = 32.0 * Float::EPSILON;
 
 pub(crate) struct DualrayFast<G: DualrayFastData, const FAST_ENCODE: bool = false>(
     std::marker::PhantomData<G>,
@@ -366,7 +354,7 @@ impl<G: DualrayFastData, const FAST_ENCODE: bool> DualrayFast<G, FAST_ENCODE> {
                 }
                 u -= f * (f1_squared - product) / denominator;
             }
-            let values = rows.map(|row| value(row, u));
+            let values = rows.map(|row| cubic(row, u));
             if !(u >= 0.0
                 && u * l < c
                 && (values[face] - target).abs() <= target * UPPER_TOLERANCE
@@ -402,28 +390,27 @@ impl<G: DualrayFastData, const FAST_ENCODE: bool> DualrayFast<G, FAST_ENCODE> {
         None
     }
 
-    // The exact first exit, for colors the fast paths do not cover.
-    //
-    // Whether the red channel's dip crosses zero depends only on hue and
-    // changes at the red fold, where the dip is tangent and lane rounding
-    // cannot decide it (f32 picked the wrong exit at Rec.2020's fold). The
-    // binary64 fold hue decides instead: before it a dip within FOLD_SLACK of
-    // zero is an exit, after it a dip within FOLD_SLACK is not.
+    // The exact first exit, for colors the fast paths do not cover. In f32
+    // blue-fold windows red uses Dualray's fitted local form near the fold.
     fn search(l: Float, c: Float, h: Float, out: &mut [Float; 3]) -> Path {
         let rows = cubics::<G>(h);
+        let (rows, origin) = if SINGLE && in_blue_fold::<G>(h) {
+            fold_local::<G>(rows, h)
+        } else {
+            (rows, [0.0; 3])
+        };
         let inv_l = 1.0 / l;
         let target = inv_l * inv_l * inv_l;
-        let before_fold = h < G::RED_FOLD || (h == G::RED_FOLD && G::RED_FOLD_LO > 0.0);
-        let red_floor = if before_fold { FOLD_SLACK } else { -FOLD_SLACK };
-        let (u, beyond) = first_exit(&rows, [0.0; 3], target, (c * inv_l).max(0.0), red_floor);
+        let (u, beyond) = first_exit(&rows, origin, target, (c * inv_l).max(0.0));
+        let at =
+            |u: Float| -> [Float; 3] { std::array::from_fn(|k| cubic(rows[k], u - origin[k])) };
         let l3 = l * l * l;
-        *out = rows.map(|row| Self::encode(l3 * value(row, u)));
+        *out = at(u).map(|v| Self::encode(l3 * v));
         // Write the exiting channel exactly on its face.
         if let Some(hi) = beyond {
-            let at = rows.map(|row| value(row, hi));
-            let floor = |k: usize| if k == 0 { red_floor } else { 0.0 };
-            if let Some(k) = (0..3).find(|&k| at[k] < floor(k) || at[k] > target) {
-                out[k] = if at[k] > target { 1.0 } else { 0.0 };
+            let beyond = at(hi);
+            if let Some(k) = (0..3).find(|&k| beyond[k] < 0.0 || beyond[k] > target) {
+                out[k] = if beyond[k] > target { 1.0 } else { 0.0 };
             }
         }
         Path::Search

@@ -417,9 +417,9 @@ Its target is a deltaEOK of at most `1e-3`, and `1e-4` at the 99th percentile,
 from the constant-lightness/hue first exit. Measured maxima are about `2.7e-4`
 with a p99 of `3e-5` to `5e-5` in all three gamuts and both precisions, against
 exact Dualray and gma-accuracy's certified reference. These are sampled
-results, not bounds. The f32 lane is pure f32: at the red fold, where rounding
-cannot decide whether the red channel's tangent dip is an exit, the binary64
-fold hue (stored as two f32 constants) decides. `node scripts/generate-dualray-fast.mjs`
+results, not bounds. The f32 lane is pure f32: in blue-fold windows its exact
+search evaluates red with Dualray's fitted local form near the fold, so the
+nearly tangent dip keeps binary64-level accuracy. `node scripts/generate-dualray-fast.mjs`
 fits the per-gamut data from exact roots; add `--check` to verify freshness.
 Validation compares the lanes against per-gamut regression ceilings, checks
 exact canonical pass-through in both modes, and keeps the f64 rows within the

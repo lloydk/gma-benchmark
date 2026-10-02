@@ -95,7 +95,7 @@ fn first_exit_keeps_the_first_crossing() {
     // One channel varies; the others stay inside. Rows are [d, b, a, constant].
     let inside = [0.0, 0.0, 0.0, 0.5];
     let exit = |row: [Float; 4], target: Float, limit: Float| {
-        super::first_exit(&[row, inside, inside], [0.0; 3], target, limit, 0.0)
+        super::first_exit(&[row, inside, inside], [0.0; 3], target, limit)
     };
     // -(x - 0.25)(x - 0.5)(x - 1): endpoints at 0 and 0.75 have the same
     // sign, so a single endpoint bracket would miss both early roots.

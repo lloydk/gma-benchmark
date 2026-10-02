@@ -120,9 +120,9 @@ fn polish(x: Float, row: [Float; 4]) -> Float {
     }
 }
 
-// First exit along u in [0, limit] from 0 <= channel <= target, with
-// `red_floor` in place of 0 for the red channel. Each row is a cubic in
-// u - origin[k] (an origin of zero is plain u). Every channel is monotone
+// First exit along u in [0, limit] from 0 <= channel <= target. Each row is
+// a cubic in u - origin[k] (an origin of zero is plain u). Every channel is
+// monotone
 // between consecutive stationary points, so the first infeasible breakpoint
 // brackets the exit and feasibility is monotone inside it. A tangent touch
 // stays feasible: it does not leave the gamut. Returns the last feasible u
@@ -132,12 +132,11 @@ pub(crate) fn first_exit(
     origin: [Float; 3],
     target: Float,
     limit: Float,
-    red_floor: Float,
 ) -> (Float, Option<Float>) {
     let feasible = |u: Float| {
         (0..3).all(|k| {
             let v = cubic(rows[k], u - origin[k]);
-            v >= (if k == 0 { red_floor } else { 0.0 }) && v <= target
+            v >= 0.0 && v <= target
         })
     };
     let mut points = [limit; 7];
@@ -242,6 +241,36 @@ fn upper(
     None
 }
 
+// f32 blue-fold windows. Near the fold red's dip is nearly tangent: its
+// depth, a sum of O(1) terms close to zero, is lost to f32 rounding, and with
+// it the first exit. Around its local minimum the cubic is exactly
+// depth + c2·δ² + d·δ³, and only the depth is ill-conditioned: it comes from
+// a binary64 fit in the hue offset from the fold. The offset is exact
+// (Sterbenz) against a fold constant on the same side of zero as the hue.
+// Returns the rows and origins for `first_exit`. Shared with Dualray Fast.
+#[inline(never)]
+pub(crate) fn fold_local<G: DualrayData>(
+    mut rows: [[Float; 4]; 3],
+    hue: Float,
+) -> ([[Float; 4]; 3], [Float; 3]) {
+    let mut origin = [0.0; 3];
+    let [d, b, a, _] = rows[0];
+    let disc = (b * b - 3.0 * d * a).sqrt();
+    let minimum = [(-b - disc) / (3.0 * d), (-b + disc) / (3.0 * d)]
+        .into_iter()
+        .find(|&u| u > 0.0 && 3.0 * d * u + b > 0.0);
+    if let Some(u) = minimum {
+        let fold = if hue < 0.0 { G::FOLD_NEG } else { G::FOLD };
+        let offset = (hue - fold[0]) - fold[1];
+        let [centre, inv_half, coef @ ..] = G::FOLD_DEPTH;
+        let t = (offset - centre) * inv_half;
+        let depth = offset * coef.iter().rev().fold(0.0, |sum, &c| sum * t + c);
+        rows[0] = [d, 3.0 * d * u + b, 0.0, depth];
+        origin[0] = u;
+    }
+    (rows, origin)
+}
+
 // Select by channel index without indexing memory: runtime-indexed arrays
 // would leave the hot path's values on the stack.
 #[inline(always)]
@@ -313,7 +342,7 @@ impl<G: DualrayData> Dualray<G> {
         target: Float,
         limit: Float,
     ) -> [Float; 3] {
-        let (u, beyond) = first_exit(&rows, origin, target, limit, 0.0);
+        let (u, beyond) = first_exit(&rows, origin, target, limit);
         let at = |u: Float| std::array::from_fn(|k| cubic(rows[k], u - origin[k]));
         let values: [Float; 3] = at(u);
         if let Some(hi) = beyond {
@@ -323,38 +352,6 @@ impl<G: DualrayData> Dualray<G> {
             }
         }
         values.map(|v| G::Transfer::encode_clamped(l3 * v))
-    }
-
-    // f32 blue-fold windows. Near the fold red's dip is nearly tangent: its
-    // depth, a sum of O(1) terms close to zero, is lost to f32 rounding, and
-    // with it the first exit. Around its local minimum the cubic is exactly
-    // depth + c2·δ² + d·δ³, and only the depth is ill-conditioned: it comes
-    // from a binary64 fit in the hue offset from the fold. The offset is exact
-    // (Sterbenz) against a fold constant on the same side of zero as the hue.
-    #[inline(never)]
-    fn fold_search(
-        mut rows: [[Float; 4]; 3],
-        hue: Float,
-        l3: Float,
-        target: Float,
-        limit: Float,
-    ) -> [Float; 3] {
-        let mut origin = [0.0; 3];
-        let [d, b, a, _] = rows[0];
-        let disc = (b * b - 3.0 * d * a).sqrt();
-        let minimum = [(-b - disc) / (3.0 * d), (-b + disc) / (3.0 * d)]
-            .into_iter()
-            .find(|&u| u > 0.0 && 3.0 * d * u + b > 0.0);
-        if let Some(u) = minimum {
-            let fold = if hue < 0.0 { G::FOLD_NEG } else { G::FOLD };
-            let offset = (hue - fold[0]) - fold[1];
-            let [centre, inv_half, coef @ ..] = G::FOLD_DEPTH;
-            let t = (offset - centre) * inv_half;
-            let depth = offset * coef.iter().rev().fold(0.0, |sum, &c| sum * t + c);
-            rows[0] = [d, 3.0 * d * u + b, 0.0, depth];
-            origin[0] = u;
-        }
-        Self::search(rows, origin, l3, target, limit)
     }
 
     // A validated exit at u: the input keeps its conversion if it lies before.
@@ -413,7 +410,8 @@ impl<G: DualrayData> Dualray<G> {
         let limit = input_u.min(G::ROOT_LIMIT);
         let fold = in_blue_fold::<G>(hue);
         if SINGLE && fold {
-            *out = Self::fold_search(rows, hue, l3, target, limit);
+            let (rows, origin) = fold_local::<G>(rows, hue);
+            *out = Self::search(rows, origin, l3, target, limit);
             return;
         }
 
