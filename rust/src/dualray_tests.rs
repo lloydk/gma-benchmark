@@ -91,15 +91,21 @@ fn upper_face_handoffs_and_gate_neighbours_match_oracle() {
 }
 
 #[test]
-fn first_root_recovery_keeps_the_first_crossing() {
-    // (x - 0.25)(x - 0.5)(x - 1): endpoints at 0 and 0.75 have the
-    // same sign, so a single endpoint bracket would miss both early roots.
-    // Polynomial evaluation can round to zero a few ulps from the root.
-    assert!((first_root(1.0, -1.75, 0.875, -0.125, 0.75) - 0.25).abs() <= Float::EPSILON);
-    assert!((first_root(0.0, 1.0, -0.75, 0.125, 1.0) - 0.25).abs() <= Float::EPSILON);
-    // Touching either face at x=0.5 remains inside on both sides.
-    assert_eq!(first_root(0.0, 1.0, -1.0, 0.25, 1.0), Float::INFINITY);
-    assert_eq!(first_root(0.0, -1.0, 1.0, -0.25, 1.0), Float::INFINITY);
+fn first_exit_keeps_the_first_crossing() {
+    // One channel varies; the others stay inside. Rows are [d, b, a, constant].
+    let inside = [0.0, 0.0, 0.0, 0.5];
+    let exit = |row: [Float; 4], target: Float, limit: Float| {
+        super::first_exit(&[row, inside, inside], [0.0; 3], target, limit, 0.0)
+    };
+    // -(x - 0.25)(x - 0.5)(x - 1): endpoints at 0 and 0.75 have the same
+    // sign, so a single endpoint bracket would miss both early roots.
+    let (u, beyond) = exit([-1.0, 1.75, -0.875, 0.125], 1.0, 0.75);
+    assert!((u - 0.25).abs() <= Float::EPSILON && beyond.is_some());
+    let (u, beyond) = exit([0.0, 1.0, -0.75, 0.125], 1.0, 1.0);
+    assert!((u - 0.25).abs() <= Float::EPSILON && beyond.is_some());
+    // Touching either face at x = 0.5 remains inside on both sides.
+    assert_eq!(exit([0.0, 1.0, -1.0, 0.25], 1.0, 1.0), (1.0, None));
+    assert_eq!(exit([0.0, -1.0, 1.0, 1.75], 2.0, 1.0), (1.0, None));
 }
 
 #[test]
@@ -353,7 +359,7 @@ fn target_seed_data<G: DualrayData>() {
             let expected = oracle.reference.linear_rgb([1.0, c, f64::from(h)]);
             for j in 0..3 {
                 let k = coefficients[j];
-                let actual = value(k[0], k[1], k[2], c as Float);
+                let actual = cubic([k[0], k[1], k[2], 1.0], c as Float);
                 let error = (f64::from(actual) - expected[j]).abs() / expected[j].abs().max(1.0);
                 max_basis = max_basis.max(error);
             }
@@ -373,7 +379,7 @@ fn target_seed_data<G: DualrayData>() {
         };
         let k = coefficients[face];
         let seed = G::seed(a, b, face as u8);
-        let refined = polish(seed, k[0], k[1], k[2]);
+        let refined = polish(seed, [k[0], k[1], k[2], 1.0]);
         assert!(refined.is_finite() && refined > 0.0);
         max_seed = max_seed.max((f64::from(refined) - saturation).abs());
     }
@@ -422,8 +428,8 @@ fn fold_tangent_regressions_use_native_conditioning() {
 fn bernstein_controls_reject_inside_endpoints_with_outside_interiors() {
     // 1 - 6x + 6x² dips below zero; 1 + 6x - 6x² rises above two.
     // Both have endpoints equal to one on [0, 1].
-    assert!(!super::interior_within(-6.0, 6.0, 1.0, 2.0));
-    assert!(!super::interior_within(6.0, -6.0, 1.0, 2.0));
-    assert!(super::interior_within(-6.0, 6.0, 0.01, 2.0));
-    assert!(super::interior_within(0.0, 0.0, 1.0, 1.0));
+    assert!(!super::interior_within([0.0, 6.0, -6.0, 1.0], 1.0, 2.0));
+    assert!(!super::interior_within([0.0, -6.0, 6.0, 1.0], 1.0, 2.0));
+    assert!(super::interior_within([0.0, 6.0, -6.0, 1.0], 0.01, 2.0));
+    assert!(super::interior_within([0.0, 0.0, 0.0, 1.0], 1.0, 1.0));
 }

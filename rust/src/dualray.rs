@@ -1,10 +1,10 @@
 // Dualray: guarded upper-first shortcut and upper-face retry.
 // Target-specific basis and seeds; retains the benchmark intrinsic-in-gamut policy.
-// Fold windows use first-exit isolation instead of trusting fitted roots.
+// Fold windows and every rejected guard use one exact first-exit search; in
+// f32 fold windows red is evaluated around its minimum with a fitted depth.
 // The balanced seed evaluation matches the JS port. The corrections reuse
 // Horner intermediates and cancel common factors, changing last-bit rounding.
-// Arithmetic stays in the containing module's precision. Compensated products
-// use hardware FMA when enabled, with a native split-product fallback.
+// Arithmetic stays in the containing module's precision.
 
 use super::gamut::{DisplayP3, Rec2020, RgbGamut, Srgb};
 use super::rgb_solvers::in_blue_fold;
@@ -12,18 +12,17 @@ use super::transfer::TransferFunction;
 use super::{Float, PI, SINGLE};
 use std::marker::PhantomData;
 
-// Precision-specific residual guards and hue reduction.
-mod fold {
-    include!("dualray_fold.rs");
-}
-
 const TOLERANCE: Float = if SINGLE { 8.0 * Float::EPSILON } else { 1e-12 };
 const HUE_FAST_LIMIT: Float = if SINGLE { 360.0 } else { 1e9 };
 
 pub(crate) trait DualrayData: RgbGamut {
     const BASIS: [[Float; 9]; 3];
     const SECTORS: [[Float; 2]; 2];
-    const PRECISE_BASIS: [[fold::Wide; 9]; 3];
+    // Red's fold hue split into two Float constants (and the same less 360,
+    // for negative hues), and its fitted dip depth near the fold.
+    const FOLD: [Float; 2];
+    const FOLD_NEG: [Float; 2];
+    const FOLD_DEPTH: [Float; 6];
     const ROOT_LIMIT: Float = crate::dualray_config::config(Self::ID).root_limit as Float;
     fn seed(a: Float, b: Float, face: u8) -> Float;
 }
@@ -36,7 +35,9 @@ macro_rules! fitted {
         impl DualrayData for $gamut {
             const BASIS: [[Float; 9]; 3] = round_basis($module::BASIS);
             const SECTORS: [[Float; 2]; 2] = $module::SECTORS;
-            const PRECISE_BASIS: [[fold::Wide; 9]; 3] = fold::split_basis($module::BASIS);
+            const FOLD: [Float; 2] = split($module::FOLD_HUE);
+            const FOLD_NEG: [Float; 2] = split($module::FOLD_HUE - 360.0);
+            const FOLD_DEPTH: [Float; 6] = narrow($module::FOLD_DEPTH);
             #[inline(always)]
             fn seed(a: Float, b: Float, face: u8) -> Float {
                 $module::seed(a, b, face)
@@ -47,6 +48,22 @@ macro_rules! fitted {
 fitted!(Srgb, srgb, "generated/dualray_srgb.rs");
 fitted!(DisplayP3, p3, "generated/dualray_display_p3.rs");
 fitted!(Rec2020, rec2020, "generated/dualray_rec2020.rs");
+
+// A binary64 constant as a Float plus its rounding remainder.
+const fn split(x: f64) -> [Float; 2] {
+    let high = x as Float;
+    [high, (x - high as f64) as Float]
+}
+
+const fn narrow<const N: usize>(input: [f64; N]) -> [Float; N] {
+    let mut result = [0.0; N];
+    let mut i = 0;
+    while i < N {
+        result[i] = input[i] as Float;
+        i += 1;
+    }
+    result
+}
 
 const fn round_basis(input: [[f64; 9]; 3]) -> [[Float; 9]; 3] {
     let mut result = [[0.0; 9]; 3];
@@ -62,15 +79,27 @@ const fn round_basis(input: [[f64; 9]; 3]) -> [[Float; 9]; 3] {
     result
 }
 
+// A channel cubic along the ray, divided by L³: ((d·u + b)·u + a)·u + r.
+// Dualray's rows are normalized so r = 1; Dualray Fast uses the row sum.
 #[inline(always)]
-fn value(d: Float, b: Float, a: Float, x: Float) -> Float {
-    ((d * x + b) * x + a) * x + 1.0
+pub(crate) fn cubic([d, b, a, r]: [Float; 4], u: Float) -> Float {
+    ((d * u + b) * u + a) * u + r
+}
+
+// The cubic, its derivative and half its second derivative at u, sharing
+// Horner intermediates.
+#[inline(always)]
+fn derivatives([d, b, a, r]: [Float; 4], u: Float) -> (Float, Float, Float) {
+    let du = d * u;
+    let q = du + b;
+    let p = q * u + a;
+    (p * u + r, (du + q) * u + p, (du + du) + q)
 }
 
 // Interior Bernstein controls bound the whole interval, not just its endpoint.
 // Controls and guard are scaled by three, avoiding two divisions.
 #[inline(always)]
-fn interior_within(a: Float, b: Float, u: Float, guard: Float) -> bool {
+fn interior_within([_, b, a, _]: [Float; 4], u: Float, guard: Float) -> bool {
     let limit = 3.0 * guard;
     let linear = a * u;
     let c1 = 3.0 + linear;
@@ -78,15 +107,10 @@ fn interior_within(a: Float, b: Float, u: Float, guard: Float) -> bool {
     c1 >= 0.0 && c1 <= limit && c2 >= 0.0 && c2 <= limit
 }
 
+// One Halley step toward the channel's zero.
 #[inline(always)]
-fn polish(x: Float, d: Float, b: Float, a: Float) -> Float {
-    // Reuse Horner intermediates for f, f', and f'' / 2.
-    let dx = d * x;
-    let q = dx + b;
-    let r = q * x + a;
-    let f = r * x + 1.0;
-    let half_second = (dx + dx) + q;
-    let f1 = (dx + q) * x + r;
+fn polish(x: Float, row: [Float; 4]) -> Float {
+    let (f, f1, half_second) = derivatives(row, x);
     // Cancel the common factor of two in the Halley correction.
     let denominator = f1 * f1 - f * half_second;
     if denominator != 0.0 {
@@ -96,127 +120,157 @@ fn polish(x: Float, d: Float, b: Float, a: Float) -> Float {
     }
 }
 
-// Partition at derivative roots, then bisect the first sign-changing interval.
-#[inline(never)]
-fn first_root(d: Float, b: Float, a: Float, constant: Float, limit: Float) -> Float {
-    let mut s0 = limit;
-    let mut s1 = limit;
-    if d == 0.0 {
-        let s = -a / (2.0 * b);
-        if s > 0.0 && s < limit {
-            s0 = s;
-        }
-    } else {
-        let discriminant = b * b - 3.0 * d * a;
-        if discriminant >= 0.0 {
-            let q = -b - (if b < 0.0 { -1.0 } else { 1.0 }) * discriminant.sqrt();
-            let t0 = q / (3.0 * d);
-            let t1 = if q == 0.0 { 0.0 } else { a / q };
-            let low = t0.min(t1);
-            let high = t0.max(t1);
-            if low > 0.0 && low < limit {
-                s0 = low;
-            }
-            if high > 0.0 && high < limit {
-                if s0 == limit {
-                    s0 = high;
-                } else {
-                    s1 = high;
-                }
+// First exit along u in [0, limit] from 0 <= channel <= target, with
+// `red_floor` in place of 0 for the red channel. Each row is a cubic in
+// u - origin[k] (an origin of zero is plain u). Every channel is monotone
+// between consecutive stationary points, so the first infeasible breakpoint
+// brackets the exit and feasibility is monotone inside it. A tangent touch
+// stays feasible: it does not leave the gamut. Returns the last feasible u
+// and, if it exits, the first infeasible one. Shared with Dualray Fast.
+pub(crate) fn first_exit(
+    rows: &[[Float; 4]; 3],
+    origin: [Float; 3],
+    target: Float,
+    limit: Float,
+    red_floor: Float,
+) -> (Float, Option<Float>) {
+    let feasible = |u: Float| {
+        (0..3).all(|k| {
+            let v = cubic(rows[k], u - origin[k]);
+            v >= (if k == 0 { red_floor } else { 0.0 }) && v <= target
+        })
+    };
+    let mut points = [limit; 7];
+    let mut n = 0;
+    for (&[d, b, a, _], shift) in rows.iter().zip(origin) {
+        // Roots of the derivative 3d·u² + 2b·u + a.
+        let disc = b * b - 3.0 * d * a;
+        let roots = if d != 0.0 && disc >= 0.0 {
+            [
+                (-b - disc.sqrt()) / (3.0 * d),
+                (-b + disc.sqrt()) / (3.0 * d),
+            ]
+        } else if d == 0.0 && b != 0.0 {
+            [-a / (2.0 * b), limit]
+        } else {
+            [limit; 2]
+        };
+        for u in roots.map(|root| root + shift) {
+            if u > 0.0 && u < limit {
+                points[n] = u;
+                n += 1;
             }
         }
     }
+    n += 1;
+    points[..n].sort_by(|x, y| x.total_cmp(y));
     let mut lo = 0.0;
-    let negative = constant < 0.0;
-    for interval in 0..3 {
-        let mut hi = if interval == 0 {
-            s0
-        } else if interval == 1 {
-            s1
-        } else {
-            limit
-        };
-        let fhi = ((d * hi + b) * hi + a) * hi + constant;
-        // A stationary touch does not leave the gamut. At an exact endpoint
-        // root, accept only an outward crossing; keep the original inside sign.
-        if fhi == 0.0 && hi == limit {
-            let slope = (3.0 * d * hi + 2.0 * b) * hi + a;
-            if if negative { slope > 0.0 } else { slope < 0.0 } {
-                return hi;
-            }
-        }
-        if if negative { fhi > 0.0 } else { fhi < 0.0 } {
-            for _ in 0..64 {
+    for &end in &points[..n] {
+        if !feasible(end) {
+            let mut hi = end;
+            loop {
                 let mid = lo + (hi - lo) * 0.5;
-                if mid == lo || mid == hi {
-                    break;
+                if mid <= lo || mid >= hi {
+                    return (lo, Some(hi));
                 }
-                let f = ((d * mid + b) * mid + a) * mid + constant;
-                if if negative { f <= 0.0 } else { f >= 0.0 } {
+                if feasible(mid) {
                     lo = mid;
                 } else {
                     hi = mid;
                 }
             }
-            return lo + (hi - lo) * 0.5;
         }
-        lo = hi;
-        if hi == limit {
-            break;
-        }
+        lo = end;
     }
-    Float::INFINITY
+    (limit, None)
+}
+
+// Two Householder steps toward one upper face from `u`. Returns the converged
+// first upper exit in [0, limit] and the channel values there.
+// - `near_white` (the upper-first seed): skip the second step once the
+//   residual is within tolerance, and reject rather than retry.
+// - Otherwise (the chord seed): always take both steps, because near bright
+//   yellow the face channel is almost flat and a small f32 residual can leave
+//   the root inaccurate. If another channel exceeds the target, it exits
+//   first: retry on it once, never moving away from neutral.
+#[inline(always)]
+fn upper(
+    rows: [[Float; 4]; 3],
+    target: Float,
+    mut u: Float,
+    mut face: usize,
+    limit: Float,
+    near_white: bool,
+) -> Option<(Float, usize, [Float; 3])> {
+    let guard = target * (1.0 + TOLERANCE);
+    for retry in [false, true] {
+        let previous = u;
+        let row = pick(rows, face);
+        for step in 0..2 {
+            let (value, f1, half_second) = derivatives(row, u);
+            let f = value - target;
+            if near_white && step == 1 && f.abs() <= target * TOLERANCE {
+                break;
+            }
+            let f1_squared = f1 * f1;
+            let product = f * half_second;
+            // Cancel the common factor of six in the Householder correction.
+            let denominator = f1 * (f1_squared - 2.0 * product) + f * f * row[0];
+            if denominator == 0.0 {
+                break;
+            }
+            u -= f * (f1_squared - product) / denominator;
+        }
+        let values = rows.map(|row| cubic(row, u));
+        if !(u >= 0.0
+            && u <= limit
+            && (!retry || u <= previous)
+            && values.iter().all(|&v| v >= -TOLERANCE)
+            && (pick(values, face) - target).abs() <= target * TOLERANCE)
+        {
+            return None;
+        }
+        let brightest = brightest(values);
+        if pick(values, brightest) <= guard {
+            return Some((u, face, values));
+        }
+        if near_white {
+            return None;
+        }
+        face = brightest;
+    }
+    None
+}
+
+// Select by channel index without indexing memory: runtime-indexed arrays
+// would leave the hot path's values on the stack.
+#[inline(always)]
+fn pick<T: Copy>([r, g, b]: [T; 3], k: usize) -> T {
+    if k == 0 {
+        r
+    } else if k == 1 {
+        g
+    } else {
+        b
+    }
 }
 
 #[inline(always)]
-fn lower_exit(rows: [[Float; 3]; 3], limit: Float) -> (Float, u8) {
-    let mut root = Float::INFINITY;
-    let mut face = 0;
-    for (i, [d, b, a]) in rows.into_iter().enumerate() {
-        let candidate = first_root(d, b, a, 1.0, root.min(limit));
-        if candidate < root {
-            root = candidate;
-            face = i as u8;
+fn brightest([r, g, b]: [Float; 3]) -> usize {
+    if r > g {
+        if r > b {
+            0
+        } else {
+            2
         }
+    } else if g > b {
+        1
+    } else {
+        2
     }
-    (root, face)
 }
 
 pub(crate) struct Dualray<G: DualrayData>(PhantomData<G>);
-
-// f64 fold isolation is bounded by the authored input, including upper faces:
-// an inside endpoint alone cannot rule out an earlier exit and re-entry.
-#[inline(never)]
-fn map_fold<G: DualrayData>(
-    rows: [[Float; 3]; 3],
-    l3: Float,
-    target: Float,
-    input_u: Float,
-    out: &mut [Float; 3],
-) {
-    let mut u = input_u.min(G::ROOT_LIMIT);
-    let mut face = None;
-    for (i, [d, b, a]) in rows.into_iter().enumerate() {
-        let root = first_root(d, b, a, 1.0, u);
-        if root <= u {
-            u = root;
-            face = Some((i, 0.0));
-        }
-    }
-    if target.is_finite() {
-        for (i, [d, b, a]) in rows.into_iter().enumerate() {
-            let root = first_root(-d, -b, -a, target - 1.0, u);
-            if root <= u {
-                u = root;
-                face = Some((i, 1.0));
-            }
-        }
-    }
-    *out = rows.map(|[d, b, a]| G::Transfer::encode_clamped(l3 * value(d, b, a, u)));
-    if let Some((channel, value)) = face {
-        out[channel] = value;
-    }
-}
 
 impl<G: DualrayData> Dualray<G> {
     pub(crate) fn new() -> Self {
@@ -229,19 +283,107 @@ impl<G: DualrayData> Dualray<G> {
         self.map(oklch, out);
     }
 
+    // An input before the first exit keeps its normalized conversion.
+    #[inline(always)]
+    fn interior(rows: [[Float; 4]; 3], l3: Float, input_u: Float) -> [Float; 3] {
+        rows.map(|row| G::Transfer::encode_clamped(l3 * cubic(row, input_u)))
+    }
+
+    // Encoded channels at an exit, with the crossed channel exactly on its
+    // face (0 or 1).
+    #[inline(always)]
+    fn on_face(l3: Float, values: [Float; 3], face: usize, bound: Float) -> [Float; 3] {
+        std::array::from_fn(|k| {
+            if k == face {
+                bound
+            } else {
+                G::Transfer::encode_clamped(l3 * values[k])
+            }
+        })
+    }
+
+    // The exact first exit bounded by the input, for blue-fold hues (where
+    // re-entry islands exist and fitted roots do not apply) and any rejected
+    // guard. Rows are cubics in u - origin.
+    #[inline(never)]
+    fn search(
+        rows: [[Float; 4]; 3],
+        origin: [Float; 3],
+        l3: Float,
+        target: Float,
+        limit: Float,
+    ) -> [Float; 3] {
+        let (u, beyond) = first_exit(&rows, origin, target, limit, 0.0);
+        let at = |u: Float| std::array::from_fn(|k| cubic(rows[k], u - origin[k]));
+        let values: [Float; 3] = at(u);
+        if let Some(hi) = beyond {
+            let beyond: [Float; 3] = at(hi);
+            if let Some(k) = (0..3).find(|&k| beyond[k] < 0.0 || beyond[k] > target) {
+                return Self::on_face(l3, values, k, if beyond[k] > target { 1.0 } else { 0.0 });
+            }
+        }
+        values.map(|v| G::Transfer::encode_clamped(l3 * v))
+    }
+
+    // f32 blue-fold windows. Near the fold red's dip is nearly tangent: its
+    // depth, a sum of O(1) terms close to zero, is lost to f32 rounding, and
+    // with it the first exit. Around its local minimum the cubic is exactly
+    // depth + c2·δ² + d·δ³, and only the depth is ill-conditioned: it comes
+    // from a binary64 fit in the hue offset from the fold. The offset is exact
+    // (Sterbenz) against a fold constant on the same side of zero as the hue.
+    #[inline(never)]
+    fn fold_search(
+        mut rows: [[Float; 4]; 3],
+        hue: Float,
+        l3: Float,
+        target: Float,
+        limit: Float,
+    ) -> [Float; 3] {
+        let mut origin = [0.0; 3];
+        let [d, b, a, _] = rows[0];
+        let disc = (b * b - 3.0 * d * a).sqrt();
+        let minimum = [(-b - disc) / (3.0 * d), (-b + disc) / (3.0 * d)]
+            .into_iter()
+            .find(|&u| u > 0.0 && 3.0 * d * u + b > 0.0);
+        if let Some(u) = minimum {
+            let fold = if hue < 0.0 { G::FOLD_NEG } else { G::FOLD };
+            let offset = (hue - fold[0]) - fold[1];
+            let [centre, inv_half, coef @ ..] = G::FOLD_DEPTH;
+            let t = (offset - centre) * inv_half;
+            let depth = offset * coef.iter().rev().fold(0.0, |sum, &c| sum * t + c);
+            rows[0] = [d, 3.0 * d * u + b, 0.0, depth];
+            origin[0] = u;
+        }
+        Self::search(rows, origin, l3, target, limit)
+    }
+
+    // A validated exit at u: the input keeps its conversion if it lies before.
+    #[inline(always)]
+    fn exit(
+        rows: [[Float; 4]; 3],
+        l3: Float,
+        input_u: Float,
+        (u, values, face, bound): (Float, [Float; 3], usize, Float),
+    ) -> [Float; 3] {
+        if input_u < u {
+            Self::interior(rows, l3, input_u)
+        } else {
+            Self::on_face(l3, values, face, bound)
+        }
+    }
+
     #[inline(always)]
     pub(crate) fn map(&mut self, oklch: &[Float; 3], out: &mut [Float; 3]) {
         let [l, c, h] = *oklch;
-        if l <= 0.0 {
-            *out = [0.0; 3];
-            return;
-        }
-        if l >= 1.0 {
-            *out = [1.0; 3];
-            return;
-        }
-        if c <= 0.0 {
-            *out = [G::Transfer::encode_clamped(l * l * l); 3];
+        if l <= 0.0 || l >= 1.0 || c <= 0.0 {
+            let neutral = if l <= 0.0 {
+                0.0
+            } else if l >= 1.0 {
+                1.0
+            } else {
+                G::Transfer::encode_clamped(l * l * l)
+            };
+            *out = [neutral; 3];
             return;
         }
         let hue = if h > -HUE_FAST_LIMIT && h < HUE_FAST_LIMIT {
@@ -249,10 +391,6 @@ impl<G: DualrayData> Dualray<G> {
         } else {
             h % 360.0
         };
-        if SINGLE && in_blue_fold::<G>(hue) {
-            fold::map::<G>(l, c, hue, out);
-            return;
-        }
         let radians = hue * (PI / 180.0);
         let a = radians.cos();
         let b = radians.sin();
@@ -261,453 +399,82 @@ impl<G: DualrayData> Dualray<G> {
         let ab = a * b;
         let a3 = a2 * a;
         let a2b = a2 * b;
-        let rd =
-            G::BASIS[0][0] * a3 + G::BASIS[0][1] * a2b + G::BASIS[0][2] * a + G::BASIS[0][3] * b;
-        let rb = G::BASIS[0][4] + G::BASIS[0][5] * a2 + G::BASIS[0][6] * ab;
-        let ra = G::BASIS[0][7] * a + G::BASIS[0][8] * b;
-        let gd =
-            G::BASIS[1][0] * a3 + G::BASIS[1][1] * a2b + G::BASIS[1][2] * a + G::BASIS[1][3] * b;
-        let gb = G::BASIS[1][4] + G::BASIS[1][5] * a2 + G::BASIS[1][6] * ab;
-        let ga = G::BASIS[1][7] * a + G::BASIS[1][8] * b;
-        let bd =
-            G::BASIS[2][0] * a3 + G::BASIS[2][1] * a2b + G::BASIS[2][2] * a + G::BASIS[2][3] * b;
-        let bb = G::BASIS[2][4] + G::BASIS[2][5] * a2 + G::BASIS[2][6] * ab;
-        let ba = G::BASIS[2][7] * a + G::BASIS[2][8] * b;
+        let rows = G::BASIS.map(|k| {
+            [
+                k[0] * a3 + k[1] * a2b + k[2] * a + k[3] * b,
+                k[4] + k[5] * a2 + k[6] * ab,
+                k[7] * a + k[8] * b,
+                1.0,
+            ]
+        });
         let inv_l = 1.0 / l;
         let input_u = c * inv_l;
         let target = inv_l * inv_l * inv_l;
+        let limit = input_u.min(G::ROOT_LIMIT);
+        let fold = in_blue_fold::<G>(hue);
+        if SINGLE && fold {
+            *out = Self::fold_search(rows, hue, l3, target, limit);
+            return;
+        }
 
-        // Predict one upper face near white. The gate is a performance heuristic;
-        // containment, first-interval, and residual guards decide acceptance.
+        // Predict one upper face near white. The gate is a performance
+        // heuristic; the solve's guards and containment decide acceptance.
         let delta = target - 1.0;
-        let max_slope = ra.max(ga).max(ba);
+        let slopes = rows.map(|row| row[2]);
+        let max_slope = slopes[0].max(slopes[1]).max(slopes[2]);
         if delta > 0.0 && delta < 0.15 * max_slope {
-            let upper_face = if ra == max_slope {
-                0
-            } else if ga == max_slope {
-                1
-            } else {
-                2
-            };
-            let wd = if upper_face == 0 {
-                rd
-            } else if upper_face == 1 {
-                gd
-            } else {
-                bd
-            };
-            let wb = if upper_face == 0 {
-                rb
-            } else if upper_face == 1 {
-                gb
-            } else {
-                bb
-            };
-            let wa = max_slope;
-            let mut u = (2.0 * delta) / (wa + (wa * wa + 4.0 * wb * delta).sqrt());
-            for step in 0..2 {
-                // Reuse Horner intermediates for f, f', and f'' / 2.
-                let du = wd * u;
-                let q = du + wb;
-                let r = q * u + wa;
-                let f = (r * u + 1.0) - target;
-                // Use the same precision-specific tolerance as the final guard.
-                if step == 1 && f.abs() <= target * TOLERANCE {
-                    break;
-                }
-                let half_second = (du + du) + q;
-                let f1 = (du + q) * u + r;
-                let f1_squared = f1 * f1;
-                let product = f * half_second;
-                // Cancel the common factor of six in the Householder correction.
-                let denominator = f1 * (f1_squared - 2.0 * product) + f * f * wd;
-                if denominator == 0.0 {
-                    break;
-                }
-                u -= f * (f1_squared - product) / denominator;
-            }
-            let r = value(rd, rb, ra, u);
-            let g = value(gd, gb, ga, u);
-            let blue = value(bd, bb, ba, u);
+            let face = slopes.iter().position(|&s| s == max_slope).unwrap_or(2);
+            let wb = pick(rows, face)[1];
+            let seed =
+                (2.0 * delta) / (max_slope + (max_slope * max_slope + 4.0 * wb * delta).sqrt());
             let guard = target * (1.0 + TOLERANCE);
-            let selected = if upper_face == 0 {
-                r
-            } else if upper_face == 1 {
-                g
-            } else {
-                blue
-            };
-            if u >= 0.0
-                && u < G::ROOT_LIMIT
-                && r >= -TOLERANCE
-                && g >= -TOLERANCE
-                && blue >= -TOLERANCE
-                && r <= guard
-                && g <= guard
-                && blue <= guard
-                && (selected - target).abs() <= target * TOLERANCE
-                && interior_within(ra, rb, u, guard)
-                && interior_within(ga, gb, u, guard)
-                && interior_within(ba, bb, u, guard)
-            {
-                // u is the validated first exit; classify the input against it.
-                if input_u < u {
-                    out[0] = G::Transfer::encode_clamped(l3 * value(rd, rb, ra, input_u));
-                    out[1] = G::Transfer::encode_clamped(l3 * value(gd, gb, ga, input_u));
-                    out[2] = G::Transfer::encode_clamped(l3 * value(bd, bb, ba, input_u));
+            if let Some((u, face, values)) = upper(rows, target, seed, face, G::ROOT_LIMIT, true) {
+                // No lower root bounds this solve: Bernstein controls certify
+                // that no channel leaves [0, target] before the exit.
+                if rows.iter().all(|&row| interior_within(row, u, guard)) {
+                    *out = Self::exit(rows, l3, input_u, (u, values, face, 1.0));
                     return;
                 }
-                out[0] = if upper_face == 0 {
-                    1.0
-                } else {
-                    G::Transfer::encode_clamped(l3 * r)
-                };
-                out[1] = if upper_face == 1 {
-                    1.0
-                } else {
-                    G::Transfer::encode_clamped(l3 * g)
-                };
-                out[2] = if upper_face == 2 {
-                    1.0
-                } else {
-                    G::Transfer::encode_clamped(l3 * blue)
-                };
-                return;
             }
             // Rejections retain the lower-first path.
         }
-        // The f32 lane already returned above for fold hues. Compute this
-        // once for f64 and reuse it when selecting the lower-bound solve.
-        let fold = !SINGLE && in_blue_fold::<G>(hue);
-        if fold
-            && [
-                value(rd, rb, ra, input_u),
-                value(gd, gb, ga, input_u),
-                value(bd, bb, ba, input_u),
-            ]
-            .into_iter()
-            .all(|v| v >= 0.0 && v <= target)
-        {
-            // Endpoint membership alone permits disconnected re-entry islands.
-            // Bernstein controls certify the entire neutral-to-input segment.
-            // Keep rounding-scale contacts on the isolation/snapping path.
-            let margin = 32.0 * Float::EPSILON * target;
-            if [
-                value(rd, rb, ra, input_u),
-                value(gd, gb, ga, input_u),
-                value(bd, bb, ba, input_u),
-            ]
-            .into_iter()
-            .all(|v| v > margin && v < target - margin)
-                && interior_within(ra, rb, input_u, target)
-                && interior_within(ga, gb, input_u, target)
-                && interior_within(ba, bb, input_u, target)
-            {
-                out[0] = G::Transfer::encode_clamped(l3 * value(rd, rb, ra, input_u));
-                out[1] = G::Transfer::encode_clamped(l3 * value(gd, gb, ga, input_u));
-                out[2] = G::Transfer::encode_clamped(l3 * value(bd, bb, ba, input_u));
-                return;
-            }
-            // An inside endpoint may lie beyond a first exit/re-entry. Bound
-            // isolation by the input; do not treat it as proof of pass-through.
-            map_fold::<G>(
-                [[rd, rb, ra], [gd, gb, ga], [bd, bb, ba]],
-                l3,
-                target,
-                input_u,
-                out,
-            );
+        // The f32 lane already returned above for fold hues.
+        if fold {
+            *out = Self::search(rows, [0.0; 3], l3, target, limit);
             return;
         }
-        let mut face = if a * G::SECTORS[0][0] + b * G::SECTORS[0][1] > 1.0 {
-            0
-        } else if a * G::SECTORS[1][0] + b * G::SECTORS[1][1] > 1.0 {
-            1
-        } else {
-            2
-        };
-        let d = if face == 0 {
-            rd
-        } else if face == 1 {
-            gd
-        } else {
-            bd
-        };
-        let b2 = if face == 0 {
-            rb
-        } else if face == 1 {
-            gb
-        } else {
-            bb
-        };
-        let a1 = if face == 0 {
-            ra
-        } else if face == 1 {
-            ga
-        } else {
-            ba
-        };
-        let mut saturation = if fold {
-            // Outside endpoints retain the fast upper-face refinement below.
-            // Bounding every upper face with bisection costs more here.
-            let (root, exit_face) =
-                lower_exit([[rd, rb, ra], [gd, gb, ga], [bd, bb, ba]], G::ROOT_LIMIT);
-            face = exit_face;
-            root
-        } else {
-            polish(G::seed(a, b, face), d, b2, a1)
-        };
-        let mut lower_r = if face == 0 {
-            0.0
-        } else {
-            value(rd, rb, ra, saturation)
-        };
-        let mut lower_g = if face == 1 {
-            0.0
-        } else {
-            value(gd, gb, ga, saturation)
-        };
-        let mut lower_b = if face == 2 {
-            0.0
-        } else {
-            value(bd, bb, ba, saturation)
-        };
+
+        // The lower face: fitted seed and one Halley step on the sector's channel.
+        let face = G::SECTORS
+            .iter()
+            .position(|&[x, y]| a * x + b * y > 1.0)
+            .unwrap_or(2);
+        let saturation = polish(G::seed(a, b, face as u8), pick(rows, face));
+        let lower: [Float; 3] = std::array::from_fn(|k| {
+            if k == face {
+                0.0
+            } else {
+                cubic(rows[k], saturation)
+            }
+        });
         if !(saturation > 0.0 && saturation < G::ROOT_LIMIT)
-            || lower_r < -TOLERANCE
-            || lower_g < -TOLERANCE
-            || lower_b < -TOLERANCE
+            || lower.iter().any(|&v| v < -TOLERANCE)
         {
-            (saturation, face) =
-                lower_exit([[rd, rb, ra], [gd, gb, ga], [bd, bb, ba]], G::ROOT_LIMIT);
-            lower_r = value(rd, rb, ra, saturation);
-            lower_g = value(gd, gb, ga, saturation);
-            lower_b = value(bd, bb, ba, saturation);
-        }
-        if !(lower_r > target || lower_g > target || lower_b > target) {
-            if input_u < saturation {
-                out[0] = G::Transfer::encode_clamped(l3 * value(rd, rb, ra, input_u));
-                out[1] = G::Transfer::encode_clamped(l3 * value(gd, gb, ga, input_u));
-                out[2] = G::Transfer::encode_clamped(l3 * value(bd, bb, ba, input_u));
-                return;
-            }
-            out[0] = if face == 0 {
-                0.0
-            } else {
-                G::Transfer::encode_clamped(l3 * lower_r)
-            };
-            out[1] = if face == 1 {
-                0.0
-            } else {
-                G::Transfer::encode_clamped(l3 * lower_g)
-            };
-            out[2] = if face == 2 {
-                0.0
-            } else {
-                G::Transfer::encode_clamped(l3 * lower_b)
-            };
+            *out = Self::search(rows, [0.0; 3], l3, target, limit);
             return;
         }
-        face = if lower_r > lower_g {
-            if lower_r > lower_b {
-                0
-            } else {
-                2
-            }
-        } else if lower_g > lower_b {
-            1
-        } else {
-            2
-        };
-        let wd = if face == 0 {
-            rd
-        } else if face == 1 {
-            gd
-        } else {
-            bd
-        };
-        let wb = if face == 0 {
-            rb
-        } else if face == 1 {
-            gb
-        } else {
-            bb
-        };
-        let wa = if face == 0 {
-            ra
-        } else if face == 1 {
-            ga
-        } else {
-            ba
-        };
-        let max_lower = if face == 0 {
-            lower_r
-        } else if face == 1 {
-            lower_g
-        } else {
-            lower_b
-        };
-        let mut u = (saturation * (target - 1.0)) / (max_lower - 1.0);
-        for _ in 0..2 {
-            // Reuse Horner intermediates for f, f', and f'' / 2.
-            let du = wd * u;
-            let q = du + wb;
-            let r = q * u + wa;
-            let f = (r * u + 1.0) - target;
-            let half_second = (du + du) + q;
-            let f1 = (du + q) * u + r;
-            let f1_squared = f1 * f1;
-            let product = f * half_second;
-            // Cancel the common factor of six in the Householder correction.
-            let denominator = f1 * (f1_squared - 2.0 * product) + f * f * wd;
-            if denominator == 0.0 {
-                break;
-            }
-            u -= f * (f1_squared - product) / denominator;
-        }
-        let mut r = value(rd, rb, ra, u);
-        let mut g = value(gd, gb, ga, u);
-        let mut blue = value(bd, bb, ba, u);
-        let guard = target * (1.0 + TOLERANCE);
-        if !(u >= 0.0
-            && u <= saturation
-            && r >= -TOLERANCE
-            && g >= -TOLERANCE
-            && blue >= -TOLERANCE
-            && r <= guard
-            && g <= guard
-            && blue <= guard
-            && ((if face == 0 {
-                r
-            } else if face == 1 {
-                g
-            } else {
-                blue
-            }) - target)
-                .abs()
-                <= target * TOLERANCE)
-        {
-            // Retry a converged prediction only when another upper face rejects it.
-            let predicted_value = if face == 0 {
-                r
-            } else if face == 1 {
-                g
-            } else {
-                blue
-            };
-            if u >= 0.0
-                && u <= saturation
-                && r >= -TOLERANCE
-                && g >= -TOLERANCE
-                && blue >= -TOLERANCE
-                && (predicted_value - target).abs() <= target * TOLERANCE
-                && (r > guard || g > guard || blue > guard)
-            {
-                face = if r > g {
-                    if r > blue {
-                        0
-                    } else {
-                        2
-                    }
-                } else if g > blue {
-                    1
-                } else {
-                    2
-                };
-                let retry_d = if face == 0 {
-                    rd
-                } else if face == 1 {
-                    gd
-                } else {
-                    bd
-                };
-                let retry_b = if face == 0 {
-                    rb
-                } else if face == 1 {
-                    gb
-                } else {
-                    bb
-                };
-                let retry_a = if face == 0 {
-                    ra
-                } else if face == 1 {
-                    ga
-                } else {
-                    ba
-                };
-                let previous_u = u;
-                for _ in 0..2 {
-                    let f = value(retry_d, retry_b, retry_a, u) - target;
-                    let f1 = (3.0 * retry_d * u + 2.0 * retry_b) * u + retry_a;
-                    let half_second = 3.0 * retry_d * u + retry_b;
-                    let f1_squared = f1 * f1;
-                    let product = f * half_second;
-                    let denominator = f1 * (f1_squared - 2.0 * product) + f * f * retry_d;
-                    if denominator == 0.0 {
-                        break;
-                    }
-                    u -= f * (f1_squared - product) / denominator;
-                }
-                r = value(rd, rb, ra, u);
-                g = value(gd, gb, ga, u);
-                blue = value(bd, bb, ba, u);
-                // Never accept a retry that moves away from neutral.
-                if !(u >= 0.0 && u <= previous_u) {
-                    u = Float::NAN;
-                }
-            }
-            let selected_value = if face == 0 {
-                r
-            } else if face == 1 {
-                g
-            } else {
-                blue
-            };
-            if !(u >= 0.0
-                && u <= saturation
-                && r >= -TOLERANCE
-                && g >= -TOLERANCE
-                && blue >= -TOLERANCE
-                && r <= guard
-                && g <= guard
-                && blue <= guard
-                && (selected_value - target).abs() <= target * TOLERANCE)
-            {
-                let ru = first_root(rd, rb, ra, 1.0 - target, saturation);
-                let gu = first_root(gd, gb, ga, 1.0 - target, saturation);
-                let bu = first_root(bd, bb, ba, 1.0 - target, saturation);
-                u = ru.min(gu).min(bu);
-                face = if u == ru {
-                    0
-                } else if u == gu {
-                    1
-                } else {
-                    2
-                };
-                r = value(rd, rb, ra, u);
-                g = value(gd, gb, ga, u);
-                blue = value(bd, bb, ba, u);
-            }
-        }
-        if input_u < u {
-            out[0] = G::Transfer::encode_clamped(l3 * value(rd, rb, ra, input_u));
-            out[1] = G::Transfer::encode_clamped(l3 * value(gd, gb, ga, input_u));
-            out[2] = G::Transfer::encode_clamped(l3 * value(bd, bb, ba, input_u));
+        if !lower.iter().any(|&v| v > target) {
+            // Below the cusp the lower face is the first exit.
+            *out = Self::exit(rows, l3, input_u, (saturation, lower, face, 0.0));
             return;
         }
-        out[0] = if face == 0 {
-            1.0
-        } else {
-            G::Transfer::encode_clamped(l3 * r)
-        };
-        out[1] = if face == 1 {
-            1.0
-        } else {
-            G::Transfer::encode_clamped(l3 * g)
-        };
-        out[2] = if face == 2 {
-            1.0
-        } else {
-            G::Transfer::encode_clamped(l3 * blue)
+        // Above the cusp: the chord from the lower root to the brightest
+        // lower channel's crossing, refined on that channel.
+        let face = brightest(lower);
+        let seed = (saturation * (target - 1.0)) / (pick(lower, face) - 1.0);
+        *out = match upper(rows, target, seed, face, saturation, false) {
+            Some((u, face, values)) => Self::exit(rows, l3, input_u, (u, values, face, 1.0)),
+            None => Self::search(rows, [0.0; 3], l3, target, limit),
         };
     }
 }

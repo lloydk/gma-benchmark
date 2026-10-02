@@ -359,8 +359,10 @@ last clipped candidate on interval exhaustion, as specified. Clipped linear
 RGB in the selected target converts directly to Oklab for deltaEOK; gamma encoding is deferred until return.
 
 `dualray.rs` is compiled in both precision modules. It uses fitted seeds, a
-guarded upper-first path, competing-face retry, first-root fallback, and
-intrinsic in-gamut handling. Its f32 policy uses constants for the
+guarded upper-first path, one upper Householder solve with a competing-face
+retry, and intrinsic in-gamut handling. Blue-fold hues (f64) and every rejected
+guard take one exact first-exit search, which bisects between the channels'
+stationary points and stops at the input chroma. Dualray Fast shares it. Its f32 policy uses constants for the
 residual/containment tolerance `8 * f32::EPSILON` and hue
 reduction outside `(-360, 360)`. The f64 tolerance remains `1e-12`, with hue
 reduction outside `(-1e9, 1e9)`.
@@ -372,21 +374,22 @@ P3's incumbent coefficients remain pinned.
 The shared sRGB `[264.03,264.23]` and Rec.2020 `[245.04,245.31]` degree windows
 (with f32-rounded endpoints in both lanes) bypass fitted lower roots and isolate
 the first exit. The generator requires at least 0.02 degrees between either
-window edge and the sector switch/fold; compile-time checks bound the
-small-angle series domain. The Rust regression visits every f32 hue within
-0.02 degrees of each edge, including negative and wrapped hues.
-Native f32 uses split constants, polynomial trigonometry and compensated
-evaluation inside those windows to prevent tangent-root errors. Products use
-the shared hardware-FMA/native-split helper, without software `fmaf` or f64
-widening. The fold direction consumes the already-reduced hue.
-Newton steps stay inside the first monotone crossing bracket, with bisection
-as a fallback. Searches stop at the input chroma or the nearest exit already
-found, and the selected exit channel is set to exactly zero or one. Interior
-inputs do not snap to a face. The f64 fold path skips the seed. For inside endpoints, it bounds all
-six face searches by the input chroma and nearest root found so far; this still
-finds an earlier exit before an in-gamut outer island. Outside endpoints retain
-the faster upper-face refinement. Recovery ignores stationary face touches that
-do not exit gamut. See the
+window edge and the sector switch/fold. The Rust regression visits every f32
+hue within 0.02 degrees of each edge, including negative and wrapped hues.
+Both lanes find the first exit in the windows with the shared first-exit
+search, which covers the whole segment up to the input chroma, so an earlier
+exit before an in-gamut outer island is still found. f64 runs it after the
+upper-first path; f32 runs it first. Near the fold, red's dip is nearly
+tangent: its depth is a sum of O(1) terms close to zero, which f32 rounding
+cannot resolve. f32 therefore evaluates red exactly in its local form around
+its minimum, depth + c2·δ² + d·δ³, with the minimum, curvature and cubic term
+in f32 and the depth from a binary64 fit in the hue offset from the fold (four
+terms, under 2e-14 from the generator's reference across each window). The
+offset is exact against the fold hue split into two f32 constants, on the
+same side of zero as the hue. Everything stays native f32, without
+compensated arithmetic or f64 widening. Searches set the selected exit channel
+to exactly zero or one; interior inputs do not snap to a face, and stationary
+face touches that do not exit gamut are ignored. See the
 [second review follow-up](reports/dualray-review-followup.md) for accuracy and timings.
 
 Dualray preserves its existing normalized-cubic policy for inputs below the

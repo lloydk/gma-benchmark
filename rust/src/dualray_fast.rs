@@ -25,6 +25,7 @@
 // transfer function's pow for a polynomial on out-of-gamut results only.
 
 use super::color::{KA0, KA1, KA2, KB0, KB1, KB2};
+use super::dualray::first_exit;
 use super::gamut::{DisplayP3, Rec2020, RgbGamut, Srgb};
 use super::transfer::TransferFunction;
 use super::{Float, PI, SINGLE};
@@ -274,67 +275,6 @@ fn cubics<G: DualrayFastData>(h: Float) -> [[Float; 4]; 3] {
 // Slack for the red channel's floor near its fold (see `search`).
 const FOLD_SLACK: Float = 32.0 * Float::EPSILON;
 
-// First exit along u in [0, limit] from 0 <= channel <= target, with
-// `red_floor` in place of 0 for the red channel. Every channel is monotone
-// between consecutive stationary points, so the first infeasible breakpoint
-// brackets the exit and feasibility is monotone inside it. Returns the last
-// feasible u and, if it exits, the first infeasible one.
-fn first_exit(
-    rows: &[[Float; 4]; 3],
-    target: Float,
-    limit: Float,
-    red_floor: Float,
-) -> (Float, Option<Float>) {
-    let feasible = |u: Float| {
-        (0..3).all(|k| {
-            let v = value(rows[k], u);
-            v >= (if k == 0 { red_floor } else { 0.0 }) && v <= target
-        })
-    };
-    let mut points = [limit; 7];
-    let mut n = 0;
-    for &[d, b, a, _] in rows {
-        // Roots of the derivative 3d·u² + 2b·u + a.
-        let disc = b * b - 3.0 * d * a;
-        if d != 0.0 && disc >= 0.0 {
-            let s = disc.sqrt();
-            for u in [(-b - s) / (3.0 * d), (-b + s) / (3.0 * d)] {
-                if u > 0.0 && u < limit {
-                    points[n] = u;
-                    n += 1;
-                }
-            }
-        } else if d == 0.0 && b != 0.0 {
-            let u = -a / (2.0 * b);
-            if u > 0.0 && u < limit {
-                points[n] = u;
-                n += 1;
-            }
-        }
-    }
-    n += 1;
-    points[..n].sort_by(|x, y| x.total_cmp(y));
-    let mut lo = 0.0;
-    for &end in &points[..n] {
-        if !feasible(end) {
-            let mut hi = end;
-            loop {
-                let mid = lo + (hi - lo) * 0.5;
-                if mid <= lo || mid >= hi {
-                    return (lo, Some(hi));
-                }
-                if feasible(mid) {
-                    lo = mid;
-                } else {
-                    hi = mid;
-                }
-            }
-        }
-        lo = end;
-    }
-    (limit, None)
-}
-
 pub(crate) struct DualrayFast<G: DualrayFastData, const FAST_ENCODE: bool = false>(
     std::marker::PhantomData<G>,
 );
@@ -475,7 +415,7 @@ impl<G: DualrayFastData, const FAST_ENCODE: bool> DualrayFast<G, FAST_ENCODE> {
         let target = inv_l * inv_l * inv_l;
         let before_fold = h < G::RED_FOLD || (h == G::RED_FOLD && G::RED_FOLD_LO > 0.0);
         let red_floor = if before_fold { FOLD_SLACK } else { -FOLD_SLACK };
-        let (u, beyond) = first_exit(&rows, target, (c * inv_l).max(0.0), red_floor);
+        let (u, beyond) = first_exit(&rows, [0.0; 3], target, (c * inv_l).max(0.0), red_floor);
         let l3 = l * l * l;
         *out = rows.map(|row| Self::encode(l3 * value(row, u)));
         // Write the exiting channel exactly on its face.

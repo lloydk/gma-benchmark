@@ -12,8 +12,7 @@ pub(crate) struct Config {
 pub(crate) const fn config(id: SpaceId) -> Config {
     let fold = match crate::rgb_spaces::blue_fold_window(id) {
         Some([lo, hi]) => {
-            // The compensated direction series is centred at 270 degrees.
-            assert!(lo >= 244.0 && hi <= 296.0 && lo < hi);
+            assert!(lo < hi);
             Some([lo as f64, hi as f64])
         }
         None => None,
@@ -24,7 +23,7 @@ pub(crate) const fn config(id: SpaceId) -> Config {
     }
 }
 
-// Evaluate the angle-domain checks even when no generator/example is built.
+// Evaluate the window checks even when no generator/example is built.
 const _: () = {
     config(SpaceId::Srgb);
     config(SpaceId::DisplayP3);

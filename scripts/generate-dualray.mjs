@@ -191,6 +191,10 @@ for (const profile of await loadProfiles()) {
     const id=profile.name, lines=id==='display-p3' ? pinned.sectors : sectors(profile);
     const basis=id==='display-p3' ? pinned.basis : [0,1,2].map(i => channelBasis(profile,i));
     let fits, seedSplit;
+    // f32 blue-fold windows evaluate red around its local minimum, with the
+    // depth from this binary64 fit: depth = offset * P(t), offset = h - fold.
+    // Display P3 has no window.
+    let foldHue = 0, foldDepth = Array(6).fill(0);
     if(id==='display-p3') {
         fits=pinned.fits.map((f,i)=>({sin:f[0],cos:f[1],centre:f[2],invHalf:f[3],coef:f.slice(4),fold:i===3?true:undefined}));
         seedSplit=pinned.split;
@@ -211,6 +215,17 @@ for (const profile of await loadProfiles()) {
             assert(redEndFit + margin < h && h + margin < greenStart, `${id} ${name} ${h} requires ${margin} degrees inside fold window`);
         }
         console.log(`${id}: sector ${redEnd}, fold ${fold}, minimum window margin ${Math.min(redEnd-redEndFit,greenStart-redEnd,fold-redEndFit,greenStart-fold)}`);
+        const depth=fit(4,redEndFit-fold,greenStart-fold,x=>minimum(profile,0,fold+x)/x);
+        let worstDepth=0;
+        for(let i=0;i<=20000;i++) {
+            const x=redEndFit-fold+(greenStart-redEndFit)*i/20000, t=(x-depth.centre)*depth.invHalf;
+            const fitted=x*depth.coef.reduceRight((sum,c)=>sum*t+c,0);
+            worstDepth=Math.max(worstDepth,Math.abs(fitted-minimum(profile,0,fold+x)));
+        }
+        assert(worstDepth<1e-12,`${id} fold depth fit ${worstDepth}`);
+        console.log(`${id}: fold depth fit maximum error ${worstDepth}`);
+        foldHue=fold;
+        foldDepth=[depth.centre,depth.invHalf,...depth.coef];
         fits=[makeFit(profile,1,greenStart,blueStart+360),makeFit(profile,2,blueStart,redStart),
             makeFit(profile,0,redStart,split),makeFit(profile,0,split,redEndFit,fold)];
         let worstRoot=0,worstResidual=0;
@@ -248,6 +263,11 @@ for (const profile of await loadProfiles()) {
 // ${id}: ${id==='display-p3'?'pinned incumbent data':'target-fitted lower-root seeds'}.
 pub const BASIS: [[f64; 9]; 3] = ${array(basis)};
 pub const SECTORS: [[Float; 2]; 2] = ${array(lines)};
+// Red's fold hue and its dip depth near it (f32 blue-fold windows):
+// depth = (h - FOLD_HUE) * P(t), t = (h - FOLD_HUE - FOLD_DEPTH[0]) * FOLD_DEPTH[1],
+// P with monomial coefficients FOLD_DEPTH[2..].${id==='display-p3'?' Unused: no window.':''}
+pub const FOLD_HUE: f64 = ${rust(foldHue)};
+pub const FOLD_DEPTH: [f64; 6] = ${array(foldDepth)};
 #[inline(always)]
 ${seed}`;
     const factoryName = `create_${id.replaceAll('-', '_')}`;
