@@ -400,16 +400,17 @@ mappers. This distinction is tested and remains visible in the benchmark.
 
 `dualray_fast.rs` (rows `dualray fast` and `dualray fast (poly encode)`, Rust
 only) is an approximate, cache-free constant-lightness/hue mapper for OKLCh
-input. It does not call Dualray. Below the cusp, per-sector hue polynomials give
+input. It reuses Dualray's channel basis, upper solve and exact search. Below
+the cusp, per-sector hue polynomials give
 the lower-face boundary ratio and the two nonzero linear channels directly, so
 about three quarters of the out-of-gamut workload colors need no trigonometry,
 conversion or root solve. Other colors take, in order: the canonical in-gamut
 check (an in-gamut color returns that conversion, including colors in a
 blue-fold re-entry island); the fitted lower output for the margin band just
-beyond the lower face; above the cusp, the chord seed and two Householder steps
-on the brighter lower channel, retried on a channel that exceeds one; and for
-the rest (mostly blue-fold hues, at most about 0.1% of colors) an exact first
-exit by bisection between the channels' stationary points. Its checked entry
+beyond the lower face; above the cusp, Dualray's upper solve from a chord seed
+on the brighter lower channel, using the fitted root and channel value; and for
+the rest (mostly blue-fold hues, at most about 0.1% of colors) Dualray's exact
+first-exit search. Its checked entry
 point is the same algorithm. The poly-encode row replaces the transfer
 function's `pow` with a polynomial on out-of-gamut results only.
 

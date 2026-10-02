@@ -33,7 +33,7 @@ macro_rules! fitted {
             include!($file);
         }
         impl DualrayData for $gamut {
-            const BASIS: [[Float; 9]; 3] = round_basis($module::BASIS);
+            const BASIS: [[Float; 9]; 3] = narrow_rows($module::BASIS);
             const SECTORS: [[Float; 2]; 2] = $module::SECTORS;
             const FOLD: [Float; 2] = split($module::FOLD_HUE);
             const FOLD_NEG: [Float; 2] = split($module::FOLD_HUE - 360.0);
@@ -55,7 +55,8 @@ const fn split(x: f64) -> [Float; 2] {
     [high, (x - high as f64) as Float]
 }
 
-const fn narrow<const N: usize>(input: [f64; N]) -> [Float; N] {
+// Binary64 data rounded to Float (shared with Dualray Fast).
+pub(crate) const fn narrow<const N: usize>(input: [f64; N]) -> [Float; N] {
     let mut result = [0.0; N];
     let mut i = 0;
     while i < N {
@@ -65,25 +66,33 @@ const fn narrow<const N: usize>(input: [f64; N]) -> [Float; N] {
     result
 }
 
-const fn round_basis(input: [[f64; 9]; 3]) -> [[Float; 9]; 3] {
-    let mut result = [[0.0; 9]; 3];
-    let mut i = 0;
-    while i < 3 {
-        let mut j = 0;
-        while j < 9 {
-            result[i][j] = input[i][j] as Float;
-            j += 1;
-        }
-        i += 1;
-    }
-    result
+pub(crate) const fn narrow_rows<const N: usize>(input: [[f64; N]; 3]) -> [[Float; N]; 3] {
+    [narrow(input[0]), narrow(input[1]), narrow(input[2])]
 }
 
 // A channel cubic along the ray, divided by L³: ((d·u + b)·u + a)·u + r.
-// Dualray's rows are normalized so r = 1; Dualray Fast uses the row sum.
+// Rows are normalized so r = 1, except red's local form near an f32 fold.
 #[inline(always)]
 pub(crate) fn cubic([d, b, a, r]: [Float; 4], u: Float) -> Float {
     ((d * u + b) * u + a) * u + r
+}
+
+// The three channel cubics in u = C/L at hue (cos, sin) = (a, b), from the
+// target's basis. Shared with Dualray Fast.
+#[inline(always)]
+pub(crate) fn ray_rows<G: DualrayData>(a: Float, b: Float) -> [[Float; 4]; 3] {
+    let a2 = a * a;
+    let ab = a * b;
+    let a3 = a2 * a;
+    let a2b = a2 * b;
+    G::BASIS.map(|k| {
+        [
+            k[0] * a3 + k[1] * a2b + k[2] * a + k[3] * b,
+            k[4] + k[5] * a2 + k[6] * ab,
+            k[7] * a + k[8] * b,
+            1.0,
+        ]
+    })
 }
 
 // The cubic, its derivative and half its second derivative at u, sharing
@@ -192,8 +201,9 @@ pub(crate) fn first_exit(
 //   yellow the face channel is almost flat and a small f32 residual can leave
 //   the root inaccurate. If another channel exceeds the target, it exits
 //   first: retry on it once, never moving away from neutral.
+// Shared with Dualray Fast.
 #[inline(always)]
-fn upper(
+pub(crate) fn upper(
     rows: [[Float; 4]; 3],
     target: Float,
     mut u: Float,
@@ -247,9 +257,9 @@ fn upper(
 // depth + c2·δ² + d·δ³, and only the depth is ill-conditioned: it comes from
 // a binary64 fit in the hue offset from the fold. The offset is exact
 // (Sterbenz) against a fold constant on the same side of zero as the hue.
-// Returns the rows and origins for `first_exit`. Shared with Dualray Fast.
+// Returns the rows and origins for `first_exit`.
 #[inline(never)]
-pub(crate) fn fold_local<G: DualrayData>(
+fn fold_local<G: DualrayData>(
     mut rows: [[Float; 4]; 3],
     hue: Float,
 ) -> ([[Float; 4]; 3], [Float; 3]) {
@@ -269,6 +279,47 @@ pub(crate) fn fold_local<G: DualrayData>(
         origin[0] = u;
     }
     (rows, origin)
+}
+
+// The exact first exit bounded by the input (u <= limit), for blue-fold hues
+// (where re-entry islands exist and fitted roots do not apply) and any
+// rejected guard. An input before it keeps its conversion; at an exit the
+// crossed channel is exactly on its face, as is an input exactly on the upper
+// face (L³·target need not round to one). Shared with Dualray Fast.
+#[inline(never)]
+pub(crate) fn search<G: DualrayData>(
+    rows: [[Float; 4]; 3],
+    hue: Float,
+    l3: Float,
+    target: Float,
+    limit: Float,
+    encode: impl Fn(Float) -> Float,
+) -> [Float; 3] {
+    let (rows, origin) = if SINGLE && in_blue_fold::<G>(hue) {
+        fold_local::<G>(rows, hue)
+    } else {
+        (rows, [0.0; 3])
+    };
+    let (u, beyond) = first_exit(&rows, origin, target, limit);
+    let at = |u: Float| -> [Float; 3] { std::array::from_fn(|k| cubic(rows[k], u - origin[k])) };
+    let values = at(u);
+    let face = beyond.and_then(|hi| {
+        let beyond = at(hi);
+        (0..3)
+            .find(|&k| beyond[k] < 0.0 || beyond[k] > target)
+            .map(|k| (k, beyond[k] > target))
+    });
+    std::array::from_fn(|k| match face {
+        Some((f, upper)) if f == k => {
+            if upper {
+                1.0
+            } else {
+                0.0
+            }
+        }
+        _ if values[k] >= target => 1.0,
+        _ => encode(l3 * values[k]),
+    })
 }
 
 // Select by channel index without indexing memory: runtime-indexed arrays
@@ -331,36 +382,6 @@ impl<G: DualrayData> Dualray<G> {
         })
     }
 
-    // The exact first exit bounded by the input, for blue-fold hues (where
-    // re-entry islands exist and fitted roots do not apply) and any rejected
-    // guard. Rows are cubics in u - origin.
-    #[inline(never)]
-    fn search(
-        rows: [[Float; 4]; 3],
-        origin: [Float; 3],
-        l3: Float,
-        target: Float,
-        limit: Float,
-    ) -> [Float; 3] {
-        let (u, beyond) = first_exit(&rows, origin, target, limit);
-        let at = |u: Float| std::array::from_fn(|k| cubic(rows[k], u - origin[k]));
-        let values: [Float; 3] = at(u);
-        if let Some(hi) = beyond {
-            let beyond: [Float; 3] = at(hi);
-            if let Some(k) = (0..3).find(|&k| beyond[k] < 0.0 || beyond[k] > target) {
-                return Self::on_face(l3, values, k, if beyond[k] > target { 1.0 } else { 0.0 });
-            }
-        }
-        // An input exactly on the upper face: L³·target need not round to one.
-        values.map(|v| {
-            if v >= target {
-                1.0
-            } else {
-                G::Transfer::encode_clamped(l3 * v)
-            }
-        })
-    }
-
     // A validated exit at u: the input keeps its conversion if it lies before.
     #[inline(always)]
     fn exit(
@@ -399,26 +420,15 @@ impl<G: DualrayData> Dualray<G> {
         let a = radians.cos();
         let b = radians.sin();
         let l3 = l * l * l;
-        let a2 = a * a;
-        let ab = a * b;
-        let a3 = a2 * a;
-        let a2b = a2 * b;
-        let rows = G::BASIS.map(|k| {
-            [
-                k[0] * a3 + k[1] * a2b + k[2] * a + k[3] * b,
-                k[4] + k[5] * a2 + k[6] * ab,
-                k[7] * a + k[8] * b,
-                1.0,
-            ]
-        });
+        let rows = ray_rows::<G>(a, b);
         let inv_l = 1.0 / l;
         let input_u = c * inv_l;
         let target = inv_l * inv_l * inv_l;
         let limit = input_u.min(G::ROOT_LIMIT);
         let fold = in_blue_fold::<G>(hue);
+        let encode = G::Transfer::encode_clamped;
         if SINGLE && fold {
-            let (rows, origin) = fold_local::<G>(rows, hue);
-            *out = Self::search(rows, origin, l3, target, limit);
+            *out = search::<G>(rows, hue, l3, target, limit, encode);
             return;
         }
 
@@ -445,7 +455,7 @@ impl<G: DualrayData> Dualray<G> {
         }
         // The f32 lane already returned above for fold hues.
         if fold {
-            *out = Self::search(rows, [0.0; 3], l3, target, limit);
+            *out = search::<G>(rows, hue, l3, target, limit, encode);
             return;
         }
 
@@ -465,7 +475,7 @@ impl<G: DualrayData> Dualray<G> {
         if !(saturation > 0.0 && saturation < G::ROOT_LIMIT)
             || lower.iter().any(|&v| v < -TOLERANCE)
         {
-            *out = Self::search(rows, [0.0; 3], l3, target, limit);
+            *out = search::<G>(rows, hue, l3, target, limit, encode);
             return;
         }
         if !lower.iter().any(|&v| v > target) {
@@ -479,7 +489,7 @@ impl<G: DualrayData> Dualray<G> {
         let seed = (saturation * (target - 1.0)) / (pick(lower, face) - 1.0);
         *out = match upper(rows, target, seed, face, saturation, false) {
             Some((u, face, values)) => Self::exit(rows, l3, input_u, (u, values, face, 1.0)),
-            None => Self::search(rows, [0.0; 3], l3, target, limit),
+            None => search::<G>(rows, hue, l3, target, limit, encode),
         };
     }
 }

@@ -1,6 +1,6 @@
 // Dualray Fast (prototype): an approximate, cache-free constant-L/h gamut
-// mapper for OKLCh input. Standalone: it needs only the conversion matrices,
-// the transfer function and its fitted hue polynomials.
+// mapper for OKLCh input: fitted hue polynomials in front of Dualray's
+// channel cubics, upper solve and exact search.
 //
 // Along a constant-hue ray, each linear channel divided by L³ is a cubic in
 // u = C/L. Below the cusp the first exit is on the lower face: one channel is
@@ -15,19 +15,17 @@
 // 2. Otherwise convert canonically; an in-gamut color returns that conversion
 //    unchanged, including colors in a blue-fold window's re-entry island.
 // 3. Out of gamut below the cusp (the margin band): the shortcut's output.
-// 4. Above the cusp: the chord seed and Householder steps on the brighter
-//    lower channel, retried on a channel that exceeds one.
+// 4. Above the cusp: Dualray's chord seed and upper solve on the brighter
+//    lower channel, from the fitted lower root and channel value.
 // 5. Anything else (blue-fold windows, rejected upper solves, neutrals):
-//    the first exit by bisection between the channels' stationary points.
+//    Dualray's exact search.
 //
 // Accuracy is an empirical ΔEOK budget, not a bound: the channel fits target
 // 1e-4 against a 1e-3 max / 1e-4 p99 runtime target. FAST_ENCODE swaps the
 // transfer function's pow for a polynomial on out-of-gamut results only.
 
-use super::color::{KA0, KA1, KA2, KB0, KB1, KB2};
-use super::dualray::{cubic, first_exit, fold_local, DualrayData};
+use super::dualray::{narrow, narrow_rows, ray_rows, search, upper, DualrayData};
 use super::gamut::{DisplayP3, Rec2020, Srgb};
-use super::rgb_solvers::in_blue_fold;
 use super::transfer::TransferFunction;
 use super::{Float, PI, SINGLE};
 use crate::rgb_spaces::SpaceId;
@@ -36,7 +34,7 @@ use crate::rgb_spaces::SpaceId;
 const U_TERMS: usize = p3::U_TERMS;
 const G_TERMS: usize = p3::G_TERMS;
 
-// Dualray's data supplies the fold constants (never its solver).
+// Dualray's data supplies the channel basis and fold constants.
 pub(crate) trait DualrayFastData: DualrayData {
     const BLUE_START: Float;
     const RED_START: Float;
@@ -49,19 +47,6 @@ pub(crate) trait DualrayFastData: DualrayData {
     const U: [[Float; U_TERMS]; 3];
     const G0: [[Float; G_TERMS]; 3];
     const G1: [[Float; G_TERMS]; 3];
-}
-
-const fn narrow<const N: usize>(input: [f64; N]) -> [Float; N] {
-    let mut out = [0.0; N];
-    let mut i = 0;
-    while i < N {
-        out[i] = input[i] as Float;
-        i += 1;
-    }
-    out
-}
-const fn narrow_rows<const N: usize>(input: [[f64; N]; 3]) -> [[Float; N]; 3] {
-    [narrow(input[0]), narrow(input[1]), narrow(input[2])]
 }
 
 macro_rules! fitted {
@@ -155,15 +140,6 @@ const TWELFTHS: [f64; 12] = [
     17.959392772949972,
     23.9729132300269,
 ];
-const TWELFTHS_F32: [f32; 12] = {
-    let mut out = [0.0; 12];
-    let mut i = 0;
-    while i < 12 {
-        out[i] = TWELFTHS[i] as f32;
-        i += 1;
-    }
-    out
-};
 #[inline(always)]
 fn mantissa_power(m: Float) -> Float {
     let t = 2.0 * m - 3.0;
@@ -179,8 +155,8 @@ fn pow_5_12(x: Float) -> Float {
         let e = ((bits >> 23) as i32) - 127;
         let m = f32::from_bits((bits & 0x007f_ffff) | 0x3f80_0000) as Float;
         let (q, r) = (e.div_euclid(12), e.rem_euclid(12));
-        let scale = f32::from_bits(((127 + 5 * q) as u32) << 23) * TWELFTHS_F32[r as usize];
-        mantissa_power(m) * scale as Float
+        let scale = f32::from_bits(((127 + 5 * q) as u32) << 23) as Float;
+        mantissa_power(m) * (scale * const { narrow(TWELFTHS) }[r as usize])
     } else {
         let bits = (x as f64).to_bits();
         let e = ((bits >> 52) as i64) - 1023;
@@ -207,9 +183,6 @@ fn encode_fast<G: DualrayFastData>(x: Float) -> Float {
     // The polynomial's error can exceed one just below x = 1.
     y.min(1.0)
 }
-
-// Relative residual and face guards for the approximate upper solve.
-const UPPER_TOLERANCE: Float = if SINGLE { 64.0 * Float::EPSILON } else { 1e-7 };
 
 // Which path mapped a color (diagnostics; `map` discards it).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -244,24 +217,6 @@ enum Decline {
 
 // Nonzero channels of each sector, in increasing order; the third is zero.
 const NONZERO: [[usize; 2]; 3] = [[0, 1], [1, 2], [0, 2]];
-
-// The three channel cubics at the input hue, from the canonical conversion's
-// matrices: channel_k / L³ = Σ_j M[k][j]·(1 + u·κ_j)³.
-#[inline(always)]
-fn cubics<G: DualrayFastData>(h: Float) -> [[Float; 4]; 3] {
-    let (b, a) = (h * (PI / 180.0)).sin_cos();
-    let k = [KA0 * a + KB0 * b, KA1 * a + KB1 * b, KA2 * a + KB2 * b];
-    let k2 = k.map(|x| x * x);
-    let k3 = [k2[0] * k[0], k2[1] * k[1], k2[2] * k[2]];
-    G::LMS_TO_RGB.map(|m| {
-        [
-            m[0] * k3[0] + m[1] * k3[1] + m[2] * k3[2],
-            3.0 * (m[0] * k2[0] + m[1] * k2[1] + m[2] * k2[2]),
-            3.0 * (m[0] * k[0] + m[1] * k[1] + m[2] * k[2]),
-            m[0] + m[1] + m[2],
-        ]
-    })
-}
 
 pub(crate) struct DualrayFast<G: DualrayFastData, const FAST_ENCODE: bool = false>(
     std::marker::PhantomData<G>,
@@ -319,107 +274,21 @@ impl<G: DualrayFastData, const FAST_ENCODE: bool> DualrayFast<G, FAST_ENCODE> {
         Ok(())
     }
 
-    // Above the cusp: Dualray's chord seed and two Householder steps on the
-    // chosen face, from the fitted lower root and channel value. If another
-    // channel exceeds one there, that channel exits first: retry on it.
-    #[inline(always)]
-    fn upper(
-        l: Float,
-        c: Float,
-        rows: &[[Float; 4]; 3],
-        root: Float,
-        mut face: usize,
-        lower: Float,
-        out: &mut [Float; 3],
-    ) -> Option<Path> {
-        let inv_l = 1.0 / l;
-        let target = inv_l * inv_l * inv_l;
-        let guard = target * (1.0 + UPPER_TOLERANCE);
-        let mut u = root * (target - 1.0) / (lower - 1.0);
-        for attempt in 0..3 {
-            let [d, b, a, r] = rows[face];
-            for _ in 0..2 {
-                // Reuse Horner intermediates for f, f' and f''/2.
-                let du = d * u;
-                let q = du + b;
-                let p = q * u + a;
-                let f = (p * u + r) - target;
-                let half_second = (du + du) + q;
-                let f1 = (du + q) * u + p;
-                let f1_squared = f1 * f1;
-                let product = f * half_second;
-                let denominator = f1 * (f1_squared - 2.0 * product) + f * f * d;
-                if denominator == 0.0 {
-                    return None;
-                }
-                u -= f * (f1_squared - product) / denominator;
-            }
-            let values = rows.map(|row| cubic(row, u));
-            if !(u >= 0.0
-                && u * l < c
-                && (values[face] - target).abs() <= target * UPPER_TOLERANCE
-                && values.iter().all(|&v| v >= -UPPER_TOLERANCE))
-            {
-                return None;
-            }
-            let brightest = if values[0] >= values[1] && values[0] >= values[2] {
-                0
-            } else if values[1] >= values[2] {
-                1
-            } else {
-                2
-            };
-            if values[brightest] > guard && brightest != face {
-                face = brightest;
-                continue;
-            }
-            let l3 = l * l * l;
-            *out = std::array::from_fn(|k| {
-                if k == face {
-                    1.0
-                } else {
-                    Self::encode(l3 * values[k])
-                }
-            });
-            return Some(if attempt == 0 {
-                Path::Upper
-            } else {
-                Path::UpperRetry
-            });
-        }
-        None
-    }
-
-    // The exact first exit, for colors the fast paths do not cover. In f32
-    // blue-fold windows red uses Dualray's fitted local form near the fold.
+    // The exact first exit (Dualray's search) for colors the fast paths do
+    // not cover.
     fn search(l: Float, c: Float, h: Float, out: &mut [Float; 3]) -> Path {
-        let rows = cubics::<G>(h);
-        let (rows, origin) = if SINGLE && in_blue_fold::<G>(h) {
-            fold_local::<G>(rows, h)
-        } else {
-            (rows, [0.0; 3])
-        };
+        let (b, a) = (h * (PI / 180.0)).sin_cos();
         let inv_l = 1.0 / l;
         let target = inv_l * inv_l * inv_l;
-        let (u, beyond) = first_exit(&rows, origin, target, (c * inv_l).max(0.0));
-        let at =
-            |u: Float| -> [Float; 3] { std::array::from_fn(|k| cubic(rows[k], u - origin[k])) };
-        let l3 = l * l * l;
-        // An input exactly on the upper face: L³·target need not round to one.
-        *out = at(u).map(|v| {
-            if v >= target {
-                1.0
-            } else {
-                Self::encode(l3 * v)
-            }
-        });
-        // Write the exiting channel exactly on its face.
-        if let Some(hi) = beyond {
-            let beyond = at(hi);
-            if let Some(k) = (0..3).find(|&k| beyond[k] < 0.0 || beyond[k] > target) {
-                out[k] = if beyond[k] > target { 1.0 } else { 0.0 };
-            }
-        }
+        let limit = (c * inv_l).max(0.0);
+        *out = search::<G>(
+            ray_rows::<G>(a, b),
+            h,
+            l * l * l,
+            target,
+            limit,
+            Self::encode,
+        );
         Path::Search
     }
 
@@ -479,20 +348,30 @@ impl<G: DualrayFastData, const FAST_ENCODE: bool> DualrayFast<G, FAST_ENCODE> {
             Self::lower(sector, g.map(|x| l3 * x), out);
             return Path::MarginBand;
         }
-        // The brighter channel at the lower root is the likely upper face.
+        // Above the cusp: the chord from the fitted lower root to the brighter
+        // lower channel's crossing, refined by Dualray's upper solve.
         let brighter = (g[1] > g[0]) as usize;
-        let rows = cubics::<G>(hue);
-        match Self::upper(
-            l,
-            c,
-            &rows,
-            root,
-            NONZERO[sector][brighter],
-            g[brighter],
-            out,
-        ) {
-            Some(path) => path,
-            None => Self::search(l, c, hue, out),
+        let face = NONZERO[sector][brighter];
+        let (b, a) = (hue * (PI / 180.0)).sin_cos();
+        let inv_l = 1.0 / l;
+        let target = inv_l * inv_l * inv_l;
+        let seed = root * (target - 1.0) / (g[brighter] - 1.0);
+        let Some((_, exit, values)) =
+            upper(ray_rows::<G>(a, b), target, seed, face, c * inv_l, false)
+        else {
+            return Self::search(l, c, hue, out);
+        };
+        *out = std::array::from_fn(|k| {
+            if k == exit {
+                1.0
+            } else {
+                Self::encode(l3 * values[k])
+            }
+        });
+        if exit == face {
+            Path::Upper
+        } else {
+            Path::UpperRetry
         }
     }
 
