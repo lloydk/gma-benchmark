@@ -405,7 +405,14 @@ impl<G: DualrayFastData, const FAST_ENCODE: bool> DualrayFast<G, FAST_ENCODE> {
         let at =
             |u: Float| -> [Float; 3] { std::array::from_fn(|k| cubic(rows[k], u - origin[k])) };
         let l3 = l * l * l;
-        *out = at(u).map(|v| Self::encode(l3 * v));
+        // An input exactly on the upper face: L³·target need not round to one.
+        *out = at(u).map(|v| {
+            if v >= target {
+                1.0
+            } else {
+                Self::encode(l3 * v)
+            }
+        });
         // Write the exiting channel exactly on its face.
         if let Some(hi) = beyond {
             let beyond = at(hi);

@@ -351,7 +351,14 @@ impl<G: DualrayData> Dualray<G> {
                 return Self::on_face(l3, values, k, if beyond[k] > target { 1.0 } else { 0.0 });
             }
         }
-        values.map(|v| G::Transfer::encode_clamped(l3 * v))
+        // An input exactly on the upper face: L³·target need not round to one.
+        values.map(|v| {
+            if v >= target {
+                1.0
+            } else {
+                G::Transfer::encode_clamped(l3 * v)
+            }
+        })
     }
 
     // A validated exit at u: the input keeps its conversion if it lies before.

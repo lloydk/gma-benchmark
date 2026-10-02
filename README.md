@@ -62,8 +62,9 @@ such method links to the original it was derived from.
   ([original](https://github.com/color-js/apps/pull/44#issuecomment-4964705945))
 - **dualray** — a target-specific dual-ray solver, with direction
   fits, one lower Halley step, two upper Householder steps, a guarded
-  upper-first shortcut, a competing upper-face retry, and stationary-interval
-  first-root recovery. Uses exact input hues without a LUT or per-hue cache.
+  upper-first shortcut, a competing upper-face retry, and one exact first-exit
+  search (bisection between stationary points) for blue-fold hues and rejected
+  guards. Uses exact input hues without a LUT or per-hue cache.
   The shared implementation is maintained in
   [`scripts/templates/dualray-mapper.js`](scripts/templates/dualray-mapper.js),
   which generates each target's mapper with its seed expression inline.
@@ -308,10 +309,10 @@ NaN/Infinity semantics are not harmonized between JS and Rust.
 basis, fitted seed coefficients and transfer function without building a hue
 lookup table. The generator emits each target's seed expression inside the
 shared mapper template to avoid a hot helper call; runtime code needs neither
-code generation nor `eval`. Common root/fold helpers live in
-`src/dualray-kernel.js`. Both benchmark modes use intrinsic first-exit comparisons.
-Folded regions retain first-exit isolation and exact output-face channels;
-see [the Dualray port](MILESTONE-4.md#step-five-dualray).
+code generation nor `eval`. The cold exact first-exit search, shared with Rust,
+lives in `src/dualray-kernel.js`. Both benchmark modes use intrinsic first-exit
+comparisons. Folded regions keep exact output-face channels; see
+[the Dualray port](MILESTONE-4.md#step-five-dualray).
 
 CSS MINDE clips in the selected linear RGB space and converts those channels directly to
 Oklab for deltaEOK, applying the transfer function only to its final output.

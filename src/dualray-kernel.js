@@ -10,74 +10,65 @@ export function polish (x, d, b, a) {
 	return denominator !== 0 ? x-(f*f1)/denominator : x;
 }
 
-// Cold path. Partition at derivative roots so a shallow negative interval
-// cannot be skipped by endpoint bracketing. Used for both lower-root
-// guard failures and upper-face/convergence failures.
-export function firstRoot (d, b, a, constant, limit) {
-	let s0 = limit;
-	let s1 = limit;
-	if (d === 0) {
-		const s = -a / (2 * b);
-		if (s > 0 && s < limit) s0 = s;
-	} else {
-		const discriminant = b * b - 3 * d * a;
-		if (discriminant >= 0) {
-			const q = -b - (b < 0 ? -1 : 1) * Math.sqrt(discriminant);
-			const t0 = q / (3 * d);
-			const t1 = q === 0 ? 0 : a / q;
-			const low = Math.min(t0, t1);
-			const high = Math.max(t0, t1);
-			if (low > 0 && low < limit) s0 = low;
-			if (high > 0 && high < limit) {
-				if (s0 === limit) s0 = high;
-				else s1 = high;
-			}
-		}
+// First exit along u in [0, limit] from 0 <= channel <= target, for rows
+// [d, b, a] of normalized cubics. Every channel is monotone between
+// consecutive stationary points, so the first infeasible breakpoint and the
+// breakpoint before it bracket the exit, and feasibility is monotone inside.
+// A tangent touch stays feasible: it does not leave the gamut. Returns
+// [last feasible u, first infeasible u], the second undefined when nothing
+// exits. Matches Rust.
+export function firstExit (rows, target, limit) {
+	const points = [limit];
+	for (let k = 0; k < 3; k++) {
+		// Roots of the derivative 3d·u² + 2b·u + a.
+		const d = rows[k][0], b = rows[k][1], a = rows[k][2];
+		const disc = b * b - 3 * d * a;
+		if (d !== 0 && disc >= 0) {
+			const root = Math.sqrt(disc);
+			points.push((-b - root) / (3 * d), (-b + root) / (3 * d));
+		} else if (d === 0 && b !== 0) points.push(-a / (2 * b));
 	}
-	let lo = 0;
-	const negative = constant < 0;
-	for (let interval = 0; interval < 3; interval++) {
-		let hi = interval === 0 ? s0 : interval === 1 ? s1 : limit;
-		const fhi = ((d * hi + b) * hi + a) * hi + constant;
-		if (fhi === 0 && hi === limit) {
-			const slope=(3*d*hi+2*b)*hi+a;
-			if (negative ? slope>0 : slope<0) return hi;
-		}
-		if (negative ? fhi>0 : fhi<0) {
-			for (let step = 0; step < 64; step++) {
-				const mid = lo + (hi - lo) * 0.5;
-				if (mid === lo || mid === hi) break;
-				const f = ((d * mid + b) * mid + a) * mid + constant;
-				if (negative ? f<=0 : f>=0) {
-					lo = mid;
-				} else hi = mid;
-			}
-			return lo + (hi - lo) * 0.5;
-		}
-		lo = hi;
-		if (hi === limit) break;
+	let lo = 0, hi = Infinity;
+	for (const u of points) if (u > 0 && u < hi && u <= limit && !feasible(rows, target, u)) hi = u;
+	if (hi === Infinity) return [limit, undefined];
+	for (const u of points) if (u > lo && u < hi) lo = u;
+	for (;;) {
+		const mid = lo + (hi - lo) * 0.5;
+		if (mid <= lo || mid >= hi) return [lo, hi];
+		if (feasible(rows, target, mid)) lo = mid;
+		else hi = mid;
 	}
-	return Infinity;
 }
 
-export function lowerExit(rd,rb,ra,gd,gb,ga,bd,bb,ba,limit) {
-	let root=firstRoot(rd,rb,ra,1,limit),face=0;
-	const g=firstRoot(gd,gb,ga,1,Math.min(root,limit));
-	if(g<root){root=g;face=1;}
-	const b=firstRoot(bd,bb,ba,1,Math.min(root,limit));
-	if(b<root){root=b;face=2;}
-	return [root,face];
+function feasible (rows, target, u) {
+	for (let k = 0; k < 3; k++) {
+		const v = value(rows[k][0], rows[k][1], rows[k][2], u);
+		if (!(v >= 0 && v <= target)) return false;
+	}
+	return true;
 }
-export function mapFold(rows,l3,target,inputU,limit,encode,out) {
-	let u=Math.min(inputU,limit),face=-1,faceValue=0;
-	for(let i=0;i<3;i++) {
-		const [d,b,a]=rows[i],root=firstRoot(d,b,a,1,u);
-		if(root<=u){u=root;face=i;}
+
+// Cold path: the exact first exit bounded by the input, for blue-fold hues
+// (where re-entry islands exist and fitted roots do not apply) and any
+// rejected guard. An interior input keeps its normalized conversion; an exit
+// writes the crossed channel exactly on its face, as does an input exactly on
+// the upper face (L³·target need not round to one).
+export function search (rows, l3, target, limit, encode, out) {
+	const [u, beyond] = firstExit(rows, target, limit);
+	let face = -1, faceValue = 0;
+	if (beyond !== undefined) {
+		for (let k = 0; k < 3; k++) {
+			const v = value(rows[k][0], rows[k][1], rows[k][2], beyond);
+			if (v < 0 || v > target) {
+				face = k;
+				faceValue = v > target ? 1 : 0;
+				break;
+			}
+		}
 	}
-	if(Number.isFinite(target))for(let i=0;i<3;i++) {
-		const [d,b,a]=rows[i],root=firstRoot(-d,-b,-a,target-1,u);
-		if(root<=u){u=root;face=i;faceValue=1;}
+	for (let k = 0; k < 3; k++) {
+		const v = value(rows[k][0], rows[k][1], rows[k][2], u);
+		out[k] = k === face ? faceValue : v >= target ? 1 : encode(l3 * v);
 	}
-	for(let i=0;i<3;i++)out[i]=i===face?faceValue:encode(l3*value(...rows[i],u));
 	return out;
 }

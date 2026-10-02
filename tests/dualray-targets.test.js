@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { RGB_SPACES, SRGB, REC2020, DISPLAY_P3 } from "../src/rgb-spaces.js";
-import { createDualray, firstRoot, mapFold } from "../src/dualray-factory.js";
+import { createDualray, firstExit, search } from "../src/dualray-factory.js";
 import { dualray } from "../src/dualray.js";
 import { dualraySamples } from "./helpers/dualray-samples.js";
 import { validateDualrayMethod } from "./helpers/validate-dualray-method.js";
@@ -50,14 +50,15 @@ test("mapper validation rejects returned replacement arrays and unwritten buffer
  }
 });
 
-test("fold kernel snaps a lower face whose isolated root rounds inside",()=>{
+test("exact search snaps a lower face whose isolated root rounds inside",()=>{
  // This cubic's first exit evaluates to +2^-53 after root isolation. A
  // tolerance check or final clipping alone would accept the unsnapped value.
  const row=[3.1554404040798545,-5.84003952331841,-7.066192119382322];
- const root=firstRoot(...row,1,4);
- assert.ok(((row[0]*root+row[1])*root+row[2])*root+1>0);
+ const [root,beyond]=firstExit([row,[0,0,0],[0,0,0]],2,.5);
+ assert.ok(((row[0]*root+row[1])*root+row[2])*root+1>=0);
+ assert.ok(((row[0]*beyond+row[1])*beyond+row[2])*beyond+1<0);
  const out=[NaN,NaN,NaN];
- assert.equal(mapFold([row,[0,0,0],[0,0,0]],.5,2,.5,4,v=>v,out),out);
+ assert.equal(search([row,[0,0,0],[0,0,0]],.5,2,.5,v=>v,out),out);
  assert.deepEqual(out,[0,.5,.5]);
 });
 
@@ -97,12 +98,15 @@ test("independent boundary reference treats an outward upper-face origin as firs
  assert.ok(ref.boundaries(1-Number.EPSILON/2,80).first<1e-12);
 });
 
-test("Dualray fallback ignores stationary touches and accepts outward endpoint crossings",()=>{
+test("Dualray exact search ignores stationary touches and finds outward crossings",()=>{
  // (1-x)^2 (1-x/4): touching zero at x=1 does not leave the gamut;
- // the first outward crossing is x=4. Negation exercises upper-face orientation.
+ // the first outward crossing is x=4. Negation (target 2) exercises the
+ // upper face: 2 - p touches 2 at x=1 and exceeds it beyond x=4.
  for(const sign of [1,-1]) {
-  assert.equal(firstRoot(sign*-.25,sign*1.5,sign*-2.25,sign,1),Infinity);
-  assert.equal(firstRoot(sign*-.25,sign*1.5,sign*-2.25,sign,4),4);
-  assert.ok(Math.abs(firstRoot(sign*-.25,sign*1.5,sign*-2.25,sign,5)-4)<1e-13);
+  const rows=[[sign*-.25,sign*1.5,sign*-2.25],[0,0,0],[0,0,0]];
+  assert.deepEqual(firstExit(rows,2,1),[1,undefined]);
+  assert.deepEqual(firstExit(rows,2,4),[4,undefined]);
+  const [u,beyond]=firstExit(rows,2,5);
+  assert.ok(Math.abs(u-4)<1e-13 && beyond!==undefined);
  }
 });
