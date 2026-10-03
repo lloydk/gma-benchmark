@@ -1,10 +1,10 @@
 {
   "schema": "gma-performance-math-v1",
-  "created": "2026-10-03T18:43:34.589Z",
+  "created": "2026-10-03T20:03:00.947Z",
   "runtime": "v26.10.0",
-  "sourceCommit": "58e586b0473f30e9934ba2b1454224a6a46d37c3",
-  "timingArtifactSha256": "ecea98a67071a2d46fd3a509b1bbc14dfc491c4dfc344bb329f1b001044c1050",
-  "profilerSha256": "121614d41eadad1e1513337c28920b86f33a70e93bdf326641192a5c9ca1426a",
+  "sourceCommit": "afec3bb55ad9e704123c01bf7d0cf11c38ae8447",
+  "timingArtifactSha256": "2ff69749e0e5b08881ac0a9855afcc6f90a5526a199f273a28e38141f1a37ff9",
+  "profilerSha256": "7ce27871715cbd9eab22d0c93e1a098adee339accb37cd7ab2a129b925b9e1f5",
   "scope": "Untimed Node/P3 Math calls after cache warmup plus instrumented Fast path entries. Fast instrumentation matches production output per channel. No power or hardware-branch counters.",
   "rows": [
     {

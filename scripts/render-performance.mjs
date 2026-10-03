@@ -92,7 +92,9 @@ const bunFast=spreads.filter(x=>x.runtime==='bun' && x.method==='dualray-fast');
 if(bunFast.length) add(`Bun Fast has **${bunFast.filter(x=>x.spread>.05).length}/${bunFast.length} cells** with a process range above 5%. The earlier single-CPU run showed multiple timing modes, motivating the current affinity setting; the [affinity history](PERFORMANCE-NOTES.md#affinity-experiment) records that investigation.`);
 add(`Every cell was validated in a separate process before timing. All outputs had to be finite and in range, and timed checksums had to agree with the validation sum over ${report.environment.warmup+report.environment.measured} passes. ${validationNote}`);
 if(mathArtifact) add(`The [Math-call profiler](scripts/profile-performance-math.mjs) replayed each P3 workload after warming caches, delegated every counted call to the original Math function, and required exact agreement with the Node validation checksum. A separate pass instruments Fast's precheck, lower, upper and exact-search entries in an in-memory source copy, checking every output channel against production. Source replacement markers must match exactly. Gamma powers and hardware branch misses were not counted. The artifact is bound to the timing artifact's hash.`);
-const uncommitted=(report.sourceStatus??'').split('\n').some(line=>line.trim() && !line.startsWith('??'));
+// Only changes to measured sources qualify the baseline commit; report
+// artifacts replaced by a re-measurement do not.
+const uncommitted=(report.sourceStatus??'').split('\n').filter(line=>line.trim()).map(line=>line.slice(3).split(' -> ').at(-1)).some(file=>Object.hasOwn(report.sourceHashes,file));
 add(`The measured algorithm baseline is \`${report.sourceCommit}\`${uncommitted?' with uncommitted changes, which the recorded source hashes identify':''}. The artifact records input, source and Rust-binary hashes. Resume verifies source hashes, binary hash, runtime versions, CPU model and affinity.
 
 \`\`\`sh

@@ -12,8 +12,8 @@
   outputs differ from it by up to about `5e-7` deltaEOK in f64 (Rec.2020
   bright yellow; about `1.4e-7` in sRGB and P3, near white) and `2e-6` in
   Rust f32 (near white and bright yellow). In PERFORMANCE.md's P3 workloads it takes
-  10–11% less time than `dualray fast` in Rust f32 on random and grid input
-  and 18% less above the cusp; Node and Bun save 2–5% and 6–7%. The other
+  10–12% less time than `dualray fast` in Rust f32 on random and grid input
+  and 19% less above the cusp; Node and Bun save 3–4% and 6–8%. The other
   rows' outputs are unchanged. Added generator output for both
   languages, validation against `dualray fast`, JS/Rust parity, and direction
   and agreement tests.

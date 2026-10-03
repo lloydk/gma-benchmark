@@ -8,14 +8,14 @@ Measured 2026-10-03 on AMD Ryzen 7 9800X3D 8-Core Processor, using Node v26.10.0
 
 ### 1. Dualray Fast earns its lead below the cusp
 
-On shuffled P3 input, Fast cuts Dualray's time by **26.6%–38.5% across these runtimes**. Its shortcut
+On shuffled P3 input, Fast cuts Dualray's time by **26.6%–39.0% across these runtimes**. Its shortcut
 fits the lower boundary and the two nonzero RGB channels directly from hue,
 then scales them by lightness cubed. That replaces trigonometry, channel-cubic
 construction and root refinement with a small polynomial evaluation.
 
 The difference is visible when the workload is split: Node Fast takes
-**34.7 ns below the cusp and 100.3 ns above it**;
-Rust f64 takes **24.8 and 76.6 ns**. The fresh Node
+**34.4 ns below the cusp and 100.1 ns above it**;
+Rust f64 takes **24.9 and 76.6 ns**. The fresh Node
 counts show no sine or cosine calls on the entire below-cusp workload, versus
 1.22 of each per color above it. The branch probe explains the
 extra calls: every above-cusp color enters the upper solve, none enters exact
@@ -27,10 +27,10 @@ show both the operations and their source paths.
 
 | Runtime | Random: time saved by Fast | Above cusp: Fast vs Dualray |
 | --- | ---: | ---: |
-| Node | 26.6% | 10.9% more time |
-| Bun | 32.5% | 1.4% more time |
-| Rust f64 | 38.5% | 5.7% less time |
-| Rust f32 | 38.5% | 7.2% less time |
+| Node | 26.6% | 10.2% more time |
+| Bun | 32.9% | 1.9% more time |
+| Rust f64 | 39.0% | 5.5% less time |
+| Rust f32 | 38.7% | 6.1% less time |
 
 This matters because 74.7% of the standard P3 random corpus lies
 below the cusp. A bright-skewed workload loses much of the shortcut's benefit.
@@ -41,26 +41,26 @@ The `dualray fast (tables)` row reduces the above-cusp cost itself. A
 generated 360-byte table per gamut corrects the upper solve's seed, so one
 Householder step usually converges; Rust also takes the hue direction from a
 22.5° table instead of `sin_cos`, while JavaScript keeps `Math.sin` and
-`Math.cos`. Above the cusp it takes **62.7 ns in Rust f64 and
-50.3 in f32**, against Fast's 76.6 and
-61.1, and **92.9 ns in Node and
-86.0 in Bun**, against 100.3 and
+`Math.cos`. Above the cusp it takes **62.3 ns in Rust f64 and
+49.6 in f32**, against Fast's 76.6 and
+61.0, and **92.0 ns in Node and
+85.7 in Bun**, against 100.1 and
 91.2. Below the cusp the two rows run the same code, so the P3
-random saving is **1.9%–10.0% across runtimes**. Rust's larger gain includes its
+random saving is **3.4%–10.0% across runtimes**. Rust's larger gain includes its
 direction table.
 ([Implementation](src/dualray-fast.js))
 
 ### 2. Caches win by removing whole phases of work
 
-On P3 random inputs, caching speeds cubic up by 2.83–3.88× across runtimes, and
-Bottosson by 1.71–2.27× across runtimes. Cubic stores the hue-only coefficients,
+On P3 random inputs, caching speeds cubic up by 2.83–3.89× across runtimes, and
+Bottosson by 1.72–2.26× across runtimes. Cubic stores the hue-only coefficients,
 lower root and turning points; Bottosson stores its cusp and LMS direction
 slopes. After warmup, both skip hue trig, and cached Bottosson also skips cusp
 construction and its cube root. The current counters put uncached cubic at
 **5.04 cbrt calls/color**, versus **0.56** cached.
 
 Repeated integer hues can favor caches enough to change the ranking. The lowest mapped
-P3 grid medians are bottosson-lightness (cached) in Node (45.0 ns) and dualray fast (tables) in Bun (40.7 ns). The price is persistent state—366/183 KiB
+P3 grid medians are bottosson-lightness (cached) in Node (44.5 ns) and dualray fast (tables) in Bun (40.9 ns). The price is persistent state—366/183 KiB
 for cubic f64/f32 and 141/70 KiB for Bottosson—and 0.1° hue buckets. Cubic's two
 rows use the same bucket semantics; cached Bottosson changes fractional-hue
 evaluation compared with its uncached counterpart. Choose caching when that
@@ -69,8 +69,8 @@ memory and numerical trade-off fit the application.
 
 ### 3. A mapper can beat clipping by doing less conversion
 
-Below the cusp, Rust f64 Fast takes **24.8 ns** against clip's
-**40.7 ns**. Clipping must first convert the original OKLCh color:
+Below the cusp, Rust f64 Fast takes **24.9 ns** against clip's
+**40.6 ns**. Clipping must first convert the original OKLCh color:
 trig, LMS cubes, a matrix multiply and output encoding. Fast already knows
 the mapped face's two nonzero linear channels. Cached cubic likewise emits
 RGB from the polynomials it solved. The solver's intermediate values are also
@@ -85,8 +85,8 @@ the reusable values when making the implementation more modular.
 
 ### 4. CSS MINDE magnifies the cube-root cost
 
-CSS MINDE takes **475.2 ns in Node**, **629.3 in Bun** and
-**590.1 in Rust f64** on P3 random input. Each clipping-error comparison
+CSS MINDE takes **476.1 ns in Node**, **615.5 in Bun** and
+**587.5 in Rust f64** on P3 random input. Each clipping-error comparison
 converts clipped RGB back to Oklab using three cube roots. The current Node
 counter run records **32.8 cbrt calls/color**, or **10.9
 error comparisons**, on average.
@@ -96,15 +96,15 @@ The Node 26.10.0/Bun 1.4.2 operation probes supplied with the review measured
 about 4.3 versus 8.7 ns for cbrt throughput; earlier investigation identified
 V8's own implementation versus glibc on this host. Multiplying the current
 **32.8 calls by that 4.4 ns difference gives about 144.4
-ns**, close to the measured **154.1 ns** gap. This is a consistency
+ns**, close to the measured **139.4 ns** gap. This is a consistency
 check on the engine comparison, rather than a profile assigning parts of the
 mapper's total time. CSS MINDE is the strongest current case for investigating
 a faster native cube root.
 
 Raytrace is different in these measurements. Its **9.0** cube
 roots would suggest about **39.6 ns** by the same arithmetic,
-but the Node/Bun gap is only **10.4 ns**; it takes
-**234.9 ns in Node, 245.4 ns in Bun, 216.2 ns in Rust f64**. Node is slower than Rust f64 here. The isolated operation
+but the Node/Bun gap is only **3.6 ns**; it takes
+**237.2 ns in Node, 240.8 ns in Bun, 218.2 ns in Rust f64**. Node is slower than Rust f64 here. The isolated operation
 probe does not predict the full Raytrace gap; its dependency chains, argument
 distribution and surrounding work need separate profiling. The old cube-root
 story is not enough to explain today's Raytrace timings.
@@ -113,8 +113,8 @@ story is not enough to explain today's Raytrace timings.
 ### 5. Polynomial encoding buys more in f64
 
 Replacing Fast's ordinary output power with the polynomial reduces its Rust
-P3 random time from **40.8 to 32.3 ns in f64**, saving
-**8.5 ns**. In f32 it moves from **32.3 to 29.8
+P3 random time from **40.4 to 32.2 ns in f64**, saving
+**8.3 ns**. In f32 it moves from **32.2 to 29.8
 ns**, saving **2.5 ns**. The boundary mapper is the same in each
 pair, so this directly measures the benefit of the encoder variant.
 
@@ -122,7 +122,7 @@ The polynomial uses the same degree in both precisions. It does not spend
 extra terms recovering binary64 accuracy, while the ordinary encoder uses
 each lane's native power operation. The interior workload gives a second
 piece of evidence: across the other canonical-checking methods, median time
-is **31.0 ns in f32 versus 47.9 in f64**.
+is **30.5 ns in f32 versus 47.3 in f64**.
 Those paths return before solving a boundary, directly showing the cheaper
 f32 conversion-and-encoding path. Together, these results support a smaller
 cost to replace in f32, although they do not isolate the power call itself.
@@ -135,10 +135,10 @@ whether the extra approximation pays.
 
 ### 6. Edge Seeker's index addresses unpredictable lookup work
 
-In Rust f32, plain Edge Seeker goes from **36.0 ns on the grid to
-79.7 ns on random hues**, a **2.21×** increase. The indexed
-version moves from **30.3 to 43.5 ns**, or
-**1.43×**. Both variants evaluate the same interpolated boundary at
+In Rust f32, plain Edge Seeker goes from **35.5 ns on the grid to
+78.7 ns on random hues**, a **2.21×** increase. The indexed
+version moves from **30.4 to 43.8 ns**, or
+**1.44×**. Both variants evaluate the same interpolated boundary at
 the exact input hue; the index changes how they find the interval.
 
 Binary search follows a sequence of dependent comparisons. Repeated integer
@@ -154,8 +154,8 @@ the present Rust usize representation.
 
 ### 7. Higher-order convergence does not guarantee fewer cycles
 
-On P3 random input, Halley and Ostrowski take **120.1/119.7
-ns in Node** and **108.0/110.6 ns in Rust f64**. Halley
+On P3 random input, Halley and Ostrowski take **119.5/119.6
+ns in Node** and **107.9/109.9 ns in Rust f64**. Halley
 evaluates the constraints and derivatives together. Ostrowski takes a Newton
 step and usually evaluates the constraints again before its higher-order
 correction; that second evaluation depends on the first result.
@@ -171,7 +171,7 @@ rather than choosing an iteration solely for its mathematical order.
 ### 8. Uncached cubic is a real exception to the f32 advantage
 
 Rust f32 has a lower P3 random median for **15/16 methods**,
-but uncached cubic takes **228.1 ns versus 223.6 in f64**.
+but uncached cubic takes **227.3 ns versus 221.2 in f64**.
 There is a concrete difference in the work: `first_root` sends every f32
 Cardano candidate through `checked_cardano`; f64 returns the candidate directly.
 The check finds the first crossing interval, validates and polishes the root,
@@ -187,18 +187,18 @@ precision optimization; profiling their frequency and cost is the next step.
 
 ### 9. In-gamut traffic changes which work matters
 
-On the all-interior P3 workload, Node CSS MINDE falls to **62.9
-ns**, from **476.5 ns** on identical-lightness/hue out-of-gamut
+On the all-interior P3 workload, Node CSS MINDE falls to **62.2
+ns**, from **475.0 ns** on identical-lightness/hue out-of-gamut
 input. Its cube-root count falls to **0.0**: the canonical
 conversion returns before the clipping-error search. Node Fast instead takes
-**67.3 ns inside versus 57.5 ns outside**,
+**68.2 ns inside versus 57.5 ns outside**,
 because its cheap mapped lower path can skip the conversion that pass-through
 must preserve.
 
 Most canonical-checking methods consequently converge toward conversion cost
-on interior input. For example, checked Halley takes **48.0
+on interior input. For example, checked Halley takes **47.5
 ns in f64 and 30.4 ns in f32** there. Dualray retains its
-first-exit policy and still does boundary work, taking **69.6
+first-exit policy and still does boundary work, taking **68.1
 ns in f64**. For mostly in-gamut applications, the pass-through path and the
 cost of a failed precheck deserve as much attention as the boundary solver.
 The 50% mixture in the appendix shows the transition between those workloads.
@@ -206,8 +206,8 @@ The 50% mixture in the appendix shows the transition between those workloads.
 ## Comparing runtimes
 
 Node and Bun are near parity in the median across shared methods, but that
-overall similarity hides useful differences. Bun's cached cubic takes **83.6 ns
-against Node's 94.2**, and Bun Fast takes **52.6 against
+overall similarity hides useful differences. Bun's cached cubic takes **79.1 ns
+against Node's 92.7**, and Bun Fast takes **51.8 against
 57.9 ns**. Node wins CSS MINDE, where its cube-root implementation
 has much more work to influence. The median JS/Rust f64 ratios are around
 1.2× on this workload; the individual method and math-library path matter more
@@ -215,9 +215,9 @@ than a blanket language multiplier.
 
 | P3 random ratio | Median across shared methods | Range across methods |
 | --- | ---: | ---: |
-| Node / Bun | 1.03× | 0.76–1.13× |
-| Node / Rust f64 | 1.20× | 0.81–1.73× |
-| Bun / Rust f64 | 1.18× | 1.05–1.64× |
+| Node / Bun | 1.02× | 0.77–1.17× |
+| Node / Rust f64 | 1.20× | 0.81–1.74× |
+| Bun / Rust f64 | 1.16× | 1.04–1.63× |
 
 Ratios are for P3 random input; a value above one favors the denominator.
 The interior medians in Finding 5 cover CSS MINDE and the checked cubic,
@@ -238,9 +238,9 @@ especially on the grid, but the effect depends on the method and precision.
 
 | Runtime | sRGB / P3, random | Rec.2020 / P3, random | sRGB / P3, grid | Rec.2020 / P3, grid |
 | --- | ---: | ---: | ---: | ---: |
-| Node | 1.00× | 1.02× | 1.01× | 1.07× |
-| Bun | 1.01× | 1.05× | 1.01× | 1.07× |
-| Rust f64 | 0.99× | 1.01× | 1.00× | 1.07× |
+| Node | 1.00× | 1.03× | 1.01× | 1.06× |
+| Bun | 1.02× | 1.06× | 1.01× | 1.07× |
+| Rust f64 | 1.00× | 1.02× | 1.00× | 1.07× |
 | Rust f32 | 1.00× | 0.99× | 1.00× | 1.03× |
 
 Each entry is the median of the individual method's target/P3 time ratios,
@@ -250,17 +250,17 @@ three targets, so differences come from processing them for a different gamut.
 
 **Dualray's performance carries across targets.** On random input, the largest
 change from P3 across Dualray and Dualray Fast, all targets and all four runtimes,
-is 4.7%. A Dualray Fast row is the fastest mapped method on
+is 5.8%. A Dualray Fast row is the fastest mapped method on
 every target: `dualray fast (tables)` in Node, Bun and Rust f32 and `dualray fast (poly encode)` in Rust f64. Choosing sRGB or Rec.2020
 does not erase the lower-face shortcut's advantage on this distribution.
 
 **The iterative solvers and cached cubic are more sensitive.** Bun Halley takes
-140.8 ns for sRGB, 113.2 for P3 and
-148.0 for Rec.2020 on random input. Halley and Ostrowski's
-Rec.2020 penalties in Bun are 30.8%–31.1% there and
-39.2%–40.4% on the grid. Cached cubic also costs more
-for Rec.2020 in every runtime: 1.7%–13.2% on random input
-and 10.4%–26.6% on the grid. P3 alone understates these costs.
+137.8 ns for sRGB, 111.8 for P3 and
+146.0 for Rec.2020 on random input. Halley and Ostrowski's
+Rec.2020 penalties in Bun are 29.5%–30.6% there and
+38.8%–41.3% on the grid. Cached cubic also costs more
+for Rec.2020 in every runtime: 2.3%–14.1% on random input
+and 9.4%–26.8% on the grid. P3 alone understates these costs.
 
 The matrices have the same dimensions, but their coefficients change which
 channel limits chroma, when cached cubic can skip an upper-face solve, and
@@ -274,9 +274,9 @@ assign the cross-gamut gaps to extra iterations, fold handling or JIT behavior.
 **Output encoding changes too.** sRGB and P3 share a transfer function with a
 linear segment near black. This repository's CSS Rec.2020 encoder uses a pure
 gamma-2.4 power, with no linear segment. Even clip therefore changes cost:
-Rec.2020 takes 0.8%–13.3% more time than P3 on random input in
-Node, Bun and Rust f64. Rust f32 shows no penalty, at 36.0 ns
-for Rec.2020 versus 36.0 for P3. Extra power
+Rec.2020 takes 5.9%–12.4% more time than P3 on random input in
+Node, Bun and Rust f64. Rust f32 shows no penalty, at 35.4 ns
+for Rec.2020 versus 36.1 for P3. Extra power
 evaluations, fewer branches and the runtime's math implementation can pull in
 different directions; gamut width alone does not predict the result.
 ([JS transfer functions](src/rgb-spaces.js), [Rust transfer functions](rust/src/transfer.rs))
@@ -300,7 +300,7 @@ policy decides which speed comparisons are relevant.
 | Constant-lightness/hue first-exit boundary semantics | Dualray | Guarded refinement and exact-search recovery avoid replacing the boundary with Fast's fitted lower face. Canonical pass-through and disconnected outer islands remain separate policy questions. |
 | Repeated hues, with memory to spare | Cached Bottosson or cached cubic | Reuse removes hue-only setup; compare their approximation and bucket semantics before choosing. |
 | Mostly in gamut | Prioritize canonical precheck and pass-through cost | Conversion dominates once the boundary solver is skipped. |
-| Out-of-gamut, mostly above the cusp | In Rust, Dualray Fast (tables); in JavaScript, compare Dualray and the Fast rows on that distribution | In Rust the tables row takes 22.9%–23.5% less time than Dualray here. The JavaScript methods are within 10.9% of Dualray; Fast's large lower-face advantage does not carry over. Cached Bottosson and indexed Edge Seeker are also candidates when their boundary policies fit. |
+| Out-of-gamut, mostly above the cusp | In Rust, Dualray Fast (tables); in JavaScript, compare Dualray and the Fast rows on that distribution | In Rust the tables row takes 23.1%–23.7% less time than Dualray here. The JavaScript methods are within 10.2% of Dualray; Fast's large lower-face advantage does not carry over. Cached Bottosson and indexed Edge Seeker are also candidates when their boundary policies fit. |
 
 ## How to read these numbers
 
@@ -318,22 +318,22 @@ Shuffled fractional hue/lightness, C=0.4, all inputs out of gamut. The findings 
 
 | Method | Node | Bun | Rust f64 | Rust f32 |
 | --- | ---: | ---: | ---: | ---: |
-| clip | 55.0 | 55.6 | 45.8 | 36.0 |
-| css-minde | 475.2 | 629.3 | 590.1 | 394.8 |
-| oklch-cubic (cached) | 94.2 | 83.6 | 71.4 | 58.8 |
-| oklch-cubic (no cache) | 266.9 | 256.1 | 223.6 | 228.1 |
-| oklch-cubic-direct | 230.1 | 242.9 | 217.8 | 176.2 |
-| oklch-halley | 120.1 | 113.2 | 108.0 | 99.5 |
-| oklch-ostrowski | 119.7 | 115.8 | 110.6 | 94.9 |
-| dualray | 78.8 | 77.9 | 66.3 | 52.6 |
-| dualray fast | 57.9 | 52.6 | 40.8 | 32.3 |
-| dualray fast (poly encode) | — | — | 32.3 | 29.8 |
-| dualray fast (tables) | 56.8 | 50.3 | 37.5 | 29.1 |
-| bottosson-lightness | 120.6 | 121.4 | 100.3 | 79.6 |
-| bottosson-lightness (cached) | 66.3 | 71.0 | 44.2 | 37.6 |
-| edge-seeker | 154.4 | 146.7 | 89.3 | 79.7 |
-| edge-seeker (indexed) | 80.1 | 76.5 | 56.2 | 43.5 |
-| raytrace | 234.9 | 245.4 | 216.2 | 162.2 |
+| clip | 53.9 | 55.2 | 43.2 | 36.1 |
+| css-minde | 476.1 | 615.5 | 587.5 | 393.2 |
+| oklch-cubic (cached) | 92.7 | 79.1 | 70.4 | 58.4 |
+| oklch-cubic (no cache) | 262.1 | 254.6 | 221.2 | 227.3 |
+| oklch-cubic-direct | 231.6 | 240.2 | 216.8 | 174.9 |
+| oklch-halley | 119.5 | 111.8 | 107.9 | 98.9 |
+| oklch-ostrowski | 119.6 | 116.7 | 109.9 | 94.7 |
+| dualray | 78.8 | 77.2 | 66.3 | 52.6 |
+| dualray fast | 57.9 | 51.8 | 40.4 | 32.2 |
+| dualray fast (poly encode) | — | — | 32.2 | 29.8 |
+| dualray fast (tables) | 55.5 | 50.0 | 37.0 | 29.0 |
+| bottosson-lightness | 119.6 | 120.9 | 99.8 | 79.0 |
+| bottosson-lightness (cached) | 66.5 | 70.4 | 44.1 | 37.6 |
+| edge-seeker | 154.3 | 144.6 | 88.7 | 78.7 |
+| edge-seeker (indexed) | 76.8 | 75.8 | 55.8 | 43.8 |
+| raytrace | 237.2 | 240.8 | 218.2 | 161.4 |
 
 ## Where the next experiments would pay
 
@@ -347,15 +347,15 @@ Jobs ran serially with logical CPU affinity `2,3`, one method/target/runtime per
 
 Each process ran 50 complete warmup passes and 25 timed passes; the cell order rotated and reversed between rounds. All workloads contain 35,640 colors. Rust used input and checksum optimization barriers. Factories, table/index construction and initial cache filling preceded the measured passes.
 
-There are **682 measured cells** and **2046 fresh timing processes**. The median process range, (maximum−minimum)/median, is **1.8%**; **7 cells** span more than 10%. The ranges are repeatability diagnostics, not confidence intervals.
+There are **682 measured cells** and **2046 fresh timing processes**. The median process range, (maximum−minimum)/median, is **1.0%**; **6 cells** span more than 10%. The ranges are repeatability diagnostics, not confidence intervals.
 
-Bun Fast has **3/11 cells** with a process range above 5%. The earlier single-CPU run showed multiple timing modes, motivating the current affinity setting; the [affinity history](PERFORMANCE-NOTES.md#affinity-experiment) records that investigation.
+Bun Fast has **1/11 cells** with a process range above 5%. The earlier single-CPU run showed multiple timing modes, motivating the current affinity setting; the [affinity history](PERFORMANCE-NOTES.md#affinity-experiment) records that investigation.
 
 Every cell was validated in a separate process before timing. All outputs had to be finite and in range, and timed checksums had to agree with the validation sum over 75 passes. The regression suites and report-harness checks passed: **126 Rust tests**, **107 Bun tests**, **96 Node numerical tests**, **3 Node CLI tests**, **8 Node harness tests**, **8 Bun harness tests**. [Commands and complete validation logs](reports/performance-2026-10-03-validation.json) accompany the timing artifact.
 
 The [Math-call profiler](scripts/profile-performance-math.mjs) replayed each P3 workload after warming caches, delegated every counted call to the original Math function, and required exact agreement with the Node validation checksum. A separate pass instruments Fast's precheck, lower, upper and exact-search entries in an in-memory source copy, checking every output channel against production. Source replacement markers must match exactly. Gamma powers and hardware branch misses were not counted. The artifact is bound to the timing artifact's hash.
 
-The measured algorithm baseline is `58e586b0473f30e9934ba2b1454224a6a46d37c3` with uncommitted changes, which the recorded source hashes identify. The artifact records input, source and Rust-binary hashes. Resume verifies source hashes, binary hash, runtime versions, CPU model and affinity.
+The measured algorithm baseline is `afec3bb55ad9e704123c01bf7d0cf11c38ae8447`. The artifact records input, source and Rust-binary hashes. Resume verifies source hashes, binary hash, runtime versions, CPU model and affinity.
 
 ```sh
 # Generate fresh measurements on available logical CPUs.
@@ -379,106 +379,106 @@ Use `--prepare-only` or `--validate-only`, then `--resume`, for staged measureme
 
 | Method | Node | Bun | Rust f64 | Rust f32 |
 | --- | ---: | ---: | ---: | ---: |
-| clip | 40.1 | 42.7 | 30.3 | 20.4 |
-| css-minde | 422.6 | 576.3 | 538.0 | 356.8 |
-| oklch-cubic (cached) | 66.1 | 59.8 | 50.2 | 42.5 |
-| oklch-cubic (no cache) | 238.4 | 236.2 | 196.5 | 213.2 |
-| oklch-cubic-direct | 206.9 | 211.9 | 192.9 | 158.2 |
-| oklch-halley | 98.5 | 91.8 | 95.2 | 85.0 |
-| oklch-ostrowski | 97.8 | 94.5 | 93.2 | 78.2 |
-| dualray | 63.9 | 62.0 | 52.8 | 40.3 |
-| dualray fast | 48.4 | 41.9 | 30.4 | 23.6 |
-| dualray fast (poly encode) | — | — | 22.0 | 22.4 |
-| dualray fast (tables) | 46.0 | 40.7 | 27.7 | 21.1 |
-| bottosson-lightness | 101.0 | 105.6 | 88.2 | 69.7 |
-| bottosson-lightness (cached) | 45.0 | 49.0 | 30.5 | 24.0 |
-| edge-seeker | 89.7 | 100.1 | 47.4 | 36.0 |
-| edge-seeker (indexed) | 61.3 | 60.1 | 40.6 | 30.3 |
-| raytrace | 214.9 | 218.4 | 203.3 | 143.4 |
+| clip | 40.1 | 40.6 | 30.2 | 20.2 |
+| css-minde | 422.2 | 572.9 | 541.2 | 357.3 |
+| oklch-cubic (cached) | 65.1 | 59.1 | 49.5 | 42.4 |
+| oklch-cubic (no cache) | 237.5 | 234.4 | 197.1 | 210.4 |
+| oklch-cubic-direct | 205.3 | 212.1 | 193.0 | 157.3 |
+| oklch-halley | 97.3 | 91.7 | 94.6 | 84.5 |
+| oklch-ostrowski | 96.2 | 94.8 | 93.2 | 78.1 |
+| dualray | 63.4 | 61.6 | 52.5 | 40.1 |
+| dualray fast | 47.8 | 42.5 | 30.4 | 23.7 |
+| dualray fast (poly encode) | — | — | 22.0 | 21.9 |
+| dualray fast (tables) | 45.8 | 40.9 | 27.6 | 20.9 |
+| bottosson-lightness | 101.0 | 105.4 | 87.9 | 68.9 |
+| bottosson-lightness (cached) | 44.5 | 49.3 | 30.3 | 24.0 |
+| edge-seeker | 89.4 | 98.8 | 47.4 | 35.5 |
+| edge-seeker (indexed) | 58.4 | 59.9 | 40.8 | 30.4 |
+| raytrace | 213.1 | 215.8 | 201.7 | 142.7 |
 
 ### sRGB: ordered integer hues
 
 | Method | Node | Bun | Rust f64 | Rust f32 |
 | --- | ---: | ---: | ---: | ---: |
-| clip | 39.6 | 42.8 | 29.4 | 20.0 |
-| css-minde | 432.3 | 587.3 | 547.7 | 358.4 |
-| oklch-cubic (cached) | 71.6 | 62.9 | 50.2 | 43.0 |
-| oklch-cubic (no cache) | 242.8 | 240.4 | 203.4 | 213.9 |
-| oklch-cubic-direct | 211.7 | 221.3 | 192.5 | 157.6 |
-| oklch-halley | 108.0 | 120.1 | 95.9 | 88.4 |
-| oklch-ostrowski | 104.1 | 118.4 | 90.0 | 82.7 |
-| dualray | 64.2 | 60.2 | 53.9 | 40.5 |
-| dualray fast | 48.8 | 42.4 | 30.1 | 23.5 |
-| dualray fast (poly encode) | — | — | 22.0 | 21.6 |
-| dualray fast (tables) | 46.3 | 40.2 | 27.3 | 20.7 |
-| bottosson-lightness | 101.8 | 105.5 | 87.3 | 71.2 |
-| bottosson-lightness (cached) | 42.7 | 44.9 | 30.9 | 26.1 |
-| edge-seeker | 88.5 | 98.1 | 48.4 | 35.1 |
-| edge-seeker (indexed) | 63.7 | 60.4 | 40.8 | 30.4 |
-| raytrace | 216.4 | 223.5 | 201.5 | 144.6 |
+| clip | 39.2 | 43.1 | 29.5 | 19.7 |
+| css-minde | 425.2 | 584.0 | 540.3 | 356.0 |
+| oklch-cubic (cached) | 71.2 | 62.6 | 49.8 | 42.8 |
+| oklch-cubic (no cache) | 242.4 | 239.0 | 198.8 | 211.5 |
+| oklch-cubic-direct | 211.8 | 219.1 | 192.5 | 156.4 |
+| oklch-halley | 107.1 | 118.4 | 95.8 | 87.9 |
+| oklch-ostrowski | 103.4 | 116.7 | 89.3 | 82.1 |
+| dualray | 63.6 | 60.0 | 53.2 | 40.8 |
+| dualray fast | 47.6 | 42.0 | 30.0 | 23.5 |
+| dualray fast (poly encode) | — | — | 21.8 | 21.6 |
+| dualray fast (tables) | 44.9 | 40.3 | 27.5 | 20.7 |
+| bottosson-lightness | 100.1 | 106.4 | 87.9 | 71.0 |
+| bottosson-lightness (cached) | 42.2 | 44.2 | 30.6 | 26.0 |
+| edge-seeker | 89.3 | 98.0 | 48.4 | 34.6 |
+| edge-seeker (indexed) | 58.8 | 59.6 | 40.9 | 30.6 |
+| raytrace | 215.9 | 218.8 | 200.3 | 143.1 |
 
 ### sRGB: shuffled fractional hues
 
 | Method | Node | Bun | Rust f64 | Rust f32 |
 | --- | ---: | ---: | ---: | ---: |
-| clip | 53.6 | 57.1 | 43.0 | 36.4 |
-| css-minde | 482.3 | 640.3 | 589.1 | 394.6 |
-| oklch-cubic (cached) | 98.7 | 81.7 | 70.9 | 58.3 |
-| oklch-cubic (no cache) | 269.0 | 263.8 | 222.7 | 228.4 |
-| oklch-cubic-direct | 240.8 | 245.7 | 218.4 | 175.5 |
-| oklch-halley | 130.1 | 140.8 | 112.7 | 101.1 |
-| oklch-ostrowski | 125.5 | 137.0 | 106.7 | 96.0 |
-| dualray | 80.2 | 74.6 | 67.6 | 51.6 |
-| dualray fast | 57.8 | 52.0 | 39.8 | 31.6 |
-| dualray fast (poly encode) | — | — | 32.0 | 29.8 |
-| dualray fast (tables) | 56.8 | 50.9 | 36.7 | 28.7 |
-| bottosson-lightness | 119.8 | 126.4 | 101.6 | 82.8 |
-| bottosson-lightness (cached) | 65.9 | 66.4 | 44.9 | 38.6 |
-| edge-seeker | 154.6 | 145.2 | 88.2 | 76.2 |
-| edge-seeker (indexed) | 77.0 | 76.3 | 55.4 | 44.0 |
-| raytrace | 235.9 | 241.9 | 216.1 | 161.7 |
+| clip | 53.2 | 57.6 | 43.2 | 36.5 |
+| css-minde | 477.9 | 631.5 | 600.6 | 394.5 |
+| oklch-cubic (cached) | 96.4 | 82.4 | 71.1 | 58.4 |
+| oklch-cubic (no cache) | 267.7 | 260.0 | 222.3 | 228.3 |
+| oklch-cubic-direct | 235.5 | 252.1 | 217.8 | 175.1 |
+| oklch-halley | 127.7 | 137.8 | 111.1 | 101.8 |
+| oklch-ostrowski | 126.3 | 137.3 | 106.7 | 96.1 |
+| dualray | 79.3 | 74.7 | 67.2 | 51.2 |
+| dualray fast | 57.6 | 52.1 | 40.1 | 31.5 |
+| dualray fast (poly encode) | — | — | 32.0 | 29.6 |
+| dualray fast (tables) | 55.0 | 50.3 | 37.2 | 28.8 |
+| bottosson-lightness | 119.4 | 125.4 | 101.2 | 82.6 |
+| bottosson-lightness (cached) | 65.1 | 65.8 | 44.8 | 38.7 |
+| edge-seeker | 154.3 | 144.5 | 88.4 | 76.6 |
+| edge-seeker (indexed) | 76.9 | 75.3 | 55.8 | 44.1 |
+| raytrace | 234.9 | 242.3 | 215.3 | 162.9 |
 
 ### Rec.2020: ordered integer hues
 
 | Method | Node | Bun | Rust f64 | Rust f32 |
 | --- | ---: | ---: | ---: | ---: |
-| clip | 44.3 | 48.3 | 32.9 | 20.2 |
-| css-minde | 422.8 | 582.0 | 544.7 | 352.0 |
-| oklch-cubic (cached) | 83.7 | 72.2 | 58.5 | 46.9 |
-| oklch-cubic (no cache) | 249.9 | 246.2 | 206.2 | 215.3 |
-| oklch-cubic-direct | 222.4 | 238.7 | 199.2 | 159.7 |
-| oklch-halley | 117.3 | 127.8 | 101.5 | 93.5 |
-| oklch-ostrowski | 118.7 | 132.7 | 102.7 | 85.7 |
-| dualray | 67.5 | 64.0 | 58.0 | 42.6 |
-| dualray fast | 55.7 | 45.5 | 32.2 | 24.5 |
-| dualray fast (poly encode) | — | — | 23.0 | 22.8 |
-| dualray fast (tables) | 48.6 | 43.6 | 29.6 | 21.5 |
-| bottosson-lightness | 107.7 | 114.8 | 92.8 | 74.4 |
-| bottosson-lightness (cached) | 50.4 | 50.2 | 35.1 | 27.6 |
-| edge-seeker | 97.0 | 104.6 | 51.9 | 35.2 |
-| edge-seeker (indexed) | 64.8 | 63.7 | 43.4 | 31.4 |
-| raytrace | 221.7 | 226.2 | 202.9 | 144.0 |
+| clip | 42.8 | 47.4 | 32.9 | 20.6 |
+| css-minde | 421.8 | 574.6 | 535.1 | 351.2 |
+| oklch-cubic (cached) | 82.6 | 72.4 | 58.7 | 46.4 |
+| oklch-cubic (no cache) | 246.4 | 243.9 | 204.0 | 215.0 |
+| oklch-cubic-direct | 222.2 | 233.3 | 197.6 | 158.3 |
+| oklch-halley | 116.1 | 129.6 | 101.5 | 92.9 |
+| oklch-ostrowski | 118.1 | 131.5 | 102.0 | 85.8 |
+| dualray | 67.3 | 64.1 | 57.0 | 42.5 |
+| dualray fast | 49.9 | 44.9 | 32.3 | 24.4 |
+| dualray fast (poly encode) | — | — | 22.7 | 22.6 |
+| dualray fast (tables) | 47.6 | 43.9 | 29.6 | 21.5 |
+| bottosson-lightness | 106.4 | 112.3 | 92.7 | 74.1 |
+| bottosson-lightness (cached) | 49.4 | 48.2 | 35.3 | 27.4 |
+| edge-seeker | 93.9 | 105.3 | 51.6 | 35.5 |
+| edge-seeker (indexed) | 61.9 | 63.0 | 43.7 | 31.3 |
+| raytrace | 218.2 | 224.4 | 202.8 | 143.0 |
 
 ### Rec.2020: shuffled fractional hues
 
 | Method | Node | Bun | Rust f64 | Rust f32 |
 | --- | ---: | ---: | ---: | ---: |
-| clip | 57.7 | 63.0 | 46.2 | 36.0 |
-| css-minde | 471.5 | 621.9 | 581.8 | 391.9 |
-| oklch-cubic (cached) | 106.6 | 89.0 | 77.0 | 59.8 |
-| oklch-cubic (no cache) | 269.9 | 268.8 | 225.9 | 230.1 |
-| oklch-cubic-direct | 242.5 | 262.6 | 220.4 | 175.2 |
-| oklch-halley | 138.6 | 148.0 | 114.7 | 102.3 |
-| oklch-ostrowski | 138.9 | 151.8 | 117.2 | 97.7 |
-| dualray | 79.4 | 76.4 | 68.9 | 50.2 |
-| dualray fast | 58.9 | 55.0 | 41.3 | 31.2 |
-| dualray fast (poly encode) | — | — | 31.7 | 29.6 |
-| dualray fast (tables) | 57.2 | 53.5 | 38.9 | 28.6 |
-| bottosson-lightness | 123.2 | 130.5 | 104.7 | 82.1 |
-| bottosson-lightness (cached) | 68.5 | 62.3 | 44.4 | 34.1 |
-| edge-seeker | 156.6 | 150.5 | 92.1 | 76.4 |
-| edge-seeker (indexed) | 79.0 | 77.4 | 57.0 | 43.4 |
-| raytrace | 236.9 | 246.8 | 215.5 | 160.7 |
+| clip | 57.1 | 62.1 | 45.9 | 35.4 |
+| css-minde | 470.5 | 618.7 | 577.2 | 387.7 |
+| oklch-cubic (cached) | 105.7 | 89.2 | 76.8 | 59.7 |
+| oklch-cubic (no cache) | 266.7 | 262.3 | 225.2 | 226.3 |
+| oklch-cubic-direct | 240.1 | 254.0 | 219.7 | 175.1 |
+| oklch-halley | 136.7 | 146.0 | 113.8 | 102.7 |
+| oklch-ostrowski | 140.0 | 151.1 | 116.8 | 98.2 |
+| dualray | 79.2 | 75.4 | 68.8 | 50.5 |
+| dualray fast | 58.5 | 54.8 | 41.4 | 31.0 |
+| dualray fast (poly encode) | — | — | 31.9 | 29.6 |
+| dualray fast (tables) | 56.5 | 52.8 | 38.3 | 28.8 |
+| bottosson-lightness | 122.8 | 129.5 | 104.4 | 82.4 |
+| bottosson-lightness (cached) | 69.1 | 61.2 | 43.8 | 34.1 |
+| edge-seeker | 156.6 | 148.3 | 88.6 | 76.3 |
+| edge-seeker (indexed) | 80.0 | 81.3 | 56.5 | 43.3 |
+| raytrace | 236.0 | 244.7 | 214.9 | 159.6 |
 
 ## Appendix B: cusp-side and membership workloads
 
@@ -486,106 +486,106 @@ Use `--prepare-only` or `--validate-only`, then `--resume`, for staged measureme
 
 | Method | Node | Bun | Rust f64 | Rust f32 |
 | --- | ---: | ---: | ---: | ---: |
-| clip | 49.8 | 52.6 | 40.7 | 32.2 |
-| css-minde | 472.2 | 616.6 | 592.6 | 397.6 |
-| oklch-cubic (cached) | 74.2 | 61.1 | 54.1 | 40.0 |
-| oklch-cubic (no cache) | 244.8 | 237.8 | 204.5 | 209.9 |
-| oklch-cubic-direct | 223.9 | 234.7 | 210.4 | 170.4 |
-| oklch-halley | 114.4 | 108.1 | 107.3 | 97.7 |
-| oklch-ostrowski | 114.9 | 112.4 | 111.2 | 94.0 |
-| dualray | 71.5 | 70.0 | 58.3 | 46.4 |
-| dualray fast | 34.7 | 35.0 | 24.8 | 18.8 |
-| dualray fast (poly encode) | — | — | 17.4 | 17.1 |
-| dualray fast (tables) | 35.6 | 31.7 | 25.5 | 18.7 |
-| bottosson-lightness | 112.5 | 111.7 | 93.3 | 73.3 |
-| bottosson-lightness (cached) | 56.1 | 57.8 | 37.3 | 31.7 |
-| edge-seeker | 144.5 | 135.7 | 81.9 | 74.1 |
-| edge-seeker (indexed) | 69.7 | 69.3 | 47.5 | 39.0 |
-| raytrace | 226.5 | 236.5 | 213.9 | 159.2 |
+| clip | 50.1 | 52.7 | 40.6 | 32.1 |
+| css-minde | 473.3 | 618.6 | 585.4 | 393.1 |
+| oklch-cubic (cached) | 72.0 | 60.9 | 54.0 | 39.8 |
+| oklch-cubic (no cache) | 244.6 | 237.1 | 204.6 | 210.8 |
+| oklch-cubic-direct | 220.6 | 233.9 | 210.5 | 170.3 |
+| oklch-halley | 112.7 | 108.1 | 106.4 | 97.8 |
+| oklch-ostrowski | 114.7 | 111.1 | 108.1 | 94.3 |
+| dualray | 72.2 | 69.4 | 58.1 | 46.1 |
+| dualray fast | 34.4 | 31.8 | 24.9 | 18.8 |
+| dualray fast (poly encode) | — | — | 17.7 | 17.0 |
+| dualray fast (tables) | 35.2 | 32.0 | 24.8 | 18.6 |
+| bottosson-lightness | 110.6 | 111.7 | 93.0 | 72.8 |
+| bottosson-lightness (cached) | 55.7 | 57.6 | 36.9 | 31.7 |
+| edge-seeker | 147.1 | 135.8 | 81.6 | 73.4 |
+| edge-seeker (indexed) | 68.2 | 69.1 | 47.7 | 38.6 |
+| raytrace | 227.4 | 233.4 | 211.6 | 159.4 |
 
 ### Above the P3 cusp
 
 | Method | Node | Bun | Rust f64 | Rust f32 |
 | --- | ---: | ---: | ---: | ---: |
-| clip | 54.5 | 54.5 | 41.0 | 37.4 |
-| css-minde | 470.1 | 605.6 | 584.9 | 382.1 |
-| oklch-cubic (cached) | 139.7 | 120.8 | 100.8 | 102.4 |
-| oklch-cubic (no cache) | 309.2 | 298.6 | 247.9 | 268.2 |
-| oklch-cubic-direct | 221.3 | 228.6 | 210.7 | 178.1 |
-| oklch-halley | 122.9 | 114.9 | 108.4 | 106.8 |
-| oklch-ostrowski | 116.7 | 112.8 | 102.0 | 91.4 |
-| dualray | 90.5 | 89.9 | 81.3 | 65.8 |
-| dualray fast | 100.3 | 91.2 | 76.6 | 61.1 |
-| dualray fast (poly encode) | — | — | 68.7 | 59.0 |
-| dualray fast (tables) | 92.9 | 86.0 | 62.7 | 50.3 |
-| bottosson-lightness | 141.3 | 136.4 | 117.2 | 92.8 |
-| bottosson-lightness (cached) | 88.0 | 94.2 | 56.7 | 47.3 |
-| edge-seeker | 159.4 | 165.5 | 94.1 | 81.3 |
-| edge-seeker (indexed) | 81.5 | 84.2 | 63.2 | 48.4 |
-| raytrace | 238.5 | 238.5 | 214.8 | 157.9 |
+| clip | 53.9 | 54.2 | 40.8 | 37.4 |
+| css-minde | 467.5 | 600.8 | 580.4 | 376.8 |
+| oklch-cubic (cached) | 139.1 | 120.2 | 100.8 | 101.9 |
+| oklch-cubic (no cache) | 304.7 | 297.8 | 245.1 | 266.7 |
+| oklch-cubic-direct | 224.0 | 226.9 | 210.7 | 175.9 |
+| oklch-halley | 123.3 | 114.5 | 108.2 | 106.5 |
+| oklch-ostrowski | 117.0 | 112.0 | 101.8 | 91.6 |
+| dualray | 90.9 | 89.5 | 81.0 | 65.0 |
+| dualray fast | 100.1 | 91.2 | 76.6 | 61.0 |
+| dualray fast (poly encode) | — | — | 66.2 | 58.8 |
+| dualray fast (tables) | 92.0 | 85.7 | 62.3 | 49.6 |
+| bottosson-lightness | 135.7 | 136.6 | 112.6 | 93.7 |
+| bottosson-lightness (cached) | 87.8 | 94.3 | 55.6 | 47.3 |
+| edge-seeker | 161.6 | 157.1 | 93.4 | 81.0 |
+| edge-seeker (indexed) | 83.7 | 82.1 | 61.6 | 48.0 |
+| raytrace | 236.3 | 239.2 | 214.9 | 156.9 |
 
 ### P3 random, checked entry
 
 | Method | Node | Bun | Rust f64 | Rust f32 |
 | --- | ---: | ---: | ---: | ---: |
-| clip | 54.2 | 56.5 | 43.8 | 36.0 |
-| css-minde | 476.5 | 623.9 | 591.0 | 413.5 |
-| oklch-cubic (cached) | 119.3 | 101.8 | 88.0 | 78.8 |
-| oklch-cubic (no cache) | 286.2 | 272.6 | 239.2 | 259.5 |
-| oklch-cubic-direct | 252.2 | 257.9 | 222.9 | 183.6 |
-| oklch-halley | 122.7 | 135.1 | 112.3 | 106.4 |
-| oklch-ostrowski | 125.5 | 139.0 | 114.6 | 100.2 |
-| dualray | 79.5 | 76.2 | 65.9 | 52.8 |
-| dualray fast | 57.5 | 52.2 | 40.5 | 32.3 |
-| dualray fast (poly encode) | — | — | 32.3 | 29.7 |
-| dualray fast (tables) | 56.0 | 50.1 | 36.9 | 29.0 |
-| bottosson-lightness | 123.7 | 129.8 | 102.3 | 86.4 |
-| bottosson-lightness (cached) | 96.2 | 92.1 | 60.8 | 54.4 |
-| edge-seeker | 165.6 | 157.6 | 91.7 | 89.5 |
-| edge-seeker (indexed) | 97.3 | 97.0 | 68.6 | 61.3 |
-| raytrace | 238.4 | 248.3 | 221.6 | 165.7 |
+| clip | 53.9 | 55.7 | 43.3 | 35.9 |
+| css-minde | 475.0 | 618.6 | 585.4 | 395.8 |
+| oklch-cubic (cached) | 118.6 | 102.4 | 87.0 | 75.3 |
+| oklch-cubic (no cache) | 285.3 | 272.8 | 237.8 | 247.8 |
+| oklch-cubic-direct | 245.5 | 257.7 | 220.3 | 182.1 |
+| oklch-halley | 122.3 | 134.7 | 111.9 | 104.9 |
+| oklch-ostrowski | 124.2 | 140.6 | 113.6 | 99.8 |
+| dualray | 79.2 | 76.1 | 66.2 | 52.5 |
+| dualray fast | 57.5 | 52.1 | 40.4 | 31.9 |
+| dualray fast (poly encode) | — | — | 31.9 | 29.8 |
+| dualray fast (tables) | 56.6 | 50.1 | 37.1 | 29.1 |
+| bottosson-lightness | 123.9 | 128.8 | 101.9 | 86.5 |
+| bottosson-lightness (cached) | 96.1 | 89.3 | 60.2 | 54.1 |
+| edge-seeker | 166.2 | 158.5 | 90.9 | 88.6 |
+| edge-seeker (indexed) | 105.0 | 97.2 | 68.5 | 61.2 |
+| raytrace | 238.4 | 245.5 | 219.5 | 166.4 |
 
 ### P3 50% in gamut, checked entry
 
 | Method | Node | Bun | Rust f64 | Rust f32 |
 | --- | ---: | ---: | ---: | ---: |
-| clip | 58.7 | 59.2 | 46.1 | 31.5 |
-| css-minde | 278.0 | 339.9 | 323.8 | 212.6 |
-| oklch-cubic (cached) | 90.9 | 85.0 | 67.8 | 54.6 |
-| oklch-cubic (no cache) | 180.7 | 171.7 | 143.8 | 139.3 |
-| oklch-cubic-direct | 158.1 | 164.5 | 134.0 | 106.3 |
-| oklch-halley | 93.9 | 99.2 | 80.6 | 67.1 |
-| oklch-ostrowski | 93.7 | 102.2 | 81.0 | 65.1 |
-| dualray | 81.6 | 80.8 | 68.7 | 52.9 |
-| dualray fast | 66.8 | 62.9 | 46.7 | 34.3 |
-| dualray fast (poly encode) | — | — | 42.6 | 32.9 |
-| dualray fast (tables) | 65.6 | 60.9 | 45.2 | 32.9 |
-| bottosson-lightness | 93.7 | 95.7 | 75.6 | 58.0 |
-| bottosson-lightness (cached) | 82.7 | 77.0 | 54.4 | 43.9 |
-| edge-seeker | 116.0 | 110.6 | 68.3 | 60.2 |
-| edge-seeker (indexed) | 81.8 | 80.6 | 58.3 | 46.9 |
-| raytrace | 151.2 | 155.9 | 134.3 | 101.0 |
+| clip | 57.7 | 58.7 | 45.6 | 31.5 |
+| css-minde | 268.4 | 345.3 | 317.8 | 212.4 |
+| oklch-cubic (cached) | 90.4 | 84.5 | 68.0 | 54.7 |
+| oklch-cubic (no cache) | 179.7 | 171.4 | 143.6 | 139.0 |
+| oklch-cubic-direct | 155.7 | 164.2 | 133.9 | 106.7 |
+| oklch-halley | 92.8 | 99.6 | 80.2 | 67.4 |
+| oklch-ostrowski | 94.3 | 103.0 | 81.1 | 64.9 |
+| dualray | 81.7 | 79.9 | 68.9 | 52.8 |
+| dualray fast | 67.2 | 62.0 | 46.8 | 34.7 |
+| dualray fast (poly encode) | — | — | 43.5 | 33.0 |
+| dualray fast (tables) | 66.1 | 60.8 | 45.3 | 32.8 |
+| bottosson-lightness | 93.6 | 96.1 | 75.4 | 58.3 |
+| bottosson-lightness (cached) | 82.2 | 76.7 | 54.6 | 43.8 |
+| edge-seeker | 111.8 | 108.6 | 68.8 | 59.6 |
+| edge-seeker (indexed) | 82.2 | 79.5 | 58.1 | 46.9 |
+| raytrace | 150.8 | 154.3 | 133.6 | 98.4 |
 
 ### P3 100% in gamut, checked entry
 
 | Method | Node | Bun | Rust f64 | Rust f32 |
 | --- | ---: | ---: | ---: | ---: |
-| clip | 62.2 | 62.6 | 47.0 | 27.4 |
-| css-minde | 62.9 | 58.1 | 48.8 | 31.7 |
-| oklch-cubic (cached) | 61.9 | 59.4 | 47.9 | 34.0 |
-| oklch-cubic (no cache) | 62.0 | 59.8 | 47.3 | 30.3 |
-| oklch-cubic-direct | 62.8 | 59.1 | 47.2 | 30.6 |
-| oklch-halley | 63.8 | 58.8 | 48.0 | 30.4 |
-| oklch-ostrowski | 62.5 | 60.0 | 47.6 | 31.0 |
-| dualray | 83.7 | 80.4 | 69.6 | 51.3 |
-| dualray fast | 67.3 | 64.3 | 52.9 | 36.2 |
-| dualray fast (poly encode) | — | — | 53.6 | 36.3 |
-| dualray fast (tables) | 68.6 | 63.9 | 53.4 | 36.3 |
-| bottosson-lightness | 61.7 | 60.5 | 48.7 | 30.6 |
-| bottosson-lightness (cached) | 61.9 | 58.2 | 49.1 | 33.4 |
-| edge-seeker | 64.0 | 58.3 | 47.2 | 33.0 |
-| edge-seeker (indexed) | 61.2 | 59.1 | 48.1 | 32.6 |
-| raytrace | 62.2 | 58.2 | 47.7 | 30.3 |
+| clip | 61.7 | 62.3 | 46.5 | 27.6 |
+| css-minde | 62.2 | 58.1 | 48.7 | 31.2 |
+| oklch-cubic (cached) | 62.2 | 58.9 | 47.1 | 33.8 |
+| oklch-cubic (no cache) | 61.8 | 60.0 | 47.7 | 30.1 |
+| oklch-cubic-direct | 61.7 | 59.1 | 47.1 | 30.5 |
+| oklch-halley | 61.6 | 58.6 | 47.5 | 30.4 |
+| oklch-ostrowski | 62.8 | 58.8 | 47.3 | 30.4 |
+| dualray | 82.8 | 80.8 | 68.1 | 51.7 |
+| dualray fast | 68.2 | 64.7 | 53.4 | 36.2 |
+| dualray fast (poly encode) | — | — | 53.8 | 36.1 |
+| dualray fast (tables) | 68.0 | 65.7 | 52.9 | 36.2 |
+| bottosson-lightness | 62.3 | 58.7 | 48.5 | 30.3 |
+| bottosson-lightness (cached) | 61.1 | 59.0 | 48.6 | 33.0 |
+| edge-seeker | 61.8 | 58.5 | 47.2 | 32.8 |
+| edge-seeker (indexed) | 61.7 | 58.9 | 47.2 | 32.8 |
+| raytrace | 61.6 | 58.4 | 46.6 | 30.3 |
 
 ## Appendix C: inputs, operation counts and process ranges
 
@@ -653,11 +653,11 @@ Path entries overlap: a canonical precheck can precede upper solving, and reject
 
 | Workload | Runtime | Method | Median | Min–max | Range/median |
 | --- | --- | --- | ---: | ---: | ---: |
-| display-p3-inside-checked | Rust f32 | bottosson-lightness (cached) | 33.4 | 32.8–40.6 | 23.3% |
-| display-p3-below-cusp | Bun | dualray fast | 35.0 | 31.7–37.1 | 15.7% |
-| display-p3-random | Rust f64 | clip | 45.8 | 43.1–49.5 | 13.8% |
-| display-p3-grid | Bun | clip | 42.7 | 41.3–46.6 | 12.3% |
-| display-p3-mixed-checked | Node | edge-seeker | 116.0 | 109.8–123.5 | 11.8% |
-| display-p3-below-cusp | Bun | dualray fast (tables) | 31.7 | 31.6–35.4 | 11.8% |
-| srgb-grid | Node | bottosson-lightness (cached) | 42.7 | 41.7–46.0 | 10.0% |
-| display-p3-above-cusp | Rust f32 | edge-seeker (indexed) | 48.4 | 48.0–52.6 | 9.4% |
+| srgb-random | Rust f64 | oklch-cubic (cached) | 71.1 | 70.9–81.3 | 14.6% |
+| display-p3-below-cusp | Bun | dualray fast (tables) | 32.0 | 31.8–35.4 | 11.4% |
+| display-p3-random-checked | Node | edge-seeker (indexed) | 105.0 | 95.6–107.2 | 11.0% |
+| display-p3-grid | Node | dualray fast (tables) | 45.8 | 45.7–50.6 | 10.6% |
+| rec2020-random | Bun | bottosson-lightness (cached) | 61.2 | 61.0–67.4 | 10.4% |
+| display-p3-inside-checked | Rust f64 | oklch-cubic (no cache) | 47.7 | 47.6–52.4 | 10.1% |
+| rec2020-random | Node | raytrace | 236.0 | 234.0–255.8 | 9.2% |
+| rec2020-grid | Rust f32 | oklch-cubic-direct | 158.3 | 158.1–171.3 | 8.4% |

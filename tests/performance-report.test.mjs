@@ -112,7 +112,7 @@ test('branch attribution, runtime guidance and cusp evidence appear beside the a
  assert.match(text,/## Comparing runtimes/);
  assert.match(text,/## Choosing a method/);
  assert.match(text,/`dualray fast \(tables\)` in Node, Bun and Rust f32 and `dualray fast \(poly encode\)` in Rust f64/);
- assert.match(text,/31\.0 ns in f32 versus 47\.9 in f64/);
+ assert.match(text,/30\.5 ns in f32 versus 47\.3 in f64/);
  assert.match(text,/Node is slower than Rust f64 here/);
 });
 
@@ -120,7 +120,7 @@ test('gamut comparison uses identical inputs and checks target-specific conclusi
  const text=renderPerformanceAnalysis(measured,profile);
  assert.match(text,/## Comparing gamuts/);
  assert.match(text,/\| Rust f32 \| 1\.00× \| 0\.99× \| 1\.00× \| 1\.03× \|/);
- assert.match(text,/140\.8 ns for sRGB, 113\.2 for P3 and\s+148\.0 for Rec\.2020/);
+ assert.match(text,/137\.8 ns for sRGB, 111\.8 for P3 and\s+146\.0 for Rec\.2020/);
  assert.match(text,/Rec\.2020 contains 126 interior colors\s+\(0\.4%\)/);
  const mismatched=structuredClone(measured);
  mismatched.workloads.find(x=>x.id==='srgb-random').sha256='different-inputs';
