@@ -835,6 +835,16 @@ mod tests {
     }
 
     #[test]
+    fn paired_trig_keeps_prechecked_mapping_consistent() {
+        // macOS release builds previously used different trig results in
+        // Bottosson's rejected precheck and Raytrace's canonical pass-through.
+        let samples = [[0.98, 0.4, 49.0], [0.80090463, 0.4, 149.01639]];
+        validate_gamut::<DisplayP3>(&samples, &[]);
+        validate_gamut::<Srgb>(&samples, &[]);
+        validate_gamut::<Rec2020>(&samples, &[]);
+    }
+
+    #[test]
     fn all_methods_match_on_benchmark_workloads() {
         let grid = crate::build_grid();
         let random = crate::build_random(grid.len());

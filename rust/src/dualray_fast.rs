@@ -76,13 +76,20 @@ fitted!(DisplayP3, p3, "generated/dualray_fast_display_p3.rs");
 fitted!(Rec2020, rec2020, "generated/dualray_fast_rec2020.rs");
 
 // Hardware FMA when the target has it; otherwise a separate multiply/add.
+// AArch64's floating-point FMA is covered by `neon`; `fma` is the x86 feature.
 #[inline(always)]
 fn fma(a: Float, b: Float, c: Float) -> Float {
-    #[cfg(target_feature = "fma")]
+    #[cfg(any(
+        target_feature = "fma",
+        all(target_arch = "aarch64", target_feature = "neon")
+    ))]
     {
         a.mul_add(b, c)
     }
-    #[cfg(not(target_feature = "fma"))]
+    #[cfg(not(any(
+        target_feature = "fma",
+        all(target_arch = "aarch64", target_feature = "neon")
+    )))]
     {
         a * b + c
     }
@@ -330,8 +337,7 @@ impl<G: DualrayFastData, const FAST_ENCODE: bool> DualrayFast<G, FAST_ENCODE> {
                 // reuse its unit direction when the solver's angle is equal:
                 // h * PI / 180 and h * (PI / 180) can round differently.
                 let radians = super::hue_radians(h);
-                let a = radians.cos();
-                let b = radians.sin();
+                let (b, a) = radians.sin_cos();
                 let rgb = super::color::Oklab {
                     l,
                     a: c * a,
@@ -420,6 +426,17 @@ pub(crate) type DualrayFastEncode<G> = DualrayFast<G, true>;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
+    #[test]
+    fn aarch64_fma_retains_product_rounding_residual() {
+        // Separate multiply/add rounds the product to one and returns zero.
+        // Fused evaluation keeps this residual in both precision lanes.
+        let epsilon = Float::EPSILON;
+        let a = std::hint::black_box(1.0 + epsilon);
+        let b = std::hint::black_box(1.0 - epsilon);
+        assert_eq!(fma(a, b, -1.0), -epsilon * epsilon);
+    }
 
     // Retain the original reduction as a bitwise compatibility reference.
     // Horner evaluation would change rounding and cannot check this contract.

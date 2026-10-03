@@ -39,7 +39,7 @@ impl<G: RgbGamut> CssMinde<G> {
             h
         };
         let angle = hue_radians(h);
-        let (hue_a, hue_b) = (angle.cos(), angle.sin());
+        let (hue_b, hue_a) = angle.sin_cos();
         let mut lab = Oklab {
             l,
             a: c * hue_a,

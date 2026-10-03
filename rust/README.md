@@ -70,8 +70,10 @@ other implementations must use the same encoding.
   six ports; the iterative solvers retain upstream's gamut-specific fold windows.
 - `p3_compat.rs` retains test-only historical P3 conversion routines.
 - `compensated.rs` shares product residuals and accurate multiply-adds across
-  Dualray, Bottosson and the iterative fold solver. FMA-enabled targets use
-  hardware FMA; other targets use native two-product/two-sum arithmetic.
+  Dualray, Bottosson and the iterative fold solver. Targets with `fma` (x86)
+  or `neon` on AArch64 use hardware FMA; other targets use native
+  two-product/two-sum arithmetic. Dualray Fast's fitted polynomials use the
+  same feature detection, with separate multiply/add as their fallback.
   The portable multiply-add is a compensated approximation, not a general
   correctly-rounded FMA emulator. Both builds retain the same error budgets.
 - `dualray::DualrayData` owns the normalized channel basis and fitted seeds.

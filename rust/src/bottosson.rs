@@ -188,7 +188,8 @@ fn find_cusp<G: BottossonData>(a: Float, b: Float, h: Float) -> [Float; 2] {
         if (h - primary).abs() < 1.0 {
             let delta = if h < 0.0 { h + 90.0 } else { h - 270.0 };
             let angle = delta * PI / 180.0;
-            let (a, b) = (angle.sin(), -angle.cos());
+            let (a, cos) = angle.sin_cos();
+            let b = -cos;
             (a, b, compute_max_saturation::<G, true>(a, b, h))
         } else {
             (a, b, compute_max_saturation::<G, false>(a, b, h))
@@ -265,8 +266,7 @@ impl<G: BottossonData> BottossonLightness<G> {
         }
 
         let hr = hue_radians(h);
-        let unit_a = hr.cos();
-        let unit_b = hr.sin();
+        let (unit_b, unit_a) = hr.sin_cos();
         let lab_a = c * unit_a;
         let lab_b = c * unit_b;
 
@@ -402,8 +402,7 @@ impl<G: BottossonData> BottossonLightnessCached<G> {
             return self.cache[key];
         }
         let rad = key as Float / 10.0 * PI / 180.0;
-        let unit_a = rad.cos();
-        let unit_b = rad.sin();
+        let (unit_b, unit_a) = rad.sin_cos();
         let cusp = find_cusp::<G>(unit_a, unit_b, key as Float / 10.0);
         let d = [
             cusp[0],

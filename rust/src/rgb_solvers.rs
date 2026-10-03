@@ -111,7 +111,7 @@ fn first_turn(d: Float, b: Float, a: Float) -> Float {
 
 fn get_hue_data<G: RgbGamut>(h: Float) -> HueData {
     let rad = hue_radians(h);
-    let (cos, sin) = (rad.cos(), rad.sin());
+    let (sin, cos) = rad.sin_cos();
     let q0 = KA0 * cos + KB0 * sin;
     let q1 = KA1 * cos + KB1 * sin;
     let q2 = KA2 * cos + KB2 * sin;
@@ -275,7 +275,7 @@ fn first_turn_no_cache(d: Float, b: Float, a: Float) -> Float {
 fn get_hue_data_no_cache<G: RgbGamut>(h: Float) -> NoCacheHueData {
     let bucket_h = hue_bucket(h) as Float / 10.0;
     let rad = hue_radians(bucket_h);
-    let (cos, sin) = (rad.cos(), rad.sin());
+    let (sin, cos) = rad.sin_cos();
     let q0 = KA0 * cos + KB0 * sin;
     let q1 = KA1 * cos + KB1 * sin;
     let q2 = KA2 * cos + KB2 * sin;
@@ -477,7 +477,7 @@ impl<G: RgbGamut> OklchCubicDirect<G> {
         }
 
         let rad = hue_radians(h);
-        let (cos, sin) = (rad.cos(), rad.sin());
+        let (sin, cos) = rad.sin_cos();
         let q0 = KA0 * cos + KB0 * sin;
         let q1 = KA1 * cos + KB1 * sin;
         let q2 = KA2 * cos + KB2 * sin;
@@ -781,7 +781,7 @@ impl<G: RgbGamut> OklchHalley<G> {
         }
 
         let rad = hue_radians(h);
-        let (cos, sin) = (rad.cos(), rad.sin());
+        let (sin, cos) = rad.sin_cos();
         let q0 = KA0 * cos + KB0 * sin;
         let q1 = KA1 * cos + KB1 * sin;
         let q2 = KA2 * cos + KB2 * sin;
@@ -976,7 +976,7 @@ impl<G: RgbGamut> OklchOstrowski<G> {
         }
 
         let rad = hue_radians(h);
-        let (cos, sin) = (rad.cos(), rad.sin());
+        let (sin, cos) = rad.sin_cos();
         let q0 = KA0 * cos + KB0 * sin;
         let q1 = KA1 * cos + KB1 * sin;
         let q2 = KA2 * cos + KB2 * sin;
@@ -1023,8 +1023,7 @@ impl<G: RgbGamut> Raytrace<G> {
             return;
         }
         let hr = hue_radians(h);
-        let unit_a = hr.cos();
-        let unit_b = hr.sin();
+        let (unit_b, unit_a) = hr.sin_cos();
         let (mut mr, mut mg, mut mb) =
             oklab_to_linear_rgb_components::<G>(l, c * unit_a, c * unit_b);
         if check_in_gamut

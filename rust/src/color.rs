@@ -28,10 +28,13 @@ impl Oklch {
     #[inline(always)]
     pub fn to_oklab(self) -> Oklab {
         let h = hue_radians(self.h_degrees);
+        // Use the same paired trig operation as the mappers. Separate calls
+        // can be combined differently by the optimizer, changing output bits.
+        let (sin, cos) = h.sin_cos();
         Oklab {
             l: self.l,
-            a: self.c * h.cos(),
-            b: self.c * h.sin(),
+            a: self.c * cos,
+            b: self.c * sin,
         }
     }
 }

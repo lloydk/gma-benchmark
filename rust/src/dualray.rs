@@ -417,8 +417,7 @@ impl<G: DualrayData> Dualray<G> {
             h % 360.0
         };
         let radians = hue * (PI / 180.0);
-        let a = radians.cos();
-        let b = radians.sin();
+        let (b, a) = radians.sin_cos();
         let l3 = l * l * l;
         let rows = ray_rows::<G>(a, b);
         let inv_l = 1.0 / l;

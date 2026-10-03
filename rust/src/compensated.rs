@@ -1,16 +1,29 @@
 // Native compensated arithmetic for bounded solver operands. This module is
 // compiled separately in each lane; no runtime conversion changes precision.
+// AArch64 exposes hardware floating-point FMA through `neon`, not x86's `fma`.
 use super::Float;
-#[cfg(any(not(target_feature = "fma"), test))]
+#[cfg(any(
+    not(any(
+        target_feature = "fma",
+        all(target_arch = "aarch64", target_feature = "neon")
+    )),
+    test
+))]
 use super::SINGLE;
 
 #[inline(always)]
 pub(crate) fn product_error(a: Float, b: Float, product: Float) -> Float {
-    #[cfg(target_feature = "fma")]
+    #[cfg(any(
+        target_feature = "fma",
+        all(target_arch = "aarch64", target_feature = "neon")
+    ))]
     {
         a.mul_add(b, -product)
     }
-    #[cfg(not(target_feature = "fma"))]
+    #[cfg(not(any(
+        target_feature = "fma",
+        all(target_arch = "aarch64", target_feature = "neon")
+    )))]
     {
         split_product_error(a, b, product)
     }
@@ -18,7 +31,13 @@ pub(crate) fn product_error(a: Float, b: Float, product: Float) -> Float {
 
 // Dekker two-product. Callers use bounded coefficients and factors: splitting
 // does not overflow for finite products in their compensation paths.
-#[cfg(any(not(target_feature = "fma"), test))]
+#[cfg(any(
+    not(any(
+        target_feature = "fma",
+        all(target_arch = "aarch64", target_feature = "neon")
+    )),
+    test
+))]
 #[inline(always)]
 fn split_product_error(a: Float, b: Float, product: Float) -> Float {
     let splitter = if SINGLE { 4097.0 } else { 134217729.0 };
@@ -36,11 +55,17 @@ fn split_product_error(a: Float, b: Float, product: Float) -> Float {
 // is an accurate sum, not a general correctly-rounded IEEE FMA emulation.
 #[inline(always)]
 pub(crate) fn mul_add(a: Float, b: Float, c: Float) -> Float {
-    #[cfg(target_feature = "fma")]
+    #[cfg(any(
+        target_feature = "fma",
+        all(target_arch = "aarch64", target_feature = "neon")
+    ))]
     {
         a.mul_add(b, c)
     }
-    #[cfg(not(target_feature = "fma"))]
+    #[cfg(not(any(
+        target_feature = "fma",
+        all(target_arch = "aarch64", target_feature = "neon")
+    )))]
     {
         let product = a * b;
         let residual = product_error(a, b, product);
