@@ -194,7 +194,7 @@ where
         random32,
     } = workloads;
     let is_p3 = G::ID == rgb_spaces::SpaceId::DisplayP3;
-    println!("target: {} ({})", G::DEFINITION.name, "all 15 methods");
+    println!("target: {} ({})", G::DEFINITION.name, "all 16 methods");
     println!(
         "dataset: {} OKLCh colors per workload (grid + random)\n",
         grid.len()

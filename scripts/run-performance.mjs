@@ -9,11 +9,11 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { cpus, platform, release, tmpdir } from 'node:os';
 import { buildPerformanceWorkloads, methods, runtimeMethods } from './performance-workloads.mjs';
-import { median, cpuList } from './performance-stats.mjs';
+import { median, cpuList, DEFAULT_REPORT } from './performance-stats.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 process.chdir(root);
 const { values } = parseArgs({ options: {
- output: { type: 'string', default: 'reports/performance-2026-10-02.json' },
+ output: { type: 'string', default: DEFAULT_REPORT },
  cpu: { type: 'string', default: '2,3' }, runs: { type: 'string', default: '3' },
  resume: { type: 'boolean', default: false }, 'prepare-only': { type: 'boolean', default: false },
  'validate-only': { type: 'boolean', default: false },

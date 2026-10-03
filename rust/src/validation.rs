@@ -538,6 +538,8 @@ pub(crate) fn validate_solver_agreement<
     let mut dualray_max = 0.0f64;
     let mut fast = float64::dualray_fast::DualrayFast::<G>::new();
     let mut fast_max = 0.0f64;
+    let mut tables = float64::dualray_fast::DualrayFastTables::<G>::new();
+    let mut tables_max = 0.0f64;
     let mut maxima = [0.0f64; 3];
     for (set, samples) in [grid, random].into_iter().enumerate() {
         for input in samples {
@@ -557,6 +559,14 @@ pub(crate) fn validate_solver_agreement<
                     b.map(|v| reference.decode(v)),
                 ));
             }
+            // The tables row differs from Fast only in its upper seed,
+            // direction and residual tolerance.
+            fast.map(input, &mut a);
+            tables.map(input, &mut b);
+            tables_max = tables_max.max(distance(
+                reference.encoded_to_lab(a),
+                reference.encoded_to_lab(b),
+            ));
             dualray.map(input, &mut a);
             // Outside blue-fold windows, where Dualray maps re-entry islands.
             if !in_blue_fold::<G>(input[2]) {
@@ -615,6 +625,15 @@ pub(crate) fn validate_solver_agreement<
     );
     println!(
         "{} f64 Dualray Fast/Dualray deltaEOK maximum (outside blue-fold windows): {fast_max:e}",
+        G::DEFINITION.name
+    );
+    assert!(
+        tables_max <= 1e-6,
+        "{} Dualray Fast tables/Dualray Fast deltaEOK {tables_max:e}",
+        G::DEFINITION.name
+    );
+    println!(
+        "{} f64 Dualray Fast tables/Dualray Fast deltaEOK maximum: {tables_max:e}",
         G::DEFINITION.name
     );
     assert!(

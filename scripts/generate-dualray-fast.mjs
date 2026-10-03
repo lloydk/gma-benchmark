@@ -12,7 +12,8 @@
 // is fitted in w = sqrt(hFold − h). Hues in the blue-fold window are left to
 // the exact solver.
 //
-// Writes rust/src/generated/dualray_fast_*.rs and src/generated/dualray-fast.js.
+// Writes rust/src/generated/dualray_fast_*.rs and src/generated/dualray-fast.js,
+// each with the tables row's upper seeds.
 // Usage: node scripts/generate-dualray-fast.mjs [--check]
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -246,6 +247,111 @@ function generate (space) {
 	return { space, window, sectors: out };
 }
 
+// Upper seeds for `dualray fast (tables)`. Above the cusp the upper
+// solve starts on the brighter lower channel from the chord root·τ,
+// τ = (1/L³ − 1)/(g − 1), between neutral and the fitted lower root. The
+// chord misses by up to tens of percent with the face cubic's curvature; a
+// correction per two-degree bin, seed = root·τ·(1 + (1 − τ)(k0 + k1·τ)),
+// least squares in relative error, lets one Householder step converge. Bins
+// whose worst one-step error exceeds SEED_TWO_STEPS keep both steps (the low
+// bit of k0). The solve's residual check still decides acceptance, so the
+// table moves outputs only within its tolerance.
+const SEED_BINS = 180;
+const SEED_TWO_STEPS = 1e-5;
+const NONZERO = [[0, 1], [1, 2], [0, 2]];
+function seedTable (data, c) {
+	const m = model(data.space);
+	// The runtime's sector choice and fits (Horner here; Rust uses Estrin).
+	function fits (h) {
+		let sector, v;
+		if (h >= c.BLUE_START && h < c.RED_START) { sector = 0; v = h; }
+		else if (h >= c.RED_START && h < c.RED_END) { sector = 1; v = Math.sqrt(c.RED_FOLD - h); }
+		else if (h > c.GREEN_START && h < 360) { sector = 2; v = h; }
+		else if (h >= 0 && h < c.BLUE_START) { sector = 2; v = h + 360; }
+		else return null;
+		const t = c.SCALE[sector] * v + c.OFFSET[sector];
+		return { sector, root: horner(c.U[sector], t), g: [horner(c.G0[sector], t), horner(c.G1[sector], t)] };
+	}
+	// First u in (0, limit] where the channel reaches the target.
+	function crossing (q, target, limit) {
+		const [A, B, D] = q;
+		const points = [0, limit];
+		const disc = B * B - 3 * D * A;
+		if (D !== 0 && disc >= 0) {
+			for (const s of [(-B - Math.sqrt(disc)) / (3 * D), (-B + Math.sqrt(disc)) / (3 * D)])
+				if (s > 0 && s < limit) points.push(s);
+		}
+		points.sort((x, y) => x - y);
+		for (let i = 1; i < points.length; i++) {
+			let lo = points[i - 1], hi = points[i];
+			if (m.value(q, hi) < target) continue;
+			for (;;) {
+				const mid = lo + (hi - lo) / 2;
+				if (mid <= lo || mid >= hi) return mid;
+				if (m.value(q, mid) < target) lo = mid; else hi = mid;
+			}
+		}
+		return null;
+	}
+	// The runtime's Householder step (dualray.rs `upper`).
+	function step ([A, B, D], target, u) {
+		const du = D * u, q = du + B, p = q * u + A;
+		const f = (p * u + 1) - target, f1 = (du + q) * u + p, half = du + du + q;
+		const f1Squared = f1 * f1, product = f * half;
+		return u - (f * (f1Squared - product)) / (f1 * (f1Squared - 2 * product) + f * f * D);
+	}
+	// Samples per bin: [τ, exact u / root, root, target, face cubic].
+	const bins = Array.from({ length: SEED_BINS }, () => []);
+	for (let i = 0; i < 360 * 20; i++) {
+		const h = (i + 0.5) / 20;
+		const fit = fits(h);
+		if (!fit) continue;
+		const brighter = fit.g[1] > fit.g[0] ? 1 : 0, g = fit.g[brighter];
+		const q = m.cubics(h)[NONZERO[fit.sector][brighter]];
+		for (let L = 0.2; L < 0.9995; L += 0.0025) {
+			const target = 1 / (L * L * L);
+			if (!(g > target)) continue;
+			const u = crossing(q, target, 2 * fit.root);
+			if (u === null) continue;
+			const tau = (target - 1) / (g - 1);
+			bins[Math.floor(h * SEED_BINS / 360)].push([tau, u / fit.root, fit.root, target, q]);
+		}
+	}
+	// u/root − τ = τ(1 − τ)(k0 + k1·τ), fitted in the relative seed error.
+	const K = bins.map(samples => {
+		let a11 = 0, a12 = 0, a22 = 0, b1 = 0, b2 = 0;
+		for (const [tau, ratio] of samples) {
+			const x = 1 - tau, y = x * tau, r = ratio / tau - 1;
+			a11 += x * x; a12 += x * y; a22 += y * y; b1 += x * r; b2 += y * r;
+		}
+		const det = a11 * a22 - a12 * a12;
+		return samples.length < 2 || !(Math.abs(det) > 0) ? [0, 0] : [(b1 * a22 - b2 * a12) / det, (a11 * b2 - a12 * b1) / det];
+	});
+	// k0 keeps 7 bits beside the two-step flag; k1 shares the scale.
+	const scale = Math.max(...K.flat().map(Math.abs)) / 63;
+	const errors = [];
+	let twoSteps = 0;
+	const table = K.map(([k0, k1], b) => {
+		const [q0, q1] = [Math.round(k0 / scale), Math.round(k1 / scale)];
+		let worst = 0;
+		const bin = [];
+		for (const [tau, ratio, root, target, q] of bins[b]) {
+			const seed = root * tau * (1 + (1 - tau) * (q0 * scale + q1 * scale * tau));
+			const e = Math.abs(step(q, target, seed) / root - ratio) / ratio;
+			worst = Math.max(worst, e);
+			bin.push(e);
+		}
+		const two = worst > SEED_TWO_STEPS ? 1 : 0;
+		if (two) twoSteps++; else errors.push(...bin);
+		return [q0 * 2 + two, q1];
+	});
+	errors.sort((x, y) => x - y);
+	return {
+		scale, table, twoSteps,
+		p99: errors[Math.floor(0.99 * errors.length)], max: errors[errors.length - 1],
+	};
+}
+
 const rust = x => {
 	const s = String(x);
 	return /[.eE]/.test(s) || !Number.isFinite(x) ? s : `${s}.0`;
@@ -267,7 +373,7 @@ function constants ({ space, window, sectors }, U_TERMS, G_TERMS) {
 		G0: sectors.map(s => pad(s.g.ps[0], G_TERMS)), G1: sectors.map(s => pad(s.g.ps[1], G_TERMS)),
 	};
 }
-function emit (data, U_TERMS, G_TERMS) {
+function emit (data, seed, U_TERMS, G_TERMS) {
 	const { space, sectors } = data;
 	const c = constants(data, U_TERMS, G_TERMS);
 	const row = p => `[${p.map(rust).join(", ")}]`;
@@ -288,6 +394,14 @@ function emit (data, U_TERMS, G_TERMS) {
 		`// The two nonzero linear channels, in increasing channel order, divided by L³.`,
 		`pub const G0: [[f64; ${G_TERMS}]; 3] = [${c.G0.map(row).join(", ")}];`,
 		`pub const G1: [[f64; ${G_TERMS}]; 3] = [${c.G1.map(row).join(", ")}];`,
+		`// dualray fast (tables): upper seed corrections per two-degree hue bin,`,
+		`// seed = root·τ·(1 + (1 − τ)(k0 + k1·τ)), stored as [2·k0 + two_steps, k1] / SEED_SCALE.`,
+		`// One Householder step: relative error p99 ${seed.p99.toExponential(2)}, max ${seed.max.toExponential(2)} outside ${seed.twoSteps} two-step bin(s).`,
+		`pub const SEED_SCALE: f64 = ${rust(seed.scale)};`,
+		`pub const SEED: [[i8; 2]; ${SEED_BINS}] = [`,
+		...Array.from({ length: SEED_BINS / 12 }, (_, i) =>
+			`    ${seed.table.slice(12 * i, 12 * i + 12).map(([a, b]) => `[${a}, ${b}]`).join(", ")},`),
+		`];`,
 		``,
 	];
 	return lines.join("\n");
@@ -321,13 +435,15 @@ function emitJs (all, U_TERMS, G_TERMS) {
 			`blueStart: ${c.BLUE_START}, redStart: ${c.RED_START}, redEnd: ${c.RED_END}, greenStart: ${c.GREEN_START}, redFold: ${c.RED_FOLD}`,
 			`scale: ${flat(c.SCALE)}, offset: ${flat(c.OFFSET)}, margin: ${flat(c.MARGIN)}`,
 			`u: ${flat(c.U)}`, `g0: ${flat(c.G0)}`, `g1: ${flat(c.G1)}`,
+			`seedScale: ${data.seed.scale}, seed: ${flat(data.seed.table)}`,
 		].map(line => `\t\t${line},`).join("\n") + `\n\t},`;
 	});
 	return [
 		`// Generated by scripts/generate-dualray-fast.mjs; do not edit.`,
 		`// Lower-face hue fits per target (fit errors: rust/src/generated/dualray_fast_*.rs).`,
 		`// Sector order: blue-zero, red-zero, green-zero. u, g0 and g1 hold each`,
-		`// sector's monomial coefficients in t, U_TERMS or G_TERMS per sector.`,
+		`// sector's monomial coefficients in t, U_TERMS or G_TERMS per sector. seed`,
+		`// holds the tables row's [2·k0 + two_steps, k1] per two-degree hue bin.`,
 		`export const U_TERMS = ${U_TERMS}, G_TERMS = ${G_TERMS};`,
 		estrinSource("estrinU", U_TERMS),
 		estrinSource("estrinG", G_TERMS),
@@ -356,7 +472,9 @@ for (const data of all) {
 	const { space } = data;
 	for (const s of data.sectors)
 		console.log(`${space.id} zero=${"RGB"[s.zero]} ${s.start.toFixed(4)}..${s.end.toFixed(4)}: u deg ${s.u.degree} ${s.u.error.toExponential(2)} margin ${s.u.margin.toExponential(2)}; g deg ${s.g.degree} ΔEOK ${s.g.error.toExponential(2)}`);
-	write(new URL(`../rust/src/generated/dualray_fast_${space.id.replace("-", "_")}.rs`, import.meta.url), emit(data, U_TERMS, G_TERMS));
+	const seed = data.seed = seedTable(data, constants(data, U_TERMS, G_TERMS));
+	console.log(`${space.id} upper seeds: one step p99 ${seed.p99.toExponential(2)} max ${seed.max.toExponential(2)}, ${seed.twoSteps} two-step bins, scale ${seed.scale.toExponential(3)}`);
+	write(new URL(`../rust/src/generated/dualray_fast_${space.id.replace("-", "_")}.rs`, import.meta.url), emit(data, seed, U_TERMS, G_TERMS));
 }
 write(new URL("../src/generated/dualray-fast.js", import.meta.url), emitJs(all, U_TERMS, G_TERMS));
 if (stale) process.exit(1);

@@ -47,6 +47,12 @@ macro_rules! for_each_rgb_method {
             DualrayFastEncode,
             DualrayFast
         );
+        $core!(
+            "dualray fast (tables)",
+            dualray_fast,
+            DualrayFastTables,
+            DualrayFast
+        );
     };
 }
 

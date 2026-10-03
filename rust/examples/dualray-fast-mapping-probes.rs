@@ -1,4 +1,5 @@
-//! Production f64 Dualray Fast; its canonical precheck is part of both modes.
+//! Production f64 Dualray Fast and its tables row; the canonical precheck is
+//! part of both modes.
 #![allow(dead_code)]
 include!("support/mapping-probes.rs");
 #[path = "../src/dualray.rs"]
@@ -7,4 +8,9 @@ mod dualray;
 mod dualray_config;
 #[path = "../src/dualray_fast.rs"]
 mod dualray_fast;
-mapping_probe_main!(dualray_fast, DualrayFastData, fast: DualrayFast => "dualray fast");
+mapping_probe_main!(
+    dualray_fast,
+    DualrayFastData,
+    fast: DualrayFast => "dualray fast",
+    tables: DualrayFastTables => "dualray fast (tables)",
+);

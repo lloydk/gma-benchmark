@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { renderPerformance } from '../scripts/render-performance.mjs';
 import { methods, runtimeMethods } from '../scripts/performance-workloads.mjs';
-import { median, cpuList } from '../scripts/performance-stats.mjs';
+import { median, cpuList, DEFAULT_REPORT } from '../scripts/performance-stats.mjs';
 import { readFileSync } from 'node:fs';
 import { renderPerformanceAnalysis } from '../scripts/performance-analysis.mjs';
 
@@ -61,14 +61,15 @@ test('tables retain reversed measurements and text columns align left', () => {
 
 test('additional methods and workloads change coverage without a fixed cell count', () => {
  const text = render(fixture({extraMethod:true,extraWorkload:true}));
- assert.match(text,/15 methods in Node, 15 methods in Bun, 16 methods in Rust f64, 16 methods in Rust f32/);
+ assert.match(text,/16 methods in Node, 16 methods in Bun, 17 methods in Rust f64, 17 methods in Rust f32/);
  assert.match(text,/Workloads contain 10–20 colors/);
- assert.match(text,/744 measured cells/);
+ assert.match(text,/792 measured cells/);
  assert.match(text,/\| fixture mapper \| 2\.0 \| 1\.0 \| 1\.0 \| 2\.0 \|/);
 });
 
-const measured = JSON.parse(readFileSync(new URL('../reports/performance-2026-10-02.json',import.meta.url)));
-const profile = JSON.parse(readFileSync(new URL('../reports/performance-2026-10-02-math.json',import.meta.url)));
+// The runner, profiler and renderer share this default artifact.
+const measured = JSON.parse(readFileSync(new URL(`../${DEFAULT_REPORT}`,import.meta.url)));
+const profile = JSON.parse(readFileSync(new URL(`../${DEFAULT_REPORT.replace(/\.json$/,'-math.json')}`,import.meta.url)));
 
 test('checked narrative leads the report and resolves all measurement placeholders', () => {
  const text=renderPerformance(measured,{artifact:'timings.json',mathProfile:profile,mathArtifact:'math.json'});
@@ -84,6 +85,9 @@ test('changed findings or mismatched counter evidence require editorial review',
  const reversed=structuredClone(measured);
  reversed.summary.find(x=>x.workload==='display-p3-random' && x.runtime==='node' && x.method==='dualray-fast').ns=1000;
  assert.throws(()=>renderPerformanceAnalysis(reversed,profile),/editorial review: Fast no longer beats Dualray/);
+ const slowTables=structuredClone(measured);
+ slowTables.summary.find(x=>x.workload==='display-p3-above-cusp' && x.runtime==='rust-f32' && x.method==='dualray-fast-tables').ns=1000;
+ assert.throws(()=>renderPerformanceAnalysis(slowTables,profile),/editorial review: tables row no longer speeds up the upper solve/);
  const wrong=structuredClone(profile);
  wrong.rows.find(x=>x.workload==='display-p3-below-cusp' && x.method==='dualray-fast').checksum++;
  assert.throws(()=>renderPerformanceAnalysis(measured,wrong),/profile inputs\/output changed/);
@@ -107,15 +111,16 @@ test('branch attribution, runtime guidance and cusp evidence appear beside the a
  assert.match(text,/\| edge-seeker \| Above \| 0\.000 \| 2\.000 \|/);
  assert.match(text,/## Comparing runtimes/);
  assert.match(text,/## Choosing a method/);
- assert.match(text,/29\.8 ns in f32 versus 48\.0 in f64/);
+ assert.match(text,/`dualray fast \(tables\)` in Node, Bun and Rust f32 and `dualray fast \(poly encode\)` in Rust f64/);
+ assert.match(text,/31\.0 ns in f32 versus 47\.9 in f64/);
  assert.match(text,/Node is slower than Rust f64 here/);
 });
 
 test('gamut comparison uses identical inputs and checks target-specific conclusions', () => {
  const text=renderPerformanceAnalysis(measured,profile);
  assert.match(text,/## Comparing gamuts/);
- assert.match(text,/\| Rust f32 \| 1\.00× \| 0\.98× \| 1\.00× \| 1\.05× \|/);
- assert.match(text,/138\.7 ns for sRGB, 112\.2 for P3 and\s+145\.5 for Rec\.2020/);
+ assert.match(text,/\| Rust f32 \| 1\.00× \| 0\.99× \| 1\.00× \| 1\.03× \|/);
+ assert.match(text,/140\.8 ns for sRGB, 113\.2 for P3 and\s+148\.0 for Rec\.2020/);
  assert.match(text,/Rec\.2020 contains 126 interior colors\s+\(0\.4%\)/);
  const mismatched=structuredClone(measured);
  mismatched.workloads.find(x=>x.id==='srgb-random').sha256='different-inputs';

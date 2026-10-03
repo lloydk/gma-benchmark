@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-10-03
+
+- Added `dualray fast (tables)` to Node, Bun, and Rust f64/f32 benchmarks
+  for sRGB, Display-P3, and Rec.2020. Above the cusp it corrects the upper
+  solve's seed from a generated 360-byte table per gamut, so one Householder
+  step usually converges. Rust also takes the hue direction from a 22.5°
+  (cos, sin) table instead of `sin_cos`; JavaScript keeps `Math.cos` and
+  `Math.sin`, because that table slowed V8's grid workload. The accuracy
+  sweep's p99 and maxima match `dualray fast`; in sampled inputs individual
+  outputs differ from it by up to about `5e-7` deltaEOK in f64 (Rec.2020
+  bright yellow; about `1.4e-7` in sRGB and P3, near white) and `2e-6` in
+  Rust f32 (near white and bright yellow). In PERFORMANCE.md's P3 workloads it takes
+  10–11% less time than `dualray fast` in Rust f32 on random and grid input
+  and 18% less above the cusp; Node and Bun save 2–5% and 6–7%. The other
+  rows' outputs are unchanged. Added generator output for both
+  languages, validation against `dualray fast`, JS/Rust parity, and direction
+  and agreement tests.
+- Re-measured PERFORMANCE.md with the new row in every runtime (rustc 1.99.0;
+  Node and Bun unchanged). The report now names the fastest mapped row per
+  runtime from the data, covers the tables row's above-cusp saving, and
+  replaces the 2026-10-02 timing, Math-call and validation artifacts with
+  2026-10-03 ones.
+
 ## 2026-10-02
 
 - Added sRGB and Rec.2020 targets to every method in Node, Bun, and Rust

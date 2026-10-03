@@ -15,6 +15,7 @@ const { values } = parseArgs({ options: {
 const names = {
  "dualray": ["dualray", "createDualray"],
  "dualray-fast": ["dualrayFast", "createDualrayFast"],
+ "dualray-fast-tables": ["dualrayFastTables", "createDualrayFastTables"],
  "edge-seeker": ["edgeSeeker", "createEdgeSeeker"],
  "edge-seeker-indexed": ["edgeSeekerIndexed", "createEdgeSeekerIndexed"],
  "bottosson-lightness": ["bottossonLightness", "createBottossonLightness"],
@@ -32,6 +33,7 @@ const { getRgbSpace } = await import("../src/rgb-spaces.js");
 const space = getRgbSpace(values.gamut);
 let moduleName = values.method.startsWith("edge-seeker") ? "edge-seeker/index"
  : values.method === "bottosson-lightness-cached" ? "bottosson-lightness"
+ : values.method === "dualray-fast-tables" ? "dualray-fast"
  : values.method;
 if (values.gamut !== "display-p3") {
  const factoryModules = { dualray: "dualray-factory", "edge-seeker": "edge-seeker/factory",
@@ -48,7 +50,7 @@ if (values.gamut === "display-p3" && module[name]) map = module[name];
 else {
  map = module[factory](space);
 }
-if (values["in-gamut-check"] && !["clip", "css-minde", "dualray", "dualray-fast"].includes(values.method)) {
+if (values["in-gamut-check"] && !["clip", "css-minde", "dualray", "dualray-fast", "dualray-fast-tables"].includes(values.method)) {
  const unchecked = map;
  map = (input, out) => unchecked(input, out, true);
 }

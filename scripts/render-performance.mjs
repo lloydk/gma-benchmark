@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { median } from './performance-stats.mjs';
+import { median, DEFAULT_REPORT } from './performance-stats.mjs';
 import { renderPerformanceAnalysis } from './performance-analysis.mjs';
 import { createHash } from 'node:crypto';
 
@@ -92,7 +92,8 @@ const bunFast=spreads.filter(x=>x.runtime==='bun' && x.method==='dualray-fast');
 if(bunFast.length) add(`Bun Fast has **${bunFast.filter(x=>x.spread>.05).length}/${bunFast.length} cells** with a process range above 5%. The earlier single-CPU run showed multiple timing modes, motivating the current affinity setting; the [affinity history](PERFORMANCE-NOTES.md#affinity-experiment) records that investigation.`);
 add(`Every cell was validated in a separate process before timing. All outputs had to be finite and in range, and timed checksums had to agree with the validation sum over ${report.environment.warmup+report.environment.measured} passes. ${validationNote}`);
 if(mathArtifact) add(`The [Math-call profiler](scripts/profile-performance-math.mjs) replayed each P3 workload after warming caches, delegated every counted call to the original Math function, and required exact agreement with the Node validation checksum. A separate pass instruments Fast's precheck, lower, upper and exact-search entries in an in-memory source copy, checking every output channel against production. Source replacement markers must match exactly. Gamma powers and hardware branch misses were not counted. The artifact is bound to the timing artifact's hash.`);
-add(`The measured algorithm baseline is \`${report.sourceCommit}\`. The artifact records input, source and Rust-binary hashes. Resume verifies source hashes, binary hash, runtime versions, CPU model and affinity.
+const uncommitted=(report.sourceStatus??'').split('\n').some(line=>line.trim() && !line.startsWith('??'));
+add(`The measured algorithm baseline is \`${report.sourceCommit}\`${uncommitted?' with uncommitted changes, which the recorded source hashes identify':''}. The artifact records input, source and Rust-binary hashes. Resume verifies source hashes, binary hash, runtime versions, CPU model and affinity.
 
 \`\`\`sh
 # Generate fresh measurements on available logical CPUs.
@@ -146,7 +147,7 @@ return lines.join('\n');
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
- const path = process.argv[2] ?? 'reports/performance-2026-10-02.json';
+ const path = process.argv[2] ?? DEFAULT_REPORT;
  const report = JSON.parse(readFileSync(path, 'utf8'));
  const validationPath = path.replace(/\.json$/, '-validation.json');
  let validationNote;

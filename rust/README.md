@@ -4,7 +4,7 @@ A native point of reference for the JS `gma-benchmark`, timed over the same two
 35,640-color workloads: the canonical grid (`oklch(L 0.4 H)`) and a random
 hue/lightness workload (stratified/jittered, shuffled).
 
-Display-P3 remains the default target with all 15 methods: the 14 shared with
+Display-P3 remains the default target with all 16 methods: the 15 shared with
 JavaScript plus the Rust-only Dualray Fast poly-encode row. Milestone two adds
 sRGB and Rec.2020 versions of the matrix-driven solvers in native f64 and f32:
 clip, CSS MINDE, cached/uncached cubic, direct cubic, Halley, Ostrowski and Raytrace.
@@ -58,7 +58,7 @@ other implementations must use the same encoding.
   conversion, clipping and encoding are explicit operations.
 - `clip::Clip<G>`, `css_minde::CssMinde<G>` and the six `rgb_solvers` types use
   static gamut dispatch. The single ordered method registry contains all
-  fifteen generic methods. A cubic cache belongs to its gamut type;
+  sixteen generic methods. A cubic cache belongs to its gamut type;
   buckets retain 13 native scalars with no runtime gamut tag. Cached cubic
   borrows its hue entry after lazy initialization, avoiding the full-record
   stack copy whose native f64 timing depended on caller stack alignment.
@@ -314,11 +314,11 @@ The numerical tests retain these existing input policies.
 ## `gma-bench` — scalar, apples-to-apples
 
 For the default P3 target: one color per call, with native f64 and f32
-implementations of all 15 methods.
+implementations of all 16 methods.
 Each timing run prints validation, both precisions' checksums, then four
 sorted timing tables (`--validate-only` omits them): f64 grid/random and f32
 grid/random. No precision flag is needed. `--in-gamut-check` selects the prechecked path in both precisions;
-`dualray` retains its intrinsic boundary checks in either mode, both
+`dualray` retains its intrinsic boundary checks in either mode, all three
 `dualray fast` rows always include their canonical in-gamut check, and
 `css-minde` retains the in-gamut check required by CSS Color 4 in either mode.
 The f64 lane retains the JS conversion math. Rust also has native f32
@@ -357,7 +357,7 @@ The generator exports the Rust gamut profiles, then reuses the existing JS
 Rust benchmark does not require Node. Recorded generation uses Node 26.10.0;
 platform math-library differences can change the final bits of generated data.
 
-`methods.rs` supplies one ordered registry of all fifteen generic methods for both
+`methods.rs` supplies one ordered registry of all sixteen generic methods for both
 lanes and validation. This keeps algorithm and benchmark coverage aligned.
 
 `css_minde.rs` implements the [CSS Color 4 Local MINDE search](https://www.w3.org/TR/css-color-4/#binsearch)
@@ -406,8 +406,8 @@ in-gamut island beyond the first exit. Its checked entry point is the same
 algorithm; it does not add the canonical precheck used by the other exact-hue
 mappers. This distinction is tested and remains visible in the benchmark.
 
-`dualray_fast.rs` (rows `dualray fast`, also ported to JavaScript, and
-`dualray fast (poly encode)`, Rust only) is an approximate, cache-free constant-lightness/hue mapper for OKLCh
+`dualray_fast.rs` (rows `dualray fast` and `dualray fast (tables)`, also
+ported to JavaScript, and `dualray fast (poly encode)`, Rust only) is an approximate, cache-free constant-lightness/hue mapper for OKLCh
 input. It reuses Dualray's channel basis, upper solve and exact search. Below
 the cusp, per-sector hue polynomials give
 the lower-face boundary ratio and the two nonzero linear channels directly, so
@@ -421,6 +421,29 @@ the rest (mostly blue-fold hues, at most about 0.1% of colors) Dualray's exact
 first-exit search. Its checked entry
 point is the same algorithm. The poly-encode row replaces the transfer
 function's `pow` with a polynomial on out-of-gamut results only.
+
+The tables row changes only the upper solve above the cusp. A generated
+correction per two-degree hue bin adjusts its chord seed,
+`root·τ·(1 + (1 − τ)(k0 + k1·τ))`, stored as two signed bytes (360 bytes per
+gamut). One Householder step then reaches a relative error of about `4e-8` at
+p99 (`5e-7` in Rec.2020). The solve stops there when its residual is within
+`1e-7` of the target (Dualray's `8ε` in f32) and otherwise takes the second
+step. One bright-yellow bin per gamut, where the face channel is nearly flat,
+always takes both, as does a retry on another face. When no canonical check
+has computed the hue direction, it comes from (cos, sin) every 22.5° (136
+bytes in f32), rotated by short series, instead of `sin_cos`. In sampled
+inputs, outputs differ from the plain row by up to about `5e-7` deltaEOK in
+f64 and `2e-6` in f32. The single step's residual tolerance moves colors most
+at bright yellow, where the face channel is nearly flat (f64: Rec.2020 just
+past its two-step bin, e.g. `[0.971, 0.4, 110]`), and near white (f64: about
+`1.4e-7` in sRGB and P3; f32: up to `2e-6`, where `8ε` of the target is a few
+percent of its distance from neutral). Startup validation holds the f64 workloads to
+`1e-6`, the agreement test (including near-white fractional hues and both
+review reproducers) holds f64 to `1e-6` and f32 to `3e-6`, and the accuracy
+sweep's p99 and maxima are unchanged. The JavaScript
+port keeps `Math.cos`/`Math.sin` for the direction; it matches this row within
+the `1e-13` parity limit (`node scripts/check-dualray-fast-parity.mjs`), where
+plain Fast is bit-identical under Bun.
 
 Its target is a deltaEOK of at most `1e-3`, and `1e-4` at the 99th percentile,
 from the constant-lightness/hue first exit. Measured maxima are about `2.7e-4`
@@ -465,7 +488,7 @@ its new linear/perceptual gates for all targets. Bottosson now uses the separate
 its cache's hue quantization is kept separate from arithmetic error.
 
 The independent tests separately check conversion and transfer arithmetic,
-MINDE output error, and exact canonical pass-through. All fifteen methods are
+MINDE output error, and exact canonical pass-through. All sixteen methods are
 validated on mixed chroma and RGB boundary neighbours in all three gamuts.
 
 Run the numerical tests with:

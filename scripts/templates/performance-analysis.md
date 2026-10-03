@@ -25,6 +25,18 @@ This matters because {{below_share}} of the standard P3 random corpus lies
 below the cusp. A bright-skewed workload loses much of the shortcut's benefit.
 Fast's approximation buys a particularly cheap lower face, rather than a
 uniform reduction in the cost of every Dualray path.
+
+The `dualray fast (tables)` row reduces the above-cusp cost itself. A
+generated 360-byte table per gamut corrects the upper solve's seed, so one
+Householder step usually converges; Rust also takes the hue direction from a
+22.5° table instead of `sin_cos`, while JavaScript keeps `Math.sin` and
+`Math.cos`. Above the cusp it takes **{{tables_f64_above}} ns in Rust f64 and
+{{tables_f32_above}} in f32**, against Fast's {{fast_f64_above}} and
+{{fast_f32_above}}, and **{{tables_node_above}} ns in Node and
+{{tables_bun_above}} in Bun**, against {{fast_node_above}} and
+{{fast_bun_above}}. Below the cusp the two rows run the same code, so the P3
+random saving is {{tables_random_savings}}. Rust's larger gain includes its
+direction table.
 ([Implementation](src/dualray-fast.js))
 
 ### 2. Caches win by removing whole phases of work
@@ -105,7 +117,7 @@ f32 conversion-and-encoding path. Together, these results support a smaller
 cost to replace in f32, although they do not isolate the power call itself.
 
 Mostly interior traffic also removes the polynomial encoder's opportunity:
-both Fast variants deliberately keep ordinary encoding for canonical in-gamut
+every Fast row deliberately keeps ordinary encoding for canonical in-gamut
 output. Use the mapped fraction, precision and accepted error budget to decide
 whether the extra approximation pays.
 ([Rust encoder](rust/src/dualray_fast.rs))
@@ -218,8 +230,8 @@ three targets, so differences come from processing them for a different gamut.
 
 **Dualray's performance carries across targets.** On random input, the largest
 change from P3 across Dualray and Dualray Fast, all targets and all four runtimes,
-is {{dualray_gamut_change}}. Fast remains the fastest mapped JS method on each
-target; Fast with poly encode leads both Rust lanes. Choosing sRGB or Rec.2020
+is {{dualray_gamut_change}}. A Dualray Fast row is the fastest mapped method on
+every target: {{gamut_winners}}. Choosing sRGB or Rec.2020
 does not erase the lower-face shortcut's advantage on this distribution.
 
 **The iterative solvers and cached cubic are more sensitive.** Bun Halley takes
@@ -243,8 +255,8 @@ assign the cross-gamut gaps to extra iterations, fold handling or JIT behavior.
 linear segment near black. This repository's CSS Rec.2020 encoder uses a pure
 gamma-2.4 power, with no linear segment. Even clip therefore changes cost:
 Rec.2020 takes {{clip_rec2020_penalty}} more time than P3 on random input in
-Node, Bun and Rust f64. The direction reverses in Rust f32, at
-{{clip_rec2020_f32}} ns for Rec.2020 versus {{clip_p3_f32}} for P3. Extra power
+Node, Bun and Rust f64. Rust f32 shows no penalty, at {{clip_rec2020_f32}} ns
+for Rec.2020 versus {{clip_p3_f32}} for P3. Extra power
 evaluations, fewer branches and the runtime's math implementation can pull in
 different directions; gamut width alone does not predict the result.
 ([JS transfer functions](src/rgb-spaces.js), [Rust transfer functions](rust/src/transfer.rs))
@@ -268,4 +280,4 @@ policy decides which speed comparisons are relevant.
 | Constant-lightness/hue first-exit boundary semantics | Dualray | Guarded refinement and exact-search recovery avoid replacing the boundary with Fast's fitted lower face. Canonical pass-through and disconnected outer islands remain separate policy questions. |
 | Repeated hues, with memory to spare | Cached Bottosson or cached cubic | Reuse removes hue-only setup; compare their approximation and bucket semantics before choosing. |
 | Mostly in gamut | Prioritize canonical precheck and pass-through cost | Conversion dominates once the boundary solver is skipped. |
-| Out-of-gamut, mostly above the cusp | Compare Dualray and Fast on that distribution | They are close here; Fast's large lower-face advantage does not carry over. Cached Bottosson and indexed Edge Seeker are also candidates when their boundary policies fit. |
+| Out-of-gamut, mostly above the cusp | In Rust, Dualray Fast (tables); in JavaScript, compare Dualray and the Fast rows on that distribution | In Rust the tables row takes {{tables_rust_above}} less time than Dualray here. The JavaScript methods are within {{js_above_spread}} of Dualray; Fast's large lower-face advantage does not carry over. Cached Bottosson and indexed Edge Seeker are also candidates when their boundary policies fit. |

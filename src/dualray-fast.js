@@ -8,20 +8,28 @@
 // search. The accuracy target is a deltaEOK of 1e-3 max and 1e-4 at p99.
 // Rust's polynomial transfer row is not ported: bit access through typed
 // arrays costs more than Math.pow in both V8 and JavaScriptCore.
+// `tables` (the `dualray fast (tables)` row) corrects the upper seed from a
+// generated table per target (360 B), so one Householder step usually
+// converges. Unlike Rust it keeps Math.cos/Math.sin for the hue direction: a
+// 22.5° table made V8's grid workload slower.
 import { RGB_SPACES } from "./rgb-spaces.js";
 import { getRgbConversions } from "./rgb-convert.js";
 import { search } from "./dualray-kernel.js";
 import { dualrayData } from "./generated/dualray.js";
 import { dualrayFastData, estrinU, estrinG, U_TERMS, G_TERMS } from "./generated/dualray-fast.js";
 const DEG_TO_RAD = Math.PI / 180;
-// Dualray's residual and face tolerance.
+// Dualray's residual and face tolerance, and the tables row's (Rust's f64
+// SEEDED_TOLERANCE), far below the deltaEOK budget.
 const TOLERANCE = 1e-12;
+const SEEDED_TOLERANCE = 1e-7;
 
-export function createDualrayFast (space) {
+export function createDualrayFast (space, { tables = false } = {}) {
 	if (RGB_SPACES[space.id] !== space || !Object.hasOwn(dualrayFastData, space.id)) throw new RangeError(`No Dualray Fast fits for ${space.id}`);
 	const data = dualrayFastData[space.id];
 	const { blueStart, redStart, redEnd, greenStart, redFold } = data;
 	const [scale, offset, margin, U, G0, G1] = [data.scale, data.offset, data.margin, data.u, data.g0, data.g1].map(p => Float64Array.from(p));
+	const seeds = Int8Array.from(data.seed), seedScale = data.seedScale;
+	const tolerance = tables ? SEEDED_TOLERANCE : TOLERANCE;
 	const basis = dualrayData[space.id].basis;
 	const [[rD3,rD2,rD1,rD0,rB0,rB2,rB1,rA1,rA0],[gD3,gD2,gD1,gD0,gB0,gB2,gB1,gA1,gA0],[bD3,bD2,bD1,bD0,bB0,bB2,bB1,bA1,bA0]] = basis;
 	const { oklchToRgbIfInGamut } = getRgbConversions(space);
@@ -86,7 +94,8 @@ export function createDualrayFast (space) {
 		// Above the cusp: the chord from the fitted lower root to the brighter
 		// lower channel's crossing, refined by Dualray's upper solve: two
 		// Householder steps, then one retry on a channel that exceeds the
-		// target, never moving away from neutral.
+		// target, never moving away from neutral. With tables, the bin's
+		// correction lets the first face stop after one converged step.
 		const brighter = g1 > g0;
 		let face = brighter ? (sector === 0 ? 1 : 2) : sector === 1 ? 1 : 0;
 		const radians = hue * DEG_TO_RAD, A = Math.cos(radians), B = Math.sin(radians);
@@ -94,8 +103,16 @@ export function createDualrayFast (space) {
 		const rd = rD3 * A3 + rD2 * A2B + rD1 * A + rD0 * B, rb = rB0 + rB2 * A2 + rB1 * AB, ra = rA1 * A + rA0 * B;
 		const gd = gD3 * A3 + gD2 * A2B + gD1 * A + gD0 * B, gb = gB0 + gB2 * A2 + gB1 * AB, ga = gA1 * A + gA0 * B;
 		const bd = bD3 * A3 + bD2 * A2B + bD1 * A + bD0 * B, bb = bB0 + bB2 * A2 + bB1 * AB, ba = bA1 * A + bA0 * B;
-		const invL = 1 / L, target = invL * invL * invL, limit = C * invL, guard = target * (1 + TOLERANCE);
-		let u = (root * (target - 1)) / ((brighter ? g1 : g0) - 1), r = 0, g = 0, blue = 0;
+		const invL = 1 / L, target = invL * invL * invL, limit = C * invL, guard = target * (1 + tolerance);
+		let u, early = false, r = 0, g = 0, blue = 0;
+		if (tables) {
+			// The hue bin's correction; its low bit keeps both steps.
+			const bin = 2 * Math.min(179, (hue * 0.5) | 0), k0 = seeds[bin];
+			const tau = (target - 1) / ((brighter ? g1 : g0) - 1);
+			const k = ((k0 >> 1) + seeds[bin + 1] * tau) * seedScale;
+			u = root * tau * (1 + (1 - tau) * k);
+			early = (k0 & 1) === 0;
+		} else u = (root * (target - 1)) / ((brighter ? g1 : g0) - 1);
 		for (let retry = 0; ; retry++) {
 			const previous = u;
 			const wd = face === 0 ? rd : face === 1 ? gd : bd;
@@ -104,6 +121,7 @@ export function createDualrayFast (space) {
 			for (let step = 0; step < 2; step++) {
 				const du = wd * u, q = du + wb, p = q * u + wa;
 				const f = (p * u + 1) - target;
+				if (early && retry === 0 && step === 1 && Math.abs(f) <= target * tolerance) break;
 				const f1 = (du + q) * u + p;
 				const halfSecond = (du + du) + q;
 				const f1Squared = f1 * f1;
@@ -117,8 +135,8 @@ export function createDualrayFast (space) {
 			g = ((gd * u + gb) * u + ga) * u + 1;
 			blue = ((bd * u + bb) * u + ba) * u + 1;
 			if (!(u >= 0 && u <= limit && (retry === 0 || u <= previous) &&
-				r >= -TOLERANCE && g >= -TOLERANCE && blue >= -TOLERANCE &&
-				Math.abs((face === 0 ? r : face === 1 ? g : blue) - target) <= target * TOLERANCE)) return exact(L, C, hue, out);
+				r >= -tolerance && g >= -tolerance && blue >= -tolerance &&
+				Math.abs((face === 0 ? r : face === 1 ? g : blue) - target) <= target * tolerance)) return exact(L, C, hue, out);
 			const brightest = r > g ? (r > blue ? 0 : 2) : g > blue ? 1 : 2;
 			if ((brightest === 0 ? r : brightest === 1 ? g : blue) <= guard) break;
 			if (retry) return exact(L, C, hue, out);
@@ -130,3 +148,5 @@ export function createDualrayFast (space) {
 		return out;
 	};
 }
+// The `dualray fast (tables)` row.
+export const createDualrayFastTables = space => createDualrayFast(space, { tables: true });

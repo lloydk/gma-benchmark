@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
 
+// The artifact PERFORMANCE.md is rendered from: the default for measuring,
+// profiling and rendering. The runner refuses to overwrite an existing one.
+export const DEFAULT_REPORT = 'reports/performance-2026-10-03.json';
+
 export function median(values) {
  assert.ok(values.length > 0 && values.every(Number.isFinite));
  const sorted = [...values].sort((a,b)=>a-b), middle = Math.floor(sorted.length / 2);

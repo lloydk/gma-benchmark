@@ -1,10 +1,11 @@
 // Included once per precision module by examples/dualray-fast.rs. All mapping
 // arithmetic uses that module's Float; outputs are widened only for analysis.
 
-pub(crate) const NAMES: [&str; 6] = [
+pub(crate) const NAMES: [&str; 7] = [
     "dualray",
     "dualray fast",
     "dualray fast+encode",
+    "dualray fast+tables",
     "css-minde",
     "raytrace",
     "edge-seeker",
@@ -22,7 +23,7 @@ impl<G: dualray_fast::DualrayFastData + dualray::DualrayData + edge_seeker::Edge
 }
 
 pub(crate) struct Mapped {
-    pub outputs: [[f64; 3]; 6],
+    pub outputs: [[f64; 3]; 7],
     // The lane's canonical conversion when it is in gamut in this precision.
     pub canonical: Option<[f64; 3]>,
     pub hit: bool,
@@ -32,6 +33,7 @@ pub(crate) struct Mappers<G: Target> {
     dualray: dualray::Dualray<G>,
     fast: dualray_fast::DualrayFast<G, false>,
     fast_encode: dualray_fast::DualrayFast<G, true>,
+    fast_tables: dualray_fast::DualrayFastTables<G>,
     minde: css_minde::CssMinde<G>,
     raytrace: rgb_solvers::Raytrace<G>,
     edge: edge_seeker::EdgeSeeker<G>,
@@ -43,6 +45,7 @@ impl<G: Target> Mappers<G> {
             dualray: dualray::Dualray::new(),
             fast: dualray_fast::DualrayFast::new(),
             fast_encode: dualray_fast::DualrayFast::new(),
+            fast_tables: dualray_fast::DualrayFastTables::new(),
             minde: css_minde::CssMinde::new(),
             raytrace: rgb_solvers::Raytrace::new(),
             edge: edge_seeker::EdgeSeeker::new(),
@@ -52,13 +55,14 @@ impl<G: Target> Mappers<G> {
     // Methods with a precheck variant use it: in-gamut colors must pass through.
     pub(crate) fn map_all(&mut self, input: [f64; 3]) -> Mapped {
         let x: [Float; 3] = input.map(|v| v as Float);
-        let mut o = [[0.0 as Float; 3]; 6];
+        let mut o = [[0.0 as Float; 3]; NAMES.len()];
         self.dualray.map(&x, &mut o[0]);
         self.fast.map(&x, &mut o[1]);
         self.fast_encode.map(&x, &mut o[2]);
-        self.minde.map_with_in_gamut_check(&x, &mut o[3]);
-        self.raytrace.map_with_in_gamut_check(&x, &mut o[4]);
-        self.edge.map_with_in_gamut_check(&x, &mut o[5]);
+        self.fast_tables.map(&x, &mut o[3]);
+        self.minde.map_with_in_gamut_check(&x, &mut o[4]);
+        self.raytrace.map_with_in_gamut_check(&x, &mut o[5]);
+        self.edge.map_with_in_gamut_check(&x, &mut o[6]);
         let rgb = color::Oklch::from(x).to_oklab().to_linear_rgb::<G>();
         let canonical = rgb
             .in_gamut()
@@ -96,25 +100,27 @@ fn time_pass(samples: &[[Float; 3]], mut map: impl FnMut(&[Float; 3], &mut [Floa
     times[times.len() / 2]
 }
 
-// Median ns/color for exact Dualray, Fast and Fast+encode over eight rounds
-// in rotating order, and the shortcut's hit rate.
-pub(crate) fn timing<G: Target>(samples: &[[f64; 3]]) -> ([f64; 3], f64) {
+// Median ns/color for exact Dualray, Fast, Fast+encode and Fast+tables over
+// eight rounds in rotating order, and the shortcut's hit rate.
+pub(crate) fn timing<G: Target>(samples: &[[f64; 3]]) -> ([f64; 4], f64) {
     let samples: Vec<[Float; 3]> = samples.iter().map(|s| s.map(|v| v as Float)).collect();
     let hits = samples
         .iter()
         .filter(|s| dualray_fast::DualrayFast::<G>::path(s) == dualray_fast::Path::Lower)
         .count();
-    let mut t = [Vec::new(), Vec::new(), Vec::new()];
+    let mut t = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
     for round in 0..8 {
         let mut exact = dualray::Dualray::<G>::new();
         let mut fast = dualray_fast::DualrayFast::<G, false>::new();
         let mut encode = dualray_fast::DualrayFast::<G, true>::new();
-        for k in 0..3 {
-            let which = (k + round) % 3;
+        let mut tables = dualray_fast::DualrayFastTables::<G>::new();
+        for k in 0..4 {
+            let which = (k + round) % 4;
             t[which].push(match which {
                 0 => time_pass(&samples, |c, o| exact.map(c, o)),
                 1 => time_pass(&samples, |c, o| fast.map(c, o)),
-                _ => time_pass(&samples, |c, o| encode.map(c, o)),
+                2 => time_pass(&samples, |c, o| encode.map(c, o)),
+                _ => time_pass(&samples, |c, o| tables.map(c, o)),
             });
         }
     }

@@ -23,8 +23,15 @@
 // Accuracy is an empirical ΔEOK budget, not a bound: the channel fits target
 // 1e-4 against a 1e-3 max / 1e-4 p99 runtime target. FAST_ENCODE swaps the
 // transfer function's pow for a polynomial on out-of-gamut results only.
+//
+// TABLES (the `dualray fast (tables)` row) speeds up step 4 with two small
+// tables: a generated per-gamut correction of the chord seed (180 two-degree
+// hue bins, 360 B), so one Householder step usually converges, and (cos, sin)
+// every 22.5° for the hue direction when no canonical check computed it
+// (136 B in f32). The solve still checks its residual, now against a 1e-7
+// tolerance in f64, and takes a second step when needed.
 
-use super::dualray::{narrow, narrow_rows, ray_rows, search, upper, DualrayData};
+use super::dualray::{narrow, narrow_rows, ray_rows, search, upper, DualrayData, Upper};
 use super::gamut::{DisplayP3, Rec2020, Srgb};
 use super::transfer::TransferFunction;
 use super::{Float, PI, SINGLE};
@@ -47,6 +54,8 @@ pub(crate) trait DualrayFastData: DualrayData {
     const U: [[Float; U_TERMS]; 3];
     const G0: [[Float; G_TERMS]; 3];
     const G1: [[Float; G_TERMS]; 3];
+    const SEED_SCALE: Float;
+    const SEED: [[i8; 2]; 180];
 }
 
 macro_rules! fitted {
@@ -68,6 +77,8 @@ macro_rules! fitted {
             const U: [[Float; U_TERMS]; 3] = narrow_rows($module::U);
             const G0: [[Float; G_TERMS]; 3] = narrow_rows($module::G0);
             const G1: [[Float; G_TERMS]; 3] = narrow_rows($module::G1);
+            const SEED_SCALE: Float = $module::SEED_SCALE as Float;
+            const SEED: [[i8; 2]; 180] = $module::SEED;
         }
     };
 }
@@ -119,6 +130,47 @@ fn estrin<const N: usize>(p: &[Float; N], t: Float) -> Float {
     let c0 = fma(b1, t4, b0);
     let t8 = t4 * t4;
     fma(b2, t8, c0)
+}
+
+// The TABLES hue direction: (cos, sin) at every 22.5° from 0° to 360°, rotated
+// by short Taylor series over the remaining ±11.25°. Within a few ulps of
+// sin_cos and branch-free; libm's sin_cos mispredicts on random hues.
+const COS_22_5: f64 = 0.9238795325112867;
+const SIN_22_5: f64 = 0.3826834323650898;
+const HALF_SQRT_2: f64 = std::f64::consts::FRAC_1_SQRT_2;
+const UNIT: [Float; 34] = {
+    let (c, s, r) = (COS_22_5, SIN_22_5, HALF_SQRT_2);
+    narrow([
+        1.0, 0.0, c, s, r, r, s, c, 0.0, 1.0, -s, c, -r, r, -c, s, -1.0, 0.0, -c, -s, -r, -r, -s,
+        -c, 0.0, -1.0, s, -c, r, -r, c, -s, 1.0, 0.0,
+    ])
+};
+#[inline(always)]
+fn hue_direction(hue: Float) -> (Float, Float) {
+    let k = (hue * (1.0 / 22.5)).round();
+    let x = (hue - 22.5 * k) * (PI / 180.0);
+    let x2 = x * x;
+    let (sin, cos) = if SINGLE {
+        (
+            x * (1.0 + x2 * (-1.0 / 6.0 + x2 * (1.0 / 120.0))),
+            1.0 + x2 * (-0.5 + x2 * (1.0 / 24.0 + x2 * (-1.0 / 720.0))),
+        )
+    } else {
+        (
+            x * (1.0
+                + x2 * (-1.0 / 6.0
+                    + x2 * (1.0 / 120.0
+                        + x2 * (-1.0 / 5040.0
+                            + x2 * (1.0 / 362880.0 + x2 * (-1.0 / 39916800.0)))))),
+            1.0 + x2
+                * (-0.5
+                    + x2 * (1.0 / 24.0
+                        + x2 * (-1.0 / 720.0 + x2 * (1.0 / 40320.0 + x2 * (-1.0 / 3628800.0))))),
+        )
+    };
+    let k = 2 * (k as usize).min(16);
+    let (c, s) = (UNIT[k], UNIT[k + 1]);
+    (c * cos - s * sin, s * cos + c * sin)
 }
 
 // x^(5/12) for normal x in (0, 1]: x = m·2^e with e = 12q + r, so
@@ -217,11 +269,15 @@ enum Decline {
 // Nonzero channels of each sector, in increasing order; the third is zero.
 const NONZERO: [[usize; 2]; 3] = [[0, 1], [1, 2], [0, 2]];
 
-pub(crate) struct DualrayFast<G: DualrayFastData, const FAST_ENCODE: bool = false>(
-    std::marker::PhantomData<G>,
-);
+pub(crate) struct DualrayFast<
+    G: DualrayFastData,
+    const FAST_ENCODE: bool = false,
+    const TABLES: bool = false,
+>(std::marker::PhantomData<G>);
 
-impl<G: DualrayFastData, const FAST_ENCODE: bool> DualrayFast<G, FAST_ENCODE> {
+impl<G: DualrayFastData, const FAST_ENCODE: bool, const TABLES: bool>
+    DualrayFast<G, FAST_ENCODE, TABLES>
+{
     pub(crate) fn new() -> Self {
         Self(std::marker::PhantomData)
     }
@@ -377,14 +433,30 @@ impl<G: DualrayFastData, const FAST_ENCODE: bool> DualrayFast<G, FAST_ENCODE> {
         let brighter = (g[1] > g[0]) as usize;
         let face = NONZERO[sector][brighter];
         let (a, b) = direction.unwrap_or_else(|| {
-            let (b, a) = (hue * (PI / 180.0)).sin_cos();
-            (a, b)
+            if TABLES {
+                hue_direction(hue)
+            } else {
+                let (b, a) = (hue * (PI / 180.0)).sin_cos();
+                (a, b)
+            }
         });
         let inv_l = 1.0 / l;
         let target = inv_l * inv_l * inv_l;
-        let seed = root * (target - 1.0) / (g[brighter] - 1.0);
+        let (seed, mode) = if TABLES {
+            // The hue bin's correction; its low bit keeps both steps.
+            let [k0, k1] = G::SEED[((hue * 0.5) as usize).min(179)];
+            let tau = (target - 1.0) / (g[brighter] - 1.0);
+            let k = ((k0 >> 1) as Float + k1 as Float * tau) * G::SEED_SCALE;
+            let two_steps = k0 & 1 != 0;
+            (
+                root * tau * (1.0 + (1.0 - tau) * k),
+                Upper::Seeded { two_steps },
+            )
+        } else {
+            (root * (target - 1.0) / (g[brighter] - 1.0), Upper::Chord)
+        };
         let Some((_, exit, values)) =
-            upper(ray_rows::<G>(a, b), target, seed, face, c * inv_l, false)
+            upper(ray_rows::<G>(a, b), target, seed, face, c * inv_l, mode)
         else {
             return Self::search(l, c, hue, out);
         };
@@ -422,6 +494,8 @@ impl<G: DualrayFastData, const FAST_ENCODE: bool> DualrayFast<G, FAST_ENCODE> {
 
 // The same method with the polynomial transfer function (separate benchmark row).
 pub(crate) type DualrayFastEncode<G> = DualrayFast<G, true>;
+// The same method with the seed and direction tables (separate benchmark row).
+pub(crate) type DualrayFastTables<G> = DualrayFast<G, false, true>;
 
 #[cfg(test)]
 mod tests {
@@ -545,6 +619,87 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    #[test]
+    fn hue_direction_matches_sin_cos() {
+        // Every 22.5° node and rotation, through the last bin before 360°.
+        for i in 0..3_600_000 {
+            let h = i as f64 * 1e-4;
+            let (cos, sin) = hue_direction(h as Float);
+            let (want_sin, want_cos) = h.to_radians().sin_cos();
+            let error = (cos as f64 - want_cos)
+                .abs()
+                .max((sin as f64 - want_sin).abs());
+            assert!(error <= 4.0 * Float::EPSILON as f64, "{h}: {error:e}");
+        }
+    }
+
+    // The tables row changes only the upper solve's seed, direction and
+    // tolerance: it stays within the residual tolerance's reach of Fast.
+    // Returns the worst deltaEOK and its input.
+    fn tables_match_fast<G: DualrayFastData>() -> (f64, [Float; 3]) {
+        let reference = crate::rgb_reference::Reference::new(G::ID);
+        let lab = |x: [Float; 3]| reference.encoded_to_lab(x.map(f64::from));
+        let (mut fast, mut tables) = (DualrayFast::<G>::new(), DualrayFastTables::<G>::new());
+        let (mut upper, mut worst) = (0, (0.0f64, [0.0; 3]));
+        let mut check = |input: [Float; 3]| {
+            let (mut a, mut b) = ([0.0; 3], [0.0; 3]);
+            fast.map(&input, &mut a);
+            tables.map(&input, &mut b);
+            let path = DualrayFastTables::<G>::path(&input);
+            if matches!(path, Path::Upper | Path::UpperRetry) {
+                upper += 1;
+            } else if path != Path::Search {
+                assert_eq!(a, b, "{} {input:?} {path:?}", G::DEFINITION.name);
+            }
+            let error = crate::rgb_reference::distance(lab(a), lab(b));
+            if error > worst.0 {
+                worst = (error, input);
+            }
+        };
+        for li in 1..200 {
+            for ci in 1..10 {
+                for hi in 0..1440 {
+                    check([li as Float / 200.0, ci as Float * 0.05, hi as Float * 0.25]);
+                }
+            }
+        }
+        // Near white the face channel is nearly flat, so the residual
+        // tolerance moves the output most; fractional hues avoid the grid's
+        // alignment with the bins.
+        for l in [0.996, 0.999, 0.9995, 0.9999, 0.99999, 0.999999] {
+            for ci in 1..10 {
+                for hi in 0..27_000 {
+                    check([l, ci as Float * 0.05, hi as Float * (1.0 / 75.0) + 0.0071]);
+                }
+            }
+        }
+        // Review reproducers: f32 Rec.2020 moved 1.9e-6 here, and f64
+        // Rec.2020 4.6e-7 just past its bright-yellow two-step bin.
+        check([0.99999, 0.4, 103.945]);
+        check([0.971, 0.4, 110.0]);
+        assert!(
+            upper > 100_000,
+            "{} upper solves: {upper}",
+            G::DEFINITION.name
+        );
+        worst
+    }
+
+    #[test]
+    fn tables_row_matches_fast() {
+        // Sampled worst: f64 4.9e-7 (Rec.2020 bright yellow, beside its
+        // two-step bin; sRGB and P3 1.4e-7 near white); f32 1.9e-6 near
+        // white, where 8ε of the target is a few percent of target − 1.
+        let limit = if SINGLE { 3e-6 } else { 1e-6 };
+        for (name, (error, input)) in [
+            ("srgb", tables_match_fast::<Srgb>()),
+            ("display-p3", tables_match_fast::<DisplayP3>()),
+            ("rec2020", tables_match_fast::<Rec2020>()),
+        ] {
+            assert!(error <= limit, "{name} deltaEOK {error:e} at {input:?}");
         }
     }
 

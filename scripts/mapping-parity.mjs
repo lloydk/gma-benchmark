@@ -32,12 +32,14 @@ export function assertBoundaryDisagreement(input,a,b,independent) {
 // `precheck`: an intrinsic method whose canonical precheck is part of both
 // modes. Each side must return its own canonical conversion when inside; a
 // membership disagreement is a rounding-scale branch event, not a tolerance.
+// `exact`: true, false, or a predicate on the method name.
 export function runMappingParity({example,createMappers,samplesFor,limitsFor,intrinsic=false,precheck=false,exact=false}) {
  const report=[];
  for(const space of Object.values(RGB_SPACES)) {
   const samples=samplesFor(space.id),input=serializeProbes(samples);
   const lines=execFileSync("cargo",["run","--quiet","--release","--manifest-path","rust/Cargo.toml","--example",example,"--",space.id],{cwd:root,input,encoding:"utf8",maxBuffer:200*1024*1024}).trim().split("\n");
   assert.equal(lines.length,samples.length);
+  const exactFor=typeof exact==="function"?exact:()=>exact;
   const ref=createReference(space.id),canonical=intrinsic&&!precheck?null:createCanonicalReference(space),maps=Object.entries(createMappers(space));
   const maxima=maps.map(([method])=>intrinsic?{method,intrinsic:empty(),...(precheck?{boundaryDisagreement:empty()}:{})}:{method,plain:empty(),checkedSameBranch:empty(),checkedBoundaryDisagreement:empty()});
   for(let i=0;i<samples.length;i++) {
@@ -66,7 +68,7 @@ export function runMappingParity({example,createMappers,samplesFor,limitsFor,int
     }
     for(const mode of intrinsic?["plain"]:["plain","checked"]) {
      const error=metric(ref,mode==="plain"?plain:checked,expected[mode]);
-     if(exact)assert.deepEqual(mode==="plain"?plain:checked,expected[mode],`${space.id} ${name} exact parity ${sample}`);
+     if(exactFor(name))assert.deepEqual(mode==="plain"?plain:checked,expected[mode],`${space.id} ${name} exact parity ${sample}`);
      const category=intrinsic?(precheckApplies&&differs?"boundaryDisagreement":"intrinsic"):mode==="plain"?"plain":differs?"checkedBoundaryDisagreement":"checkedSameBranch";
      if(category!=="checkedBoundaryDisagreement"&&category!=="boundaryDisagreement")assert.ok(error.linear<=limits.linear&&error.delta<=limits.delta,`${space.id} ${name} ${mode} ${sample}: ${JSON.stringify(error)}`);
      accumulate(maxima[m][category],error,sample);

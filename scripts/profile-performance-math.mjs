@@ -6,9 +6,10 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import { DISPLAY_P3 } from '../src/rgb-spaces.js';
+import { DEFAULT_REPORT } from './performance-stats.mjs';
 
 process.chdir(fileURLToPath(new URL('../',import.meta.url)));
-const input = process.argv[2] ?? 'reports/performance-2026-10-02.json';
+const input = process.argv[2] ?? DEFAULT_REPORT;
 const output = process.argv[3] ?? input.replace(/\.json$/, '-math.json');
 const bytes = readFileSync(input), report = JSON.parse(bytes);
 assert.equal(process.version,report.environment.node,'Use the measured Node version');
@@ -21,7 +22,7 @@ for (const [file,sha] of Object.entries(report.sourceHashes).filter(([file])=>fi
 const fastUrl=new URL('../src/dualray-fast.js',import.meta.url);
 let fastSource=readFileSync(fastUrl,'utf8');
 for (const [before,after] of [
- ['createDualrayFast (space)', 'createDualrayFast (space, counts)'],
+ ['createDualrayFast (space, { tables = false } = {})', 'createDualrayFast (space, { tables = false } = {}, counts)'],
  ['const { oklchToRgbIfInGamut } = getRgbConversions(space);',
   'const { oklchToRgbIfInGamut: canonicalCheck } = getRgbConversions(space); const oklchToRgbIfInGamut = (...args) => { counts.precheck++; return canonicalCheck(...args); };'],
  ['const exact = (L, C, hue, out) => {', 'const exact = (L, C, hue, out) => { counts.exact++;'],
@@ -39,6 +40,7 @@ const entries = [
  ['oklch-cubic-direct','oklch-cubic-direct','oklchCubicDirect'], ['oklch-halley','oklch-halley','oklchHalley'],
  ['oklch-ostrowski','oklch-ostrowski','oklchOstrowski'], ['dualray','dualray','dualray'],
  ['dualray-fast','dualray-fast','createDualrayFast'],
+ ['dualray-fast-tables','dualray-fast','createDualrayFastTables'],
  ['bottosson-lightness','bottosson-lightness','bottossonLightness'],
  ['bottosson-lightness-cached','bottosson-lightness','bottossonLightnessCached'],
  ['edge-seeker','edge-seeker/index','edgeSeeker'], ['edge-seeker-indexed','edge-seeker/index','edgeSeekerIndexed'],
@@ -53,8 +55,9 @@ for (const work of report.workloads.filter(w=>w.gamut==='display-p3')) {
  const samples=Array.from({length:work.count},(_,i)=>Array.from({length:3},(_,j)=>data.readDoubleLE(i*24+j*8)));
  for (const [method,path,name] of entries) {
   const module=await import(`../src/${path}.js`);
-  const mapper=method==='dualray-fast'?module[name](DISPLAY_P3):module[name];
-  const checked=work.checked && !['clip','css-minde','dualray','dualray-fast'].includes(method);
+  const fast=method.startsWith('dualray-fast');
+  const mapper=fast?module[name](DISPLAY_P3):module[name];
+  const checked=work.checked && !fast && !['clip','css-minde','dualray'].includes(method);
   const out=[0,0,0];
   // Fill every hue bucket touched by this corpus before counting.
   for (const sample of samples) mapper(sample,out,checked);
@@ -72,9 +75,9 @@ for (const work of report.workloads.filter(w=>w.gamut==='display-p3')) {
   assert.equal(checksum,validation.checksum,`${work.id}/${method}`);
   const row={workload:work.id,method,count:work.count,checksum,counts,
    perColor:Object.fromEntries(operations.map(op=>[op,counts[op]/work.count]))};
-  if (method==='dualray-fast') {
+  if (fast) {
    const paths={lower:0,upper:0,exact:0,precheck:0};
-   const instrumented=instrumentFast(DISPLAY_P3,paths), reference=[0,0,0];
+   const instrumented=instrumentFast(DISPLAY_P3,{tables:method==='dualray-fast-tables'},paths), reference=[0,0,0];
    for (const sample of samples) {
     instrumented(sample,out);
     mapper(sample,reference);

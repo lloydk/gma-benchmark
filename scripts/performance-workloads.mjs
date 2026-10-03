@@ -11,6 +11,7 @@ export const methods = [
  ["oklch-cubic-direct", "oklch-cubic-direct"], ["oklch-halley", "oklch-halley"],
  ["oklch-ostrowski", "oklch-ostrowski"], ["dualray", "dualray"],
  ["dualray-fast", "dualray fast"], ["dualray-fast-poly", "dualray fast (poly encode)"],
+ ["dualray-fast-tables", "dualray fast (tables)"],
  ["bottosson-lightness", "bottosson-lightness"], ["bottosson-lightness-cached", "bottosson-lightness (cached)"],
  ["edge-seeker", "edge-seeker"], ["edge-seeker-indexed", "edge-seeker (indexed)"], ["raytrace", "raytrace"],
 ];

@@ -280,7 +280,7 @@ fn accuracy<G: Target>(name: &str, lanes: &[&str]) {
         let mut reference = float64::dualray::Dualray::<G>::new();
         let mut m64 = float64::Mappers::<G>::new();
         let mut m32 = float32::Mappers::<G>::new();
-        let mut stats = vec![vec![Stats::default(); 6]; SETS.len()];
+        let mut stats = vec![vec![Stats::default(); float64::NAMES.len()]; SETS.len()];
         let mut hits = vec![0usize; SETS.len()];
         for (s, set) in sets.iter().enumerate() {
             for &input in set {
@@ -302,7 +302,7 @@ fn accuracy<G: Target>(name: &str, lanes: &[&str]) {
                 };
                 let fold = float64::rgb_solvers::in_blue_fold::<G>(input[2]);
                 hits[s] += hit as usize;
-                for k in 0..6 {
+                for k in 0..float64::NAMES.len() {
                     stats[s][k].add::<G>(input, want, outputs[k], canonical, fold);
                 }
             }
@@ -310,7 +310,7 @@ fn accuracy<G: Target>(name: &str, lanes: &[&str]) {
         println!("\n{name} / {lane}: deviation from the constant-L/h first exit (exact f64 Dualray at the {lane} input)");
         println!("| method | ΔEOK p99 (random) | ΔEOK max (all sets) | 8-bit changed (random) | largest 8-bit change | in-gamut not canonical |");
         println!("|---|---:|---:|---:|---:|---:|");
-        for k in 0..6 {
+        for k in 0..float64::NAMES.len() {
             let random = &stats[1][k];
             let de_max = (0..SETS.len())
                 .map(|s| stats[s][k].de_max)
@@ -337,7 +337,7 @@ fn accuracy<G: Target>(name: &str, lanes: &[&str]) {
                 }
             );
         }
-        for k in 0..6 {
+        for k in 0..float64::NAMES.len() {
             let invalid: usize = (0..SETS.len()).map(|s| stats[s][k].invalid).sum();
             if invalid > 0 {
                 let (input, got) = (0..SETS.len())
@@ -359,7 +359,7 @@ fn accuracy<G: Target>(name: &str, lanes: &[&str]) {
                     100.0 * stats[s][0].outside as f64 / sets[s].len() as f64,
                     100.0 * hits[s] as f64 / sets[s].len() as f64
                 );
-                for k in 0..6 {
+                for k in 0..float64::NAMES.len() {
                     let st = &stats[s][k];
                     println!(
                         "    {:<20} p99 {:.1e} max {:.1e} at {:?}; 8-bit {:.2}%, max {} at {:?}; inside mismatch {} (max {:.1e} at {:?})",
@@ -384,16 +384,17 @@ fn timing<G: Target>(name: &str, lanes: &[&str]) {
     for &lane in lanes {
         println!("\n{name} / {lane}: ns/color, median of 8 rounds (each the median of 25 passes), rotating order");
         for (label, samples) in &workloads {
-            let ([e, f, b], hit) = if lane == "f32" {
+            let ([e, f, b, t], hit) = if lane == "f32" {
                 float32::timing::<G>(samples)
             } else {
                 float64::timing::<G>(samples)
             };
             let pct = |x: f64| 100.0 * (x / e - 1.0);
             println!(
-                "  {label:<7} dualray {e:>6.2} | fast {f:>6.2} ({:+.1}%) | fast+encode {b:>6.2} ({:+.1}%) | shortcut {:.1}%",
+                "  {label:<7} dualray {e:>6.2} | fast {f:>6.2} ({:+.1}%) | fast+encode {b:>6.2} ({:+.1}%) | fast+tables {t:>6.2} ({:+.1}%) | shortcut {:.1}%",
                 pct(f),
                 pct(b),
+                pct(t),
                 100.0 * hit
             );
         }
@@ -500,12 +501,12 @@ fn check<G: Target>(label: &str, path: &str, lane: &str) {
     let single = lane == "f32";
     let mut m64 = float64::Mappers::<G>::new();
     let mut m32 = float32::Mappers::<G>::new();
-    let mut stats = vec![Stats::default(); 6];
+    let mut stats = vec![Stats::default(); float64::NAMES.len()];
     // Inside: max difference from the reference conversion, 8-bit changes;
     // blue-fold hues separately (Dualray's first-exit policy).
-    let mut inside = [(0usize, 0.0f64, 0usize); 6];
-    let mut inside_at = [[0.0f64; 3]; 6];
-    let mut fold_changed = [0usize; 6];
+    let mut inside = [(0usize, 0.0f64, 0usize); float64::NAMES.len()];
+    let mut inside_at = [[0.0f64; 3]; float64::NAMES.len()];
+    let mut fold_changed = [0usize; float64::NAMES.len()];
     let (mut n_inside, mut n_fold, mut skipped) = (0usize, 0usize, 0usize);
     for row in &rows {
         let input = [row[0], row[1], row[2]];
@@ -526,7 +527,7 @@ fn check<G: Target>(label: &str, path: &str, lane: &str) {
             } else {
                 n_inside += 1;
             }
-            for k in 0..6 {
+            for k in 0..float64::NAMES.len() {
                 let diff = (0..3)
                     .map(|c| (outputs[k][c] - reference[c]).abs())
                     .fold(0.0, f64::max);
@@ -552,7 +553,7 @@ fn check<G: Target>(label: &str, path: &str, lane: &str) {
             }
             continue;
         }
-        for k in 0..6 {
+        for k in 0..float64::NAMES.len() {
             stats[k].add::<G>(input, reference, outputs[k], None, false);
         }
     }
@@ -562,7 +563,7 @@ fn check<G: Target>(label: &str, path: &str, lane: &str) {
     );
     println!("| method | ΔEOK p99 | ΔEOK max | encoded p99 | encoded max | 8-bit changed | largest 8-bit change | inside: max diff / 8-bit changes |");
     println!("|---|---:|---:|---:|---:|---:|---:|---:|");
-    for k in 0..6 {
+    for k in 0..float64::NAMES.len() {
         let st = &stats[k];
         println!(
             "| {} | {:.1e} | {:.1e} | {:.1e} | {:.1e} | {:.2}% | {} | {:.1e} / {} |",
@@ -578,7 +579,7 @@ fn check<G: Target>(label: &str, path: &str, lane: &str) {
         );
     }
     if n_fold > 0 {
-        let changed: Vec<String> = (0..6)
+        let changed: Vec<String> = (0..float64::NAMES.len())
             .map(|k| format!("{} {}", float64::NAMES[k], fold_changed[k]))
             .collect();
         println!(
@@ -587,7 +588,7 @@ fn check<G: Target>(label: &str, path: &str, lane: &str) {
             changed.join(", ")
         );
     }
-    for k in 0..6 {
+    for k in 0..float64::NAMES.len() {
         if stats[k].invalid > 0 {
             println!(
                 "  {}: {} outputs outside [0, 1]",
@@ -597,7 +598,7 @@ fn check<G: Target>(label: &str, path: &str, lane: &str) {
         }
     }
     if std::env::var("VERBOSE").is_ok() {
-        for k in 0..6 {
+        for k in 0..float64::NAMES.len() {
             println!(
                 "  {:<20} worst ΔEOK at {:?}; largest 8-bit change at {:?}; largest in-gamut change at {:?}",
                 float64::NAMES[k], stats[k].de_at, stats[k].byte_at, inside_at[k]

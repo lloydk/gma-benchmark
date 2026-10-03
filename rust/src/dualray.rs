@@ -193,15 +193,31 @@ pub(crate) fn first_exit(
     (limit, None)
 }
 
-// Two Householder steps toward one upper face from `u`. Returns the converged
-// first upper exit in [0, limit] and the channel values there.
-// - `near_white` (the upper-first seed): skip the second step once the
-//   residual is within tolerance, and reject rather than retry.
-// - Otherwise (the chord seed): always take both steps, because near bright
-//   yellow the face channel is almost flat and a small f32 residual can leave
-//   the root inaccurate. If another channel exceeds the target, it exits
-//   first: retry on it once, never moving away from neutral.
-// Shared with Dualray Fast.
+// How `upper` refines its seed.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Upper {
+    // The upper-first seed: skip the second step once the residual is within
+    // tolerance, and reject rather than retry.
+    NearWhite,
+    // The chord seed: always take both steps, because near bright yellow the
+    // face channel is almost flat and a small f32 residual can leave the root
+    // inaccurate.
+    Chord,
+    // Dualray Fast's table-corrected seed: skip the second step once the
+    // residual is within the looser SEEDED_TOLERANCE, unless the table marks
+    // the hue (bright yellow) as needing both. A retry on another face has no
+    // corrected seed and takes both.
+    Seeded { two_steps: bool },
+}
+
+// Dualray Fast's seeded solves accept a relative residual far below its
+// deltaEOK budget; f32 keeps Dualray's tolerance, which is near its rounding.
+const SEEDED_TOLERANCE: Float = if SINGLE { TOLERANCE } else { 1e-7 };
+
+// Up to two Householder steps toward one upper face from `u`. Returns the
+// converged first upper exit in [0, limit] and the channel values there. Except
+// near white, if another channel exceeds the target, it exits first: retry on
+// it once, never moving away from neutral. Shared with Dualray Fast.
 #[inline(always)]
 pub(crate) fn upper(
     rows: [[Float; 4]; 3],
@@ -209,16 +225,21 @@ pub(crate) fn upper(
     mut u: Float,
     mut face: usize,
     limit: Float,
-    near_white: bool,
+    mode: Upper,
 ) -> Option<(Float, usize, [Float; 3])> {
-    let guard = target * (1.0 + TOLERANCE);
+    let (tolerance, early) = match mode {
+        Upper::NearWhite => (TOLERANCE, true),
+        Upper::Chord => (TOLERANCE, false),
+        Upper::Seeded { two_steps } => (SEEDED_TOLERANCE, !two_steps),
+    };
+    let guard = target * (1.0 + tolerance);
     for retry in [false, true] {
         let previous = u;
         let row = pick(rows, face);
         for step in 0..2 {
             let (value, f1, half_second) = derivatives(row, u);
             let f = value - target;
-            if near_white && step == 1 && f.abs() <= target * TOLERANCE {
+            if early && !retry && step == 1 && f.abs() <= target * tolerance {
                 break;
             }
             let f1_squared = f1 * f1;
@@ -234,8 +255,8 @@ pub(crate) fn upper(
         if !(u >= 0.0
             && u <= limit
             && (!retry || u <= previous)
-            && values.iter().all(|&v| v >= -TOLERANCE)
-            && (pick(values, face) - target).abs() <= target * TOLERANCE)
+            && values.iter().all(|&v| v >= -tolerance)
+            && (pick(values, face) - target).abs() <= target * tolerance)
         {
             return None;
         }
@@ -243,7 +264,7 @@ pub(crate) fn upper(
         if pick(values, brightest) <= guard {
             return Some((u, face, values));
         }
-        if near_white {
+        if mode == Upper::NearWhite {
             return None;
         }
         face = brightest;
@@ -442,7 +463,9 @@ impl<G: DualrayData> Dualray<G> {
             let seed =
                 (2.0 * delta) / (max_slope + (max_slope * max_slope + 4.0 * wb * delta).sqrt());
             let guard = target * (1.0 + TOLERANCE);
-            if let Some((u, face, values)) = upper(rows, target, seed, face, G::ROOT_LIMIT, true) {
+            if let Some((u, face, values)) =
+                upper(rows, target, seed, face, G::ROOT_LIMIT, Upper::NearWhite)
+            {
                 // No lower root bounds this solve: Bernstein controls certify
                 // that no channel leaves [0, target] before the exit.
                 if rows.iter().all(|&row| interior_within(row, u, guard)) {
@@ -486,7 +509,7 @@ impl<G: DualrayData> Dualray<G> {
         // lower channel's crossing, refined on that channel.
         let face = brightest(lower);
         let seed = (saturation * (target - 1.0)) / (pick(lower, face) - 1.0);
-        *out = match upper(rows, target, seed, face, saturation, false) {
+        *out = match upper(rows, target, seed, face, saturation, Upper::Chord) {
             Some((u, face, values)) => Self::exit(rows, l3, input_u, (u, values, face, 1.0)),
             None => search::<G>(rows, hue, l3, target, limit, encode),
         };

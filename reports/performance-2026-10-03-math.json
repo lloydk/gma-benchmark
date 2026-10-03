@@ -1,10 +1,10 @@
 {
   "schema": "gma-performance-math-v1",
-  "created": "2026-10-02T22:06:22.675Z",
+  "created": "2026-10-03T18:43:34.589Z",
   "runtime": "v26.10.0",
-  "sourceCommit": "ee5b48843570a2ed90df7cbd28d55e2d1029a087",
-  "timingArtifactSha256": "582eed043d3d674b1d90b955a02c92f914989ed8ed2da1b21b1bf1ecc2276b8d",
-  "profilerSha256": "7a40c5d0dfbbb7060b767e39a6a72dff83cb35fd381a738e989e7ee271f35207",
+  "sourceCommit": "58e586b0473f30e9934ba2b1454224a6a46d37c3",
+  "timingArtifactSha256": "ecea98a67071a2d46fd3a509b1bbc14dfc491c4dfc344bb329f1b001044c1050",
+  "profilerSha256": "121614d41eadad1e1513337c28920b86f33a70e93bdf326641192a5c9ca1426a",
   "scope": "Untimed Node/P3 Math calls after cache warmup plus instrumented Fast path entries. Fast instrumentation matches production output per channel. No power or hardware-branch counters.",
   "rows": [
     {
@@ -172,6 +172,38 @@
       "method": "dualray-fast",
       "count": 35640,
       "checksum": 39942.025891032004,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 11781,
+        "sin": 12112,
+        "cos": 12112,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.33055555555555555,
+        "sin": 0.3398428731762065,
+        "cos": 0.3398428731762065,
+        "acos": 0
+      },
+      "paths": {
+        "lower": 26536,
+        "upper": 9104,
+        "exact": 0,
+        "precheck": 3008
+      },
+      "pathsPerColor": {
+        "lower": 0.7445566778900112,
+        "upper": 0.25544332210998877,
+        "exact": 0,
+        "precheck": 0.08439955106621773
+      }
+    },
+    {
+      "workload": "display-p3-grid",
+      "method": "dualray-fast-tables",
+      "count": 35640,
+      "checksum": 39942.02588784869,
       "counts": {
         "cbrt": 0,
         "sqrt": 11781,
@@ -493,6 +525,38 @@
     },
     {
       "workload": "display-p3-random",
+      "method": "dualray-fast-tables",
+      "count": 35640,
+      "checksum": 39811.8172299438,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 11722,
+        "sin": 12037,
+        "cos": 12037,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.32890011223344556,
+        "sin": 0.33773849607182943,
+        "cos": 0.33773849607182943,
+        "acos": 0
+      },
+      "paths": {
+        "lower": 26612,
+        "upper": 9028,
+        "exact": 0,
+        "precheck": 3009
+      },
+      "pathsPerColor": {
+        "lower": 0.74668911335578,
+        "upper": 0.25331088664421997,
+        "exact": 0,
+        "precheck": 0.08442760942760942
+      }
+    },
+    {
+      "workload": "display-p3-random",
       "method": "bottosson-lightness",
       "count": 35640,
       "checksum": 39814.62480872627,
@@ -754,6 +818,38 @@
     {
       "workload": "display-p3-below-cusp",
       "method": "dualray-fast",
+      "count": 35640,
+      "checksum": 23740.849749513232,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 11722,
+        "sin": 0,
+        "cos": 0,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.32890011223344556,
+        "sin": 0,
+        "cos": 0,
+        "acos": 0
+      },
+      "paths": {
+        "lower": 35640,
+        "upper": 0,
+        "exact": 0,
+        "precheck": 0
+      },
+      "pathsPerColor": {
+        "lower": 1,
+        "upper": 0,
+        "exact": 0,
+        "precheck": 0
+      }
+    },
+    {
+      "workload": "display-p3-below-cusp",
+      "method": "dualray-fast-tables",
       "count": 35640,
       "checksum": 23740.849749513232,
       "counts": {
@@ -1077,6 +1173,38 @@
     },
     {
       "workload": "display-p3-above-cusp",
+      "method": "dualray-fast-tables",
+      "count": 35640,
+      "checksum": 87650.40981837732,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 11722,
+        "sin": 43377,
+        "cos": 43377,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.32890011223344556,
+        "sin": 1.217087542087542,
+        "cos": 1.217087542087542,
+        "acos": 0
+      },
+      "paths": {
+        "lower": 0,
+        "upper": 35640,
+        "exact": 0,
+        "precheck": 7737
+      },
+      "pathsPerColor": {
+        "lower": 0,
+        "upper": 1,
+        "exact": 0,
+        "precheck": 0.21708754208754208
+      }
+    },
+    {
+      "workload": "display-p3-above-cusp",
       "method": "bottosson-lightness",
       "count": 35640,
       "checksum": 87650.12474453062,
@@ -1340,6 +1468,38 @@
       "method": "dualray-fast",
       "count": 35640,
       "checksum": 39811.81723357895,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 11722,
+        "sin": 12037,
+        "cos": 12037,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.32890011223344556,
+        "sin": 0.33773849607182943,
+        "cos": 0.33773849607182943,
+        "acos": 0
+      },
+      "paths": {
+        "lower": 26612,
+        "upper": 9028,
+        "exact": 0,
+        "precheck": 3009
+      },
+      "pathsPerColor": {
+        "lower": 0.74668911335578,
+        "upper": 0.25331088664421997,
+        "exact": 0,
+        "precheck": 0.08442760942760942
+      }
+    },
+    {
+      "workload": "display-p3-random-checked",
+      "method": "dualray-fast-tables",
+      "count": 35640,
+      "checksum": 39811.8172299438,
       "counts": {
         "cbrt": 0,
         "sqrt": 11722,
@@ -1661,6 +1821,38 @@
     },
     {
       "workload": "display-p3-mixed-checked",
+      "method": "dualray-fast-tables",
+      "count": 35640,
+      "checksum": 42127.19685450227,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 11722,
+        "sin": 23816,
+        "cos": 23816,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.32890011223344556,
+        "sin": 0.6682379349046016,
+        "cos": 0.6682379349046016,
+        "acos": 0
+      },
+      "paths": {
+        "lower": 13334,
+        "upper": 4486,
+        "exact": 0,
+        "precheck": 19330
+      },
+      "pathsPerColor": {
+        "lower": 0.37413019079685744,
+        "upper": 0.12586980920314253,
+        "exact": 0,
+        "precheck": 0.542368125701459
+      }
+    },
+    {
+      "workload": "display-p3-mixed-checked",
       "method": "bottosson-lightness",
       "count": 35640,
       "checksum": 42128.53928230279,
@@ -1922,6 +2114,38 @@
     {
       "workload": "display-p3-inside-checked",
       "method": "dualray-fast",
+      "count": 35640,
+      "checksum": 44433.14712776064,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 11722,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.32890011223344556,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      },
+      "paths": {
+        "lower": 0,
+        "upper": 0,
+        "exact": 0,
+        "precheck": 35640
+      },
+      "pathsPerColor": {
+        "lower": 0,
+        "upper": 0,
+        "exact": 0,
+        "precheck": 1
+      }
+    },
+    {
+      "workload": "display-p3-inside-checked",
+      "method": "dualray-fast-tables",
       "count": 35640,
       "checksum": 44433.14712776064,
       "counts": {

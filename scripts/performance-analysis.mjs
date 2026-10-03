@@ -50,6 +50,12 @@ export function renderPerformanceAnalysis(report, profile) {
  review(fastAbove.paths.upper===fastAbove.count && fastAbove.paths.lower===0 && fastAbove.paths.exact===0,'Fast above-cusp branch attribution changed');
  review(fastAbove.paths.precheck>0 && fastAbove.paths.precheck<fastAbove.count,'Fast precheck fraction changed');
  review(fastAbove.counts.sin===fastAbove.paths.upper+fastAbove.paths.precheck && fastAbove.counts.cos===fastAbove.counts.sin,'Fast trig attribution changed');
+ for (const r of runtimes) {
+  review(ns('above-cusp',r,'dualray-fast-tables')<ns('above-cusp',r,'dualray-fast'),`tables row no longer speeds up the upper solve in ${r}`);
+  review(ns('random',r,'dualray-fast-tables')<ns('random',r,'dualray-fast'),`tables row no longer saves time on random input in ${r}`);
+ }
+ const tablesAbove=r=>1-ns('above-cusp',r,'dualray-fast-tables')/ns('above-cusp',r,'dualray-fast');
+ review(Math.min(tablesAbove('rust-f64'),tablesAbove('rust-f32'))>Math.max(tablesAbove('node'),tablesAbove('bun')),'tables row no longer gains more in Rust');
  review(ns('random','node','raytrace')>ns('random','rust-f64','raytrace'),'Raytrace Node/Rust ordering changed');
  review(ns('random','bun','raytrace')>ns('random','node','raytrace'),'Raytrace Node/Bun ordering changed');
  for (const m of ['oklch-cubic','dualray-fast']) review(ns('random','bun',m)<ns('random','node',m),`Bun advantage changed for ${m}`);
@@ -73,6 +79,9 @@ export function renderPerformanceAnalysis(report, profile) {
   dualray_inside_f64:['inside-checked','rust-f64','dualray'],
   cubic_node:['random','node','oklch-cubic'],cubic_bun:['random','bun','oklch-cubic'],
   fast_node:['random','node','dualray-fast'],fast_bun:['random','bun','dualray-fast'],
+  fast_f32_above:['above-cusp','rust-f32','dualray-fast'],fast_bun_above:['above-cusp','bun','dualray-fast'],
+  tables_f64_above:['above-cusp','rust-f64','dualray-fast-tables'],tables_f32_above:['above-cusp','rust-f32','dualray-fast-tables'],
+  tables_node_above:['above-cusp','node','dualray-fast-tables'],tables_bun_above:['above-cusp','bun','dualray-fast-tables'],
  };
  for (const [key,args] of Object.entries(times)) text[key]=n(ns(...args));
  const savings=runtimes.map(r=>1-ns('random',r,'dualray-fast')/ns('random',r,'dualray'));
@@ -83,6 +92,14 @@ export function renderPerformanceAnalysis(report, profile) {
   return [title[r],pct(savings[i]),`${pct(Math.abs(change))} ${change<0?'less':'more'} time`];
  }));
  text.below_share=pct(report.p3RandomBelowCusp);
+ const range=xs=>`${pct(Math.min(...xs))}–${pct(Math.max(...xs))}`;
+ text.tables_random_savings=`**${range(runtimes.map(r=>1-ns('random',r,'dualray-fast-tables')/ns('random',r,'dualray-fast')))} across runtimes**`;
+ const rustAbove=['rust-f64','rust-f32'].map(r=>1-ns('above-cusp',r,'dualray-fast-tables')/ns('above-cusp',r,'dualray'));
+ review(rustAbove.every(x=>x>.15),'tables row no longer clearly beats Dualray above the cusp in Rust');
+ text.tables_rust_above=range(rustAbove);
+ const jsAbove=['node','bun'].flatMap(r=>['dualray-fast','dualray-fast-tables'].map(m=>Math.abs(ns('above-cusp',r,m)/ns('above-cusp',r,'dualray')-1)));
+ review(Math.max(...jsAbove)<.15,'JS above-cusp methods are no longer close');
+ text.js_above_spread=pct(Math.max(...jsAbove));
  text.fast_above_trig=ops('above-cusp','dualray-fast','sin').toFixed(2);
  text.fast_precheck_share=pct(fastAbove.pathsPerColor.precheck);
  const cacheRange=(a,b)=>{const xs=runtimes.map(r=>ns('random',r,a)/ns('random',r,b));return `${Math.min(...xs).toFixed(2)}–${Math.max(...xs).toFixed(2)}× across runtimes`;};
@@ -150,12 +167,20 @@ export function renderPerformanceAnalysis(report, profile) {
   review(middle('rec2020','grid')>middle('rec2020','random'),'Rec.2020 grid/random cost pattern changed');
   return [title[r],...['random','grid'].flatMap(w=>['srgb','rec2020'].map(g=>`${middle(g,w).toFixed(2)}×`))];
  }));
- const dualrayChanges=[];
- for (const r of runtimes) for (const g of gamuts) {
-  const winner=r.startsWith('rust-')?'dualray-fast-poly':'dualray-fast';
-  review(report.runtimeMethods[r].filter(m=>m!=='clip' && m!==winner).every(m=>ns('random',r,winner,g)<ns('random',r,m,g)),`random gamut winner changed in ${g}/${r}`);
-  for (const m of ['dualray','dualray-fast']) dualrayChanges.push(Math.abs(gamutRatio(g,'random',r,m)-1));
+ const dualrayChanges=[], winners=[];
+ for (const r of runtimes) {
+  const byGamut=gamuts.map(g=>{
+   const [winner]=report.runtimeMethods[r].filter(m=>m!=='clip').sort((a,b)=>ns('random',r,a,g)-ns('random',r,b,g));
+   review(winner.startsWith('dualray-fast'),`random gamut winner changed in ${g}/${r}`);
+   return winner;
+  });
+  review(byGamut.every(m=>m===byGamut[0]),`random gamut winner differs across targets in ${r}`);
+  winners.push([r,byGamut[0]]);
+  for (const g of gamuts) for (const m of ['dualray','dualray-fast']) dualrayChanges.push(Math.abs(gamutRatio(g,'random',r,m)-1));
  }
+ const label=id=>`\`${report.methods.find(([method])=>method===id)[1]}\``;
+ const list=xs=>xs.length<3?xs.join(' and '):`${xs.slice(0,-1).join(', ')} and ${xs.at(-1)}`;
+ text.gamut_winners=list([...new Set(winners.map(([,m])=>m))].map(m=>`${label(m)} in ${list(winners.filter(([,x])=>x===m).map(([r])=>title[r]))}`));
  review(Math.max(...dualrayChanges)<.1,'Dualray/Fast gamut sensitivity changed');
  text.dualray_gamut_change=pct(Math.max(...dualrayChanges));
  const penaltyRange=xs=>`${pct(Math.min(...xs))}–${pct(Math.max(...xs))}`;
@@ -172,7 +197,7 @@ export function renderPerformanceAnalysis(report, profile) {
  const clipPenalty=['node','bun','rust-f64'].map(r=>gamutRatio('rec2020','random',r,'clip')-1);
  review(clipPenalty.every(x=>x>0),'binary64 Rec.2020 clip penalty changed');
  text.clip_rec2020_penalty=penaltyRange(clipPenalty);
- review(ns('random','rust-f32','clip','rec2020')<ns('random','rust-f32','clip'),'f32 Rec.2020 clip ordering changed');
+ review(Math.abs(ns('random','rust-f32','clip','rec2020')/ns('random','rust-f32','clip')-1)<.02,'f32 Rec.2020 clip cost no longer matches P3');
  text.clip_rec2020_f32=n(ns('random','rust-f32','clip','rec2020'));
  text.clip_p3_f32=n(ns('random','rust-f32','clip'));
  const template=readFileSync(new URL('./templates/performance-analysis.md',import.meta.url),'utf8');
