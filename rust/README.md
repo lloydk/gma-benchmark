@@ -97,7 +97,7 @@ All three existing P3 JavaScript cubics share the conditioned root helper;
 the direct cubic also receives the Newton-refinement fix. JavaScript Clip,
 CSS MINDE and all six matrix solvers now support all three targets; the fitted
 and table-based ports are tracked
-in [milestone four](../MILESTONE-4.md). That port also exposed and fixed
+in [milestone four](../reports/milestone-4.md). That port also exposed and fixed
 f64 Raytrace near-white direction flushing and premature dark-fold bisection
 termination in both languages.
 

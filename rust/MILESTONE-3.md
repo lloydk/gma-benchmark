@@ -621,7 +621,7 @@ exit/re-entry. Outside f64 inputs retain the established faster refinement.
 The report separates these focused measurements from all-method harness timings;
 fold mapping remains slower than ordinary mapping.
 
-Rust milestone three is complete. [JavaScript milestone four](../MILESTONE-4.md)
+Rust milestone three is complete. [JavaScript milestone four](../reports/milestone-4.md)
 now supplies target factories, conversions, Clip, CSS MINDE and six matrix
 solvers for all three spaces. JavaScript Bottosson and both Edge Seeker variants now also support all three
 targets; Dualray remains P3-only. Step two also records the shared Raytrace and dark-fold
