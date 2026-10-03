@@ -1,6 +1,51 @@
 use super::super::{p3_compat::oklch_to_clipped_p3, SINGLE};
 use super::*;
 
+#[test]
+fn hue_fast_path_preserves_wrapping_bits() {
+    let check = |h: Float| {
+        let expected = if h < 0.0 {
+            (h % 360.0) + 360.0
+        } else {
+            h % 360.0
+        };
+        let actual = normalized_hue(h);
+        if expected.is_nan() {
+            assert!(actual.is_nan());
+        } else {
+            assert_eq!(actual.to_bits(), expected.to_bits(), "hue {h}");
+        }
+    };
+    let boundaries: [Float; 7] = [-720.0, -360.0, -0.0, 0.0, 180.0, 360.0, 720.0];
+    for h in boundaries {
+        check(h.next_down());
+        check(h);
+        check(h.next_up());
+    }
+    for h in [
+        Float::MIN,
+        Float::MAX,
+        Float::INFINITY,
+        Float::NEG_INFINITY,
+        Float::NAN,
+    ] {
+        check(h);
+    }
+    // Cover raw exponent/sign patterns as well as ordinary hue magnitudes.
+    let mut state = 0x243f6a8885a308d3u64;
+    for _ in 0..100_000 {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        let h = if SINGLE {
+            f32::from_bits(state as u32) as Float
+        } else {
+            f64::from_bits(state) as Float
+        };
+        check(h);
+    }
+}
+
 // Independent bisection of the scaled circle residual. This is monotone in y
 // for |k| < 1, covering all three LUTs; no production arc formula is used.
 fn arc_oracle(x: f64, k: f64) -> f64 {

@@ -91,6 +91,10 @@ other implementations must use the same encoding.
   `RgbGamut` contract has no LUT or approximation policy. The indexed variant
   shares a compile-time 3,600-entry index per gamut/precision; instances allocate
   no index. Sharp-interval bands and residuals are compile-time table data.
+  Mapping calls the lookup directly after the optional precheck, keeping the
+  boundary calculation in the mapper's optimization scope. Canonical hues skip
+  remainder arithmetic. See the [ARM investigation](reports/edge-seeker-arm-investigation.md)
+  for stage measurements and the callback-related f32 ranking reversal.
 
 The f32 mappers, including cube roots, powers, trigonometry and CSS MINDE
 comparisons, stay entirely f32. Only benchmark checksums/statistics and

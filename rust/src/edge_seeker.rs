@@ -119,7 +119,9 @@ fn get_lut_item_indexed<G: EdgeSeekerData>(h: Float, interval_index: &[usize]) -
 
 #[inline(always)]
 fn normalized_hue(h: Float) -> Float {
-    if h < 0.0 {
+    if h >= 0.0 && h < 360.0 {
+        h
+    } else if h < 0.0 {
         (h % 360.0) + 360.0
     } else {
         h % 360.0
@@ -209,19 +211,6 @@ fn map_edge_seeker<G: RgbGamut>(oklch: &[Float; 3], max_chroma: Float, out: &mut
     oklch_to_clipped_rgb::<G>(l, if c > max_chroma { max_chroma } else { c }, h, out);
 }
 
-#[inline(always)]
-fn map_with_lookup<G: EdgeSeekerData>(
-    input: &[Float; 3],
-    out: &mut [Float; 3],
-    check: bool,
-    lookup: impl FnOnce() -> Float,
-) {
-    if check && oklch_to_rgb_if_in_gamut::<G>(input[0], input[1], input[2], out) {
-        return;
-    }
-    map_edge_seeker::<G>(input, lookup(), out);
-}
-
 pub(crate) struct EdgeSeeker<G>(PhantomData<G>);
 
 impl<G: EdgeSeekerData> EdgeSeeker<G> {
@@ -250,9 +239,11 @@ impl<G: EdgeSeekerData> EdgeSeeker<G> {
 
     #[inline(always)]
     fn map_impl(&mut self, oklch: &[Float; 3], out: &mut [Float; 3], check_in_gamut: bool) {
-        map_with_lookup::<G>(oklch, out, check_in_gamut, || {
-            self.max_chroma(oklch[0], oklch[2])
-        });
+        if check_in_gamut && oklch_to_rgb_if_in_gamut::<G>(oklch[0], oklch[1], oklch[2], out) {
+            return;
+        }
+        let max_chroma = self.max_chroma(oklch[0], oklch[2]);
+        map_edge_seeker::<G>(oklch, max_chroma, out);
     }
 }
 
@@ -285,9 +276,13 @@ impl<G: EdgeSeekerData> EdgeSeekerIndexed<G> {
 
     #[inline(always)]
     fn map_impl(&mut self, oklch: &[Float; 3], out: &mut [Float; 3], check_in_gamut: bool) {
-        map_with_lookup::<G>(oklch, out, check_in_gamut, || {
-            self.max_chroma(oklch[0], oklch[2])
-        });
+        // Keep the lookup in the mapper's optimization scope. Passing it as a
+        // callback let LLVM outline the whole boundary solve on Apple ARM64.
+        if check_in_gamut && oklch_to_rgb_if_in_gamut::<G>(oklch[0], oklch[1], oklch[2], out) {
+            return;
+        }
+        let max_chroma = self.max_chroma(oklch[0], oklch[2]);
+        map_edge_seeker::<G>(oklch, max_chroma, out);
     }
 }
 
