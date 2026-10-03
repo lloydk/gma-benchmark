@@ -3,3 +3,4 @@ node_modules/
 /.codex/
 /.agents/
 /reports/performance-*.json.inputs/
+/reports/dualray-optimization-*.json.inputs/

@@ -1,0 +1,231 @@
+{
+  "schema": "dualray-optimization-validation-v1",
+  "runtime": {
+    "node": "26.10.0",
+    "acorn": "8.18.0",
+    "ada": "4.0.0",
+    "amaro": "1.1.11",
+    "ares": "1.34.8",
+    "brotli": "1.2.0",
+    "cldr": "48.0",
+    "icu": "78.3",
+    "libffi": "3.8.0",
+    "lief": "0.17.0",
+    "llhttp": "9.4.3",
+    "merve": "1.2.2",
+    "modules": "147",
+    "napi": "10",
+    "nbytes": "0.1.4",
+    "ncrypto": "0.0.1",
+    "nghttp2": "1.70.0",
+    "nghttp3": "",
+    "ngtcp2": "",
+    "openssl": "3.5.8",
+    "simdjson": "4.6.11",
+    "simdutf": "7.7.0",
+    "sqlite": "3.53.4",
+    "tz": "2026c",
+    "undici": "8.10.2",
+    "unicode": "17.0",
+    "uv": "1.52.1",
+    "uvwasi": "0.0.23",
+    "v8": "14.6.202.34-node.34",
+    "zlib": "1.3.2.1-motley-285e94b",
+    "zstd": "1.5.7"
+  },
+  "validatorSha256": "2f1b2a60ba6193507b02084b324093baf4c7acd620b8c1572ce1c062afd74fb4",
+  "referenceHashes": {
+    "tests/helpers/bottosson-reference.js": "802df9b01aa04eceaabb146a02ec6311be6f4ac26a886f102dc60e1e08b79b2c",
+    "tests/helpers/bottosson-samples.js": "1a851280424099ac6e7c74cfe98de0381aff8a1153dcf4f306899cbfd38546bb",
+    "tests/helpers/boundary-samples.js": "870affb81ccaa2682bea2f1d6418a2ae4cb235cf7c050418c1840694abbe148f",
+    "tests/helpers/canonical-reference.js": "f97cf23480761f018893c28b22fac5263ab43c2878a71f03511eb7240cd7f729",
+    "tests/helpers/css-minde-fixtures.mjs": "334e834403312953f2f5ca60e496f3dfc1921f52792b2b3ffbae1657ba1806ec",
+    "tests/helpers/css-minde-reference.js": "4eb64933f2593de7ea9f88eb333ec9ca0e897c54d297a2654ecb065bae6eae6b",
+    "tests/helpers/dualray-samples.js": "0940172651138a6f91dd5ca4dafbd2b5c4a613605fc21c919ab8653420844566",
+    "tests/helpers/edge-seeker-intervals.js": "df8dbf3b9c72839b37e1b7551cd0e52419e75637a1951594b117178093f7edf9",
+    "tests/helpers/edge-seeker-reference.js": "9d935786564db229806c98df0ed529b5477d1d16b684d5bce04d1ca2a95256cf",
+    "tests/helpers/edge-seeker-samples.js": "53c9d65db5cec8c9d8c8f4e7f89aef76aca74beeafb388044be1db32483f1d9e",
+    "tests/helpers/first-exit-reference.js": "41f236f53871583cbd5f8c95d47d83123c78fab249f7ac4abf2ab5f7017ca119",
+    "tests/helpers/mapper-output.js": "5d8b679a768d98e42f4722464e0b54646a7540fff9931a11992e3fdbd8729b2c",
+    "tests/helpers/matrix-reference.js": "644fc1861cf59f844d997f760469301a25ff33828492540d5327f5f1b7724caa",
+    "tests/helpers/matrix-samples.js": "14c78d63b09218db6dde998a54307c45b0baad9ba9d400a089452221a1bbc43a",
+    "tests/helpers/probe-utils.js": "5d304a0147dcc1bb42890c7161179251816d7ec7db99a3e706f30b42d08ab844",
+    "tests/helpers/validate-bottosson-methods.js": "3bd24cdb1a146862d448fbc56a5ded3318bb6559a01236287e503ffca3e74648",
+    "tests/helpers/validate-dualray-fast-method.js": "f9f55ca5d3218f6ec0e6a654b0fabc6f4cf0391dfd8c6c78bc0274de5efb21fb",
+    "tests/helpers/validate-dualray-method.js": "e8b51adfc3630f13678111bd8db3f75a4351c3617560f51c0b899c5b2c77cec1",
+    "tests/helpers/validate-edge-seeker-methods.js": "a721a288a98465f15ef8831bc4edfcd8f0a17c4fe3e97c4434af387873acfe37",
+    "tests/helpers/validate-matrix-methods.js": "06acbe32f73ef1d2b503f6213dc4e56b3f68f172ede5d257ff586adf44b3f961",
+    "tests/helpers/validate-rgb-methods.js": "4e29d50ec6abb18fde7ae39f864a2095591ae4611b6caf28aac669989f7e656c",
+    "scripts/dualray-experiment-workloads.mjs": "e8914c010bd8435c6d7782b6734186aa0bae1f8cadded1359b147c8eed2e517f"
+  },
+  "scope": "Separate validation seed plus existing adversarial boundary/fold/endpoint probes. XYZ first-exit oracle for mapped output; exact canonical conversion for Fast in-gamut output. Existing budgets unchanged.",
+  "trees": [
+    {
+      "name": "final",
+      "path": "/home/lloydk/work/gma-benchmark",
+      "sourceHashes": {
+        "src/bottosson-factory.js": "dfa5ad3b5effa0f2b7a9c489e4e9ca63d1a49abfb93a13debb53db7f7f575f1a",
+        "src/bottosson-lightness.js": "e7b0efeecb27657e9a4b9d9ea2fca4655024e56259100ac58402b5e28bdd474e",
+        "src/clip.js": "83bb278e0c8d604b65b525a0b6a17d0e18dabb57372867e921e7de20b08a9656",
+        "src/convert.js": "3e7c5a441ebc1e3ddb126c0a8da5439886a67a59a7abf28241c02a99e1645b95",
+        "src/css-minde.js": "dc7b449ba715280a32bded565b78d1a13544377584af9354f6984de3f4502e1c",
+        "src/dualray-factory.js": "10b06f7f3377c93b5fda691d6a2c7265755f9bfe241ac1f4cbfdc511747bcf2d",
+        "src/dualray-fast.js": "89932ac8d3c883ff7f1a92f9afaf32a31e4a65399b7dbe43690b2b4852eb03a5",
+        "src/dualray-interval.js": "51d95a4773c5171b529002d0389d12569a6bc2d851c36ac6276d291073e113ee",
+        "src/dualray-kernel.js": "6a9edf2c4766ad30cf00cdd4a51feeb63f07e460e0ee80769b69c8a5a090f325",
+        "src/dualray.js": "08dc8cd70eb6dbe66341b3ca763bd4ac84fb0c5d08492848fe60cfa756392974",
+        "src/edge-seeker/calculateCurvature.js": "90c52f016ea3effecaff7aa87fec1d8de51a172102a417144ef138eaf9518875",
+        "src/edge-seeker/factory.js": "df4a0503383d190df43f909a075726b7f9aac45819f0569fceda45b6e7f4e0f5",
+        "src/edge-seeker/fixColorSection.js": "fd5b206646b199c0e901e37389393a314fd8879f0bbb6ccb2909a9627b4f2dd9",
+        "src/edge-seeker/index.js": "406b061c3f5e0c2551a5af1864bcc74f0a3968f2531adcb31353b2b491308b5e",
+        "src/edge-seeker/makeColorList.js": "972d1901ee96b04e2f1278f6010d4c32c53e906999c8c00bce827a565b8d798a",
+        "src/edge-seeker/makeEdgeSeeker.js": "b0191ef84f15f48e57de4e150d5d4914ce25edeef62d4ce73c4f3a6b446cd5c0",
+        "src/edge-seeker/makeLut.js": "ee90ec170f521ecec89f57debafd4a29ab57fc24574b14cf1d96b112437a510b",
+        "src/edge-seeker/utils.js": "3ab4c5472f5299e8767f0542092a569cb6da9516fca7c97b7de303da3502ec55",
+        "src/generated/bottosson.js": "ef7c32e9c0643aaf2fe06ae22f8cbb91704f2de7b6c1d8458c7eeae72dc24038",
+        "src/generated/dualray-display-p3.js": "894350ba30bfbe62e40b736a3439835bbe1a8fe3a713e6a1320d441253ac4804",
+        "src/generated/dualray-fast.js": "89c820e7fcd991c6c975fd039da2f90e4bd222acf73a63573c960caaba83012d",
+        "src/generated/dualray-rec2020.js": "1b2d799bf4be7d380c243069f4a7f0070ae902ef34a48c419aca67bc51ed2c66",
+        "src/generated/dualray-srgb.js": "77232862f08b62e40669777b7e9f413dd6a17813face7c0a29b5688f017158e3",
+        "src/generated/dualray.js": "4a6df76c22fb2a40713262bed01c5783490ef89928689ab41bc0e480ed0d0b0a",
+        "src/generated/matrix-solver-policy.js": "43aa6da4886570266e4f3d8ed7fbcf36242d9c3febf72f8ec20aef368fdad177",
+        "src/generated/rgb-spaces.js": "87fd7fc8ae4af7e8c0240b840bda05d2f66984a42dd6a59fbc1f6ec7f06f6304",
+        "src/matrix-mappers.js": "30d83ed2eec805adef5ffd788cbbf785fd65c4384d4ca1166e3eaa114dd6bd02",
+        "src/matrix-solver-policy.js": "9d7f5ed433e9c20ad6841efc14d30a748151775220859f2be4d3b4890f946713",
+        "src/oklab.js": "09609b27755dc2c64dd915ca2b0accc6ba88466f6688e098b27a34c5e3113ca2",
+        "src/oklch-cubic-direct.js": "24f0379ae9d486313bde80a717826d4e544ef0301619e4d53711d072b73d6768",
+        "src/oklch-cubic-no-cache.js": "08b2281986f0287b7a315daefec8159e4474e570b54c12bfa8cc2dcd65f01ec0",
+        "src/oklch-cubic.js": "5d4f4a072b440e61ccac1eac24860266b40df0014b4a121b857464ade5c45c39",
+        "src/oklch-halley.js": "487be6f7e0e0aa18b6e2884ffa39b7d461707702b2e492693ac9dcb28f90ea45",
+        "src/oklch-ostrowski.js": "cea6631ee795e2e06e2074f21180fb1e5f5256318c4177376d00312aedc72cb0",
+        "src/polynomial.js": "21b2c4818630d933f56d7303fbb2c50c6a34b86939bd25b60e0690c0ab0461c7",
+        "src/raytrace.js": "8410a5921cf338a3e5c923ca5342ec6498a7025f6c03af22ea9f15f985dbaab9",
+        "src/rgb-convert.js": "8aeb891c8901ab69cd5ec29f79c5e38557e1d69c57c83ace57738a635881bb38",
+        "src/rgb-spaces.js": "9d350cd4856f02d2ec58356f93ba7b9f1bfbc9d487910cf010be649952616b1c"
+      }
+    }
+  ],
+  "results": [
+    {
+      "tree": "final",
+      "method": "dualray",
+      "gamut": "srgb",
+      "count": 142344,
+      "maxima": {
+        "linear": 4.68292071786891e-12,
+        "delta": 9.100230443539001e-13,
+        "encoded": 2.9187763317395365e-12,
+        "linearInput": [
+          0.9846969622831502,
+          0.4793342824559659,
+          108.83611883036792
+        ],
+        "deltaInput": [
+          0.9846969622831502,
+          0.4793342824559659,
+          108.83611883036792
+        ],
+        "encodedInput": [
+          0.9846969622831502,
+          0.4793342824559659,
+          108.83611883036792
+        ]
+      }
+    },
+    {
+      "tree": "final",
+      "method": "dualray-fast",
+      "gamut": "srgb",
+      "count": 142344,
+      "inside": 40440,
+      "deltaMax": 0.00008482456039996778,
+      "deltaP99": 0.000046399016203703385,
+      "maxInput": [
+        0.64,
+        0.4,
+        33
+      ]
+    },
+    {
+      "tree": "final",
+      "method": "dualray",
+      "gamut": "display-p3",
+      "count": 103822,
+      "maxima": {
+        "linear": 3.848088514502024e-12,
+        "delta": 1.0375294476187643e-12,
+        "encoded": 3.0152547125794626e-12,
+        "linearInput": [
+          0.96,
+          0.4,
+          121
+        ],
+        "deltaInput": [
+          0.96,
+          0.4,
+          121
+        ],
+        "encodedInput": [
+          0.96,
+          0.4,
+          121
+        ]
+      }
+    },
+    {
+      "tree": "final",
+      "method": "dualray-fast",
+      "gamut": "display-p3",
+      "count": 103822,
+      "inside": 24287,
+      "deltaMax": 0.0000723988089426764,
+      "deltaP99": 0.00004815279860737601,
+      "maxInput": [
+        0.7994782570566522,
+        0.41679402359636697,
+        505.66016126290197
+      ]
+    },
+    {
+      "tree": "final",
+      "method": "dualray",
+      "gamut": "rec2020",
+      "count": 142344,
+      "maxima": {
+        "linear": 7.732703366514215e-12,
+        "delta": 1.6646487969531367e-12,
+        "encoded": 5.821877387116137e-7,
+        "linearInput": [
+          0.9882139475668659,
+          0.39482140727341175,
+          106.803088048473
+        ],
+        "deltaInput": [
+          0.9882139475668659,
+          0.39482140727341175,
+          106.803088048473
+        ],
+        "encodedInput": [
+          0.7,
+          0.3950854738232584,
+          872.5950553215257
+        ]
+      }
+    },
+    {
+      "tree": "final",
+      "method": "dualray-fast",
+      "gamut": "rec2020",
+      "count": 142344,
+      "inside": 43111,
+      "deltaMax": 0.0000649695875704347,
+      "deltaP99": 0.000033435765549360484,
+      "maxInput": [
+        0.68,
+        0.4,
+        22
+      ]
+    }
+  ],
+  "completed": "2026-10-03T02:26:06.550Z"
+}

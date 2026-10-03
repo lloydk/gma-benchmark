@@ -1,0 +1,561 @@
+{
+  "schema": "dualray-optimization-validation-v1",
+  "scope": "Initial independent JS-oracle checks plus focused Node tests and complete native Rust tests for each candidate. Rust tests cover f64 and f32.",
+  "screenSha256": "de487890d7670d8127a9a1551c004ab80ab48fa26e94bf82b7c395148198ec1e",
+  "accuracy": [
+    {
+      "variant": "baseline",
+      "method": "dualray",
+      "gamut": "srgb",
+      "count": 142344,
+      "maxima": {
+        "linear": 4.68292071786891e-12,
+        "delta": 9.100230443539001e-13,
+        "encoded": 2.9187763317395365e-12,
+        "linearInput": [
+          0.9846969622831502,
+          0.4793342824559659,
+          108.83611883036792
+        ],
+        "deltaInput": [
+          0.9846969622831502,
+          0.4793342824559659,
+          108.83611883036792
+        ],
+        "encodedInput": [
+          0.9846969622831502,
+          0.4793342824559659,
+          108.83611883036792
+        ]
+      }
+    },
+    {
+      "variant": "baseline",
+      "method": "dualray-fast",
+      "gamut": "srgb",
+      "count": 142344,
+      "inside": 40440,
+      "deltaMax": 0.00008482456039996778,
+      "deltaP99": 0.000046399016203703385,
+      "maxInput": [
+        0.64,
+        0.4,
+        33
+      ]
+    },
+    {
+      "variant": "baseline",
+      "method": "dualray",
+      "gamut": "display-p3",
+      "count": 103822,
+      "maxima": {
+        "linear": 3.848088514502024e-12,
+        "delta": 1.0375294476187643e-12,
+        "encoded": 3.0152547125794626e-12,
+        "linearInput": [
+          0.96,
+          0.4,
+          121
+        ],
+        "deltaInput": [
+          0.96,
+          0.4,
+          121
+        ],
+        "encodedInput": [
+          0.96,
+          0.4,
+          121
+        ]
+      }
+    },
+    {
+      "variant": "baseline",
+      "method": "dualray-fast",
+      "gamut": "display-p3",
+      "count": 103822,
+      "inside": 24287,
+      "deltaMax": 0.0000723988089426764,
+      "deltaP99": 0.00004815279860737601,
+      "maxInput": [
+        0.7994782570566522,
+        0.41679402359636697,
+        505.66016126290197
+      ]
+    },
+    {
+      "variant": "baseline",
+      "method": "dualray",
+      "gamut": "rec2020",
+      "count": 142344,
+      "maxima": {
+        "linear": 7.732703366514215e-12,
+        "delta": 1.6646487969531367e-12,
+        "encoded": 5.821877387116137e-7,
+        "linearInput": [
+          0.9882139475668659,
+          0.39482140727341175,
+          106.803088048473
+        ],
+        "deltaInput": [
+          0.9882139475668659,
+          0.39482140727341175,
+          106.803088048473
+        ],
+        "encodedInput": [
+          0.7,
+          0.3950854738232584,
+          872.5950553215257
+        ]
+      }
+    },
+    {
+      "variant": "baseline",
+      "method": "dualray-fast",
+      "gamut": "rec2020",
+      "count": 142344,
+      "inside": 43111,
+      "deltaMax": 0.0000649695875704347,
+      "deltaP99": 0.000033435765549360484,
+      "maxInput": [
+        0.68,
+        0.4,
+        22
+      ]
+    },
+    {
+      "variant": "halley",
+      "method": "dualray",
+      "gamut": "srgb",
+      "count": 142344,
+      "maxima": {
+        "linear": 4.68292071786891e-12,
+        "delta": 9.100230443539001e-13,
+        "encoded": 2.9187763317395365e-12,
+        "linearInput": [
+          0.9846969622831502,
+          0.4793342824559659,
+          108.83611883036792
+        ],
+        "deltaInput": [
+          0.9846969622831502,
+          0.4793342824559659,
+          108.83611883036792
+        ],
+        "encodedInput": [
+          0.9846969622831502,
+          0.4793342824559659,
+          108.83611883036792
+        ]
+      }
+    },
+    {
+      "variant": "halley",
+      "method": "dualray-fast",
+      "gamut": "srgb",
+      "count": 142344,
+      "inside": 40440,
+      "deltaMax": 0.00008482456039996778,
+      "deltaP99": 0.000046399016203703385,
+      "maxInput": [
+        0.64,
+        0.4,
+        33
+      ]
+    },
+    {
+      "variant": "halley",
+      "method": "dualray",
+      "gamut": "display-p3",
+      "count": 103822,
+      "maxima": {
+        "linear": 3.848088514502024e-12,
+        "delta": 1.0375294476187643e-12,
+        "encoded": 3.0152547125794626e-12,
+        "linearInput": [
+          0.96,
+          0.4,
+          121
+        ],
+        "deltaInput": [
+          0.96,
+          0.4,
+          121
+        ],
+        "encodedInput": [
+          0.96,
+          0.4,
+          121
+        ]
+      }
+    },
+    {
+      "variant": "halley",
+      "method": "dualray-fast",
+      "gamut": "display-p3",
+      "count": 103822,
+      "inside": 24287,
+      "deltaMax": 0.0000723988089426764,
+      "deltaP99": 0.00004815279860737601,
+      "maxInput": [
+        0.7994782570566522,
+        0.41679402359636697,
+        505.66016126290197
+      ]
+    },
+    {
+      "variant": "halley",
+      "method": "dualray",
+      "gamut": "rec2020",
+      "count": 142344,
+      "maxima": {
+        "linear": 7.732703366514215e-12,
+        "delta": 1.6646487969531367e-12,
+        "encoded": 5.821877387116137e-7,
+        "linearInput": [
+          0.9882139475668659,
+          0.39482140727341175,
+          106.803088048473
+        ],
+        "deltaInput": [
+          0.9882139475668659,
+          0.39482140727341175,
+          106.803088048473
+        ],
+        "encodedInput": [
+          0.7,
+          0.3950854738232584,
+          872.5950553215257
+        ]
+      }
+    },
+    {
+      "variant": "halley",
+      "method": "dualray-fast",
+      "gamut": "rec2020",
+      "count": 142344,
+      "inside": 43111,
+      "deltaMax": 0.0000649695875704347,
+      "deltaP99": 0.000033435765549360484,
+      "maxInput": [
+        0.68,
+        0.4,
+        22
+      ]
+    },
+    {
+      "variant": "near-white",
+      "method": "dualray",
+      "gamut": "srgb",
+      "count": 142344,
+      "maxima": {
+        "linear": 4.68292071786891e-12,
+        "delta": 9.100230443539001e-13,
+        "encoded": 2.9187763317395365e-12,
+        "linearInput": [
+          0.9846969622831502,
+          0.4793342824559659,
+          108.83611883036792
+        ],
+        "deltaInput": [
+          0.9846969622831502,
+          0.4793342824559659,
+          108.83611883036792
+        ],
+        "encodedInput": [
+          0.9846969622831502,
+          0.4793342824559659,
+          108.83611883036792
+        ]
+      }
+    },
+    {
+      "variant": "near-white",
+      "method": "dualray-fast",
+      "gamut": "srgb",
+      "count": 142344,
+      "inside": 40440,
+      "deltaMax": 0.00008482456039996778,
+      "deltaP99": 0.000046399016203703385,
+      "maxInput": [
+        0.64,
+        0.4,
+        33
+      ]
+    },
+    {
+      "variant": "near-white",
+      "method": "dualray",
+      "gamut": "display-p3",
+      "count": 103822,
+      "maxima": {
+        "linear": 3.848088514502024e-12,
+        "delta": 1.0375294476187643e-12,
+        "encoded": 3.0152547125794626e-12,
+        "linearInput": [
+          0.96,
+          0.4,
+          121
+        ],
+        "deltaInput": [
+          0.96,
+          0.4,
+          121
+        ],
+        "encodedInput": [
+          0.96,
+          0.4,
+          121
+        ]
+      }
+    },
+    {
+      "variant": "near-white",
+      "method": "dualray-fast",
+      "gamut": "display-p3",
+      "count": 103822,
+      "inside": 24287,
+      "deltaMax": 0.0000723988089426764,
+      "deltaP99": 0.00004815279860737601,
+      "maxInput": [
+        0.7994782570566522,
+        0.41679402359636697,
+        505.66016126290197
+      ]
+    },
+    {
+      "variant": "near-white",
+      "method": "dualray",
+      "gamut": "rec2020",
+      "count": 142344,
+      "maxima": {
+        "linear": 7.732703366514215e-12,
+        "delta": 1.6646487969531367e-12,
+        "encoded": 5.821877387116137e-7,
+        "linearInput": [
+          0.9882139475668659,
+          0.39482140727341175,
+          106.803088048473
+        ],
+        "deltaInput": [
+          0.9882139475668659,
+          0.39482140727341175,
+          106.803088048473
+        ],
+        "encodedInput": [
+          0.7,
+          0.3950854738232584,
+          872.5950553215257
+        ]
+      }
+    },
+    {
+      "variant": "near-white",
+      "method": "dualray-fast",
+      "gamut": "rec2020",
+      "count": 142344,
+      "inside": 43111,
+      "deltaMax": 0.0000649695875704347,
+      "deltaP99": 0.000033435765549360484,
+      "maxInput": [
+        0.68,
+        0.4,
+        22
+      ]
+    },
+    {
+      "variant": "reuse-trig",
+      "method": "dualray",
+      "gamut": "srgb",
+      "count": 142344,
+      "maxima": {
+        "linear": 4.68292071786891e-12,
+        "delta": 9.100230443539001e-13,
+        "encoded": 2.9187763317395365e-12,
+        "linearInput": [
+          0.9846969622831502,
+          0.4793342824559659,
+          108.83611883036792
+        ],
+        "deltaInput": [
+          0.9846969622831502,
+          0.4793342824559659,
+          108.83611883036792
+        ],
+        "encodedInput": [
+          0.9846969622831502,
+          0.4793342824559659,
+          108.83611883036792
+        ]
+      }
+    },
+    {
+      "variant": "reuse-trig",
+      "method": "dualray-fast",
+      "gamut": "srgb",
+      "count": 142344,
+      "inside": 40440,
+      "deltaMax": 0.00008482456039996778,
+      "deltaP99": 0.000046399016203703385,
+      "maxInput": [
+        0.64,
+        0.4,
+        33
+      ]
+    },
+    {
+      "variant": "reuse-trig",
+      "method": "dualray",
+      "gamut": "display-p3",
+      "count": 103822,
+      "maxima": {
+        "linear": 3.848088514502024e-12,
+        "delta": 1.0375294476187643e-12,
+        "encoded": 3.0152547125794626e-12,
+        "linearInput": [
+          0.96,
+          0.4,
+          121
+        ],
+        "deltaInput": [
+          0.96,
+          0.4,
+          121
+        ],
+        "encodedInput": [
+          0.96,
+          0.4,
+          121
+        ]
+      }
+    },
+    {
+      "variant": "reuse-trig",
+      "method": "dualray-fast",
+      "gamut": "display-p3",
+      "count": 103822,
+      "inside": 24287,
+      "deltaMax": 0.0000723988089426764,
+      "deltaP99": 0.00004815279860737601,
+      "maxInput": [
+        0.7994782570566522,
+        0.41679402359636697,
+        505.66016126290197
+      ]
+    },
+    {
+      "variant": "reuse-trig",
+      "method": "dualray",
+      "gamut": "rec2020",
+      "count": 142344,
+      "maxima": {
+        "linear": 7.732703366514215e-12,
+        "delta": 1.6646487969531367e-12,
+        "encoded": 5.821877387116137e-7,
+        "linearInput": [
+          0.9882139475668659,
+          0.39482140727341175,
+          106.803088048473
+        ],
+        "deltaInput": [
+          0.9882139475668659,
+          0.39482140727341175,
+          106.803088048473
+        ],
+        "encodedInput": [
+          0.7,
+          0.3950854738232584,
+          872.5950553215257
+        ]
+      }
+    },
+    {
+      "variant": "reuse-trig",
+      "method": "dualray-fast",
+      "gamut": "rec2020",
+      "count": 142344,
+      "inside": 43111,
+      "deltaMax": 0.0000649695875704347,
+      "deltaP99": 0.000033435765549360484,
+      "maxInput": [
+        0.68,
+        0.4,
+        22
+      ]
+    }
+  ],
+  "testLogs": {
+    "halley": {
+      "node": "✔ tests/dualray-fast.test.js (1956.828707ms)\n✔ tests/dualray-targets.test.js (1461.283516ms)\nℹ tests 2\nℹ suites 0\nℹ pass 2\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 1968.332894\n",
+      "nativeRust": "   Compiling gma-bench v0.1.0 (/tmp/gma-dualray-experiments-20261002/halley/rust)\n    Finished `release` profile [optimized] target(s) in 31.05s\n     Running unittests src/main.rs (rust/target/release/deps/gma_bench-c76b479dc8f85496)\n\nrunning 119 tests\ntest cli::tests::gamut_requires_a_value_in_both_forms ... ok\ntest cli::tests::supported_modes_and_strict_unknown_arguments ... ok\ntest float32::checksum_tests::accumulate_after_widening_each_channel ... ok\ntest float32::checksum_tests::every_channel_and_every_sample_contribute ... ok\ntest float32::css_minde::tests::endpoints_achromatic_and_extreme_hues ... ok\ntest float32::compensated::tests::split_and_fused_product_residuals_agree_on_solver_operands ... ok\ntest float32::dualray::tests::bernstein_controls_reject_inside_endpoints_with_outside_interiors ... ok\ntest float32::css_minde::tests::in_gamut_inputs_preserve_canonical_conversion_bits ... ok\ntest float32::css_minde::tests::matches_independent_spec_vectors_in_both_modes ... ok\ntest float32::dualray::tests::first_exit_keeps_the_first_crossing ... ok\ntest float32::dualray::tests::endpoints_gray_and_extreme_hues_follow_boundary_policy ... ok\ntest float32::dualray::tests::fold_tangent_regressions_use_native_conditioning ... ok\ntest float32::edge_seeker::edge_seeker_tests::arc_endpoints_and_small_curvatures_match_oracle ... ok\ntest float32::edge_seeker::edge_seeker_tests::near_cusp_yellow_keeps_its_hue_in_both_mappers_and_modes ... ok\ntest float32::edge_seeker::edge_seeker_tests::sharp_residuals_use_the_actual_native_table_knots ... ok\ntest float32::dualray_fast::tests::out_of_range_hues_keep_canonical_in_gamut_colors ... ok\ntest float32::gamut::tests::pinned_p3_coefficients_agree_with_xyz_definitions ... ok\ntest float32::rgb_solvers::tests::a_face_contact_exits_only_in_the_outward_direction ... ok\ntest float32::rgb_solvers::tests::achromatic_raytrace_uses_the_canonical_conversion ... ok\ntest float32::dualray_fast::tests::unrolled_fits_preserve_result_bits ... ok\ntest float32::rgb_solvers::tests::dark_fold_search_keeps_the_same_normalized_outer_boundary ... ok\ntest float32::rgb_solvers::tests::direct_cubic_polish_keeps_the_limiting_face_near_a_double_root ... ok\ntest float32::rgb_solvers::tests::iterative_solvers_retain_the_vivid_branch_in_stable_blue_folds ... ok\ntest float32::rgb_solvers::tests::matrix_solvers_keep_endpoints_and_extreme_hues_finite ... ok\ntest float32::rgb_solvers::tests::iterative_fold_gap_reduces_chroma_and_preserves_the_authored_line ... ok\ntest float32::rgb_solvers::tests::raytrace_and_reference_retain_a_converged_near_white_hit ... ok\ntest float32::rgb_solvers::tests::raytrace_keeps_tiny_near_white_directions_in_both_precisions ... ok\ntest float32::rgb_solvers::tests::near_white_cubics_match_geometric_boundary ... ok\ntest float32::rgb_solvers::tests::zero_root_face_direction_is_explicit ... ok\ntest float32::rgb_tests::all_gamuts_retain_css_endpoint_and_hue_policy ... ok\ntest float32::rgb_tests::conversions_match_independent_xyz_reference ... ok\ntest float32::dualray::tests::upper_face_handoffs_and_gate_neighbours_match_oracle ... ok\ntest float32::rgb_tests::in_gamut_conversion_bits_survive_faces_and_neighbours ... ok\ntest float32::rgb_tests::transfer_endpoints_breakpoints_and_rec2020_dark_values ... ok\ntest float32::bottosson::tests::generated_sectors_and_cusps_match_independent_geometry ... ok\ntest float32::dualray::tests::basis_seeds_and_root_limits_match_independent_geometry ... ok\ntest float32::tests::edge_seeker_arc_is_stable_near_zero_curvature ... ok\ntest float32::tests::endpoints_and_extreme_hues_stay_finite ... ok\ntest float32::dualray::tests::boundary_neighbours_and_mixed_chroma_match_independent_oracle ... ok\ntest float32::rgb_tests::css_minde_matches_independent_spec_in_every_gamut ... ok\ntest float32::tests::lut_and_caches_store_f32 ... ok\ntest float32::tests::raytrace_rounding_regressions ... ok\ntest float32::dualray::tests::fold_exits_snap_the_selected_face_but_interior_inputs_do_not ... ok\ntest float32::tests::rec2020_minde_jnd_neighbour_has_bounded_perceptual_error ... ok\ntest float32::tests::indexed_and_uncached_variants_agree ... ok\ntest float32::tests::cached_cubics_match_oracle_at_their_bucket_hue ... ok\ntest float32::tests::exact_hue_methods_match_independent_boundary_oracle ... ok\ntest float64::checksum_tests::accumulate_after_widening_each_channel ... ok\ntest float64::checksum_tests::every_channel_and_every_sample_contribute ... ok\ntest float64::compensated::tests::split_and_fused_product_residuals_agree_on_solver_operands ... ok\ntest float64::css_minde::tests::endpoints_achromatic_and_extreme_hues ... ok\ntest float64::css_minde::tests::in_gamut_inputs_preserve_canonical_conversion_bits ... ok\ntest float64::css_minde::tests::matches_independent_spec_vectors_in_both_modes ... ok\ntest float64::bottosson::tests::generated_sectors_and_cusps_match_independent_geometry ... ok\ntest float64::dualray::tests::basis_seeds_and_root_limits_match_independent_geometry ... ok\ntest float64::dualray::tests::bernstein_controls_reject_inside_endpoints_with_outside_interiors ... ok\ntest float32::bottosson::tests::all_gamut_mapping_matches_independent_policy_and_preserves_canonical ... ok\ntest float64::dualray::tests::endpoints_gray_and_extreme_hues_follow_boundary_policy ... ok\ntest float64::dualray::tests::first_exit_keeps_the_first_crossing ... ok\ntest float64::dualray::tests::boundary_neighbours_and_mixed_chroma_match_independent_oracle ... ok\ntest float64::dualray::tests::fold_tangent_regressions_use_native_conditioning ... ok\ntest float32::tests::dualray_fold_window_edges_cover_every_neighbouring_f32_hue ... ok\ntest float64::dualray_fast::tests::out_of_range_hues_keep_canonical_in_gamut_colors ... ok\ntest float64::dualray_fast::tests::unrolled_fits_preserve_result_bits ... ok\ntest float64::dualray::tests::upper_face_handoffs_and_gate_neighbours_match_oracle ... ok\ntest float64::dualray::tests::fold_exits_snap_the_selected_face_but_interior_inputs_do_not ... ok\ntest float64::bottosson::tests::all_gamut_mapping_matches_independent_policy_and_preserves_canonical ... ok\ntest float64::edge_seeker::edge_seeker_tests::arc_endpoints_and_small_curvatures_match_oracle ... ok\ntest float64::edge_seeker::edge_seeker_tests::near_cusp_yellow_keeps_its_hue_in_both_mappers_and_modes ... ok\ntest float64::edge_seeker::edge_seeker_tests::sharp_residuals_use_the_actual_native_table_knots ... ok\ntest float64::gamut::tests::pinned_p3_coefficients_agree_with_xyz_definitions ... ok\ntest float64::rgb_solvers::tests::a_face_contact_exits_only_in_the_outward_direction ... ok\ntest float64::rgb_solvers::tests::achromatic_raytrace_uses_the_canonical_conversion ... ok\ntest float32::rgb_solvers::tests::fold_sweeps_require_feasible_geometric_intersections ... ok\ntest float64::rgb_solvers::tests::dark_fold_search_keeps_the_same_normalized_outer_boundary ... ok\ntest float64::rgb_solvers::tests::direct_cubic_polish_keeps_the_limiting_face_near_a_double_root ... ok\ntest float32::rgb_solvers::tests::solver_boundaries_match_their_independent_policies ... ok\ntest float64::rgb_solvers::tests::iterative_fold_gap_reduces_chroma_and_preserves_the_authored_line ... ok\ntest float64::rgb_solvers::tests::iterative_solvers_retain_the_vivid_branch_in_stable_blue_folds ... ok\ntest float64::rgb_solvers::tests::matrix_solvers_keep_endpoints_and_extreme_hues_finite ... ok\ntest float64::rgb_solvers::tests::near_white_cubics_match_geometric_boundary ... ok\ntest float64::rgb_solvers::tests::raytrace_and_reference_retain_a_converged_near_white_hit ... ok\ntest float64::rgb_solvers::tests::raytrace_keeps_tiny_near_white_directions_in_both_precisions ... ok\ntest float32::bottosson::tests::approximation_quality_against_geometric_first_exit ... ok\ntest float64::rgb_solvers::tests::zero_root_face_direction_is_explicit ... ok\ntest float64::rgb_tests::all_gamuts_retain_css_endpoint_and_hue_policy ... ok\ntest float64::rgb_tests::conversions_match_independent_xyz_reference ... ok\ntest float32::edge_seeker::edge_seeker_tests::all_gamut_cusp_and_white_neighbours_match_oracle ... ok\ntest float32::edge_seeker::edge_seeker_tests::all_gamut_approximation_quality_against_geometric_boundary ... ok\ntest float64::rgb_tests::in_gamut_conversion_bits_survive_faces_and_neighbours ... ok\ntest float64::rgb_tests::transfer_endpoints_breakpoints_and_rec2020_dark_values ... ok\ntest test_oracle::multi_gamut_oracle_handles_reentry_tangency_and_degeneracy ... ok\ntest test_oracle::multi_gamut_oracle_exits_all_six_faces ... ok\ntest float64::rgb_tests::css_minde_matches_independent_spec_in_every_gamut ... ok\ntest float64::bottosson::tests::approximation_quality_against_geometric_first_exit ... ok\ntest validation::tests::dualray_keeps_the_historical_p3_encoded_gate ... ok\ntest validation::tests::fold_window_endpoints_agree_across_precisions ... ok\ntest validation::tests::metrics_reject_regressions_away_from_zero ... ok\ntest float32::edge_seeker::edge_seeker_tests::all_gamut_mapping_matches_independent_table_policy_and_preserves_canonical ... ok\ntest validation::tests::cross_method_checks_cover_all_gamuts ... ok\ntest validation::tests::non_finite_outputs_and_metrics_are_rejected ... ok\ntest validation::tests::perceptual_gate_rejects_a_dark_regression_inside_the_linear_budget ... ok\ntest validation::tests::rejected_prechecks_must_match_plain_mapping ... ok\ntest validation::tests::srgb_blue_primary_review_reproducer_passes_startup_validation ... ok\ntest float64::edge_seeker::edge_seeker_tests::all_gamut_approximation_quality_against_geometric_boundary ... ok\ntest float64::edge_seeker::edge_seeker_tests::all_gamut_cusp_and_white_neighbours_match_oracle ... ok\ntest float64::rgb_solvers::tests::fold_sweeps_require_feasible_geometric_intersections ... ok\ntest float32::bottosson::tests::every_f32_hue_near_blue_primary_meets_policy_limits ... ok\ntest float64::rgb_solvers::tests::solver_boundaries_match_their_independent_policies ... ok\ntest validation::tests::core_methods_accept_faces_and_neighbours_in_every_gamut ... ok\ntest float64::bottosson::tests::every_f32_hue_near_blue_primary_meets_policy_limits ... ok\ntest float64::edge_seeker::edge_seeker_tests::all_gamut_mapping_matches_independent_table_policy_and_preserves_canonical ... ok\ntest validation::tests::mixed_chroma_and_in_gamut_workloads ... ok\ntest float32::dualray::tests::all_targets_match_independent_first_exit ... ok\ntest validation::tests::all_methods_match_on_benchmark_workloads ... ok\ntest float64::dualray::tests::all_targets_match_independent_first_exit ... ok\ntest validation::tests::new_gamuts_match_on_benchmark_workloads ... ok\ntest float32::rgb_solvers::tests::all_matrix_solvers_match_independent_mapping_policies_and_preserve_canonical ... ok\ntest float64::rgb_solvers::tests::all_matrix_solvers_match_independent_mapping_policies_and_preserve_canonical ... ok\n\ntest result: ok. 119 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.48s\n\n"
+    },
+    "near-white": {
+      "node": "✔ tests/dualray-fast.test.js (1960.440573ms)\n✔ tests/dualray-targets.test.js (1369.332939ms)\nℹ tests 2\nℹ suites 0\nℹ pass 2\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 1966.266055\n",
+      "nativeRust": "   Compiling gma-bench v0.1.0 (/tmp/gma-dualray-experiments-20261002/near-white/rust)\n    Finished `release` profile [optimized] target(s) in 31.27s\n     Running unittests src/main.rs (rust/target/release/deps/gma_bench-c76b479dc8f85496)\n\nrunning 119 tests\ntest cli::tests::gamut_requires_a_value_in_both_forms ... ok\ntest cli::tests::supported_modes_and_strict_unknown_arguments ... ok\ntest float32::checksum_tests::accumulate_after_widening_each_channel ... ok\ntest float32::checksum_tests::every_channel_and_every_sample_contribute ... ok\ntest float32::css_minde::tests::endpoints_achromatic_and_extreme_hues ... ok\ntest float32::compensated::tests::split_and_fused_product_residuals_agree_on_solver_operands ... ok\ntest float32::css_minde::tests::matches_independent_spec_vectors_in_both_modes ... ok\ntest float32::dualray::tests::bernstein_controls_reject_inside_endpoints_with_outside_interiors ... ok\ntest float32::dualray::tests::endpoints_gray_and_extreme_hues_follow_boundary_policy ... ok\ntest float32::dualray::tests::first_exit_keeps_the_first_crossing ... ok\ntest float32::dualray::tests::fold_tangent_regressions_use_native_conditioning ... ok\ntest float32::edge_seeker::edge_seeker_tests::arc_endpoints_and_small_curvatures_match_oracle ... ok\ntest float32::css_minde::tests::in_gamut_inputs_preserve_canonical_conversion_bits ... ok\ntest float32::edge_seeker::edge_seeker_tests::near_cusp_yellow_keeps_its_hue_in_both_mappers_and_modes ... ok\ntest float32::edge_seeker::edge_seeker_tests::sharp_residuals_use_the_actual_native_table_knots ... ok\ntest float32::gamut::tests::pinned_p3_coefficients_agree_with_xyz_definitions ... ok\ntest float32::rgb_solvers::tests::a_face_contact_exits_only_in_the_outward_direction ... ok\ntest float32::rgb_solvers::tests::achromatic_raytrace_uses_the_canonical_conversion ... ok\ntest float32::dualray_fast::tests::out_of_range_hues_keep_canonical_in_gamut_colors ... ok\ntest float32::dualray_fast::tests::unrolled_fits_preserve_result_bits ... ok\ntest float32::rgb_solvers::tests::dark_fold_search_keeps_the_same_normalized_outer_boundary ... ok\ntest float32::rgb_solvers::tests::direct_cubic_polish_keeps_the_limiting_face_near_a_double_root ... ok\ntest float32::rgb_solvers::tests::iterative_fold_gap_reduces_chroma_and_preserves_the_authored_line ... ok\ntest float32::rgb_solvers::tests::matrix_solvers_keep_endpoints_and_extreme_hues_finite ... ok\ntest float32::rgb_solvers::tests::iterative_solvers_retain_the_vivid_branch_in_stable_blue_folds ... ok\ntest float32::rgb_solvers::tests::raytrace_and_reference_retain_a_converged_near_white_hit ... ok\ntest float32::rgb_solvers::tests::raytrace_keeps_tiny_near_white_directions_in_both_precisions ... ok\ntest float32::rgb_solvers::tests::near_white_cubics_match_geometric_boundary ... ok\ntest float32::rgb_solvers::tests::zero_root_face_direction_is_explicit ... ok\ntest float32::rgb_tests::all_gamuts_retain_css_endpoint_and_hue_policy ... ok\ntest float32::rgb_tests::conversions_match_independent_xyz_reference ... ok\ntest float32::dualray::tests::upper_face_handoffs_and_gate_neighbours_match_oracle ... ok\ntest float32::rgb_tests::in_gamut_conversion_bits_survive_faces_and_neighbours ... ok\ntest float32::rgb_tests::transfer_endpoints_breakpoints_and_rec2020_dark_values ... ok\ntest float32::bottosson::tests::generated_sectors_and_cusps_match_independent_geometry ... ok\ntest float32::dualray::tests::basis_seeds_and_root_limits_match_independent_geometry ... ok\ntest float32::dualray::tests::fold_exits_snap_the_selected_face_but_interior_inputs_do_not ... ok\ntest float32::tests::endpoints_and_extreme_hues_stay_finite ... ok\ntest float32::dualray::tests::boundary_neighbours_and_mixed_chroma_match_independent_oracle ... ok\ntest float32::tests::edge_seeker_arc_is_stable_near_zero_curvature ... ok\ntest float32::tests::lut_and_caches_store_f32 ... ok\ntest float32::tests::raytrace_rounding_regressions ... ok\ntest float32::tests::rec2020_minde_jnd_neighbour_has_bounded_perceptual_error ... ok\ntest float32::rgb_tests::css_minde_matches_independent_spec_in_every_gamut ... ok\ntest float32::tests::cached_cubics_match_oracle_at_their_bucket_hue ... ok\ntest float32::tests::indexed_and_uncached_variants_agree ... ok\ntest float32::tests::exact_hue_methods_match_independent_boundary_oracle ... ok\ntest float64::checksum_tests::accumulate_after_widening_each_channel ... ok\ntest float64::checksum_tests::every_channel_and_every_sample_contribute ... ok\ntest float64::compensated::tests::split_and_fused_product_residuals_agree_on_solver_operands ... ok\ntest float64::css_minde::tests::endpoints_achromatic_and_extreme_hues ... ok\ntest float64::css_minde::tests::in_gamut_inputs_preserve_canonical_conversion_bits ... ok\ntest float64::css_minde::tests::matches_independent_spec_vectors_in_both_modes ... ok\ntest float64::bottosson::tests::generated_sectors_and_cusps_match_independent_geometry ... ok\ntest float32::bottosson::tests::all_gamut_mapping_matches_independent_policy_and_preserves_canonical ... ok\ntest float64::dualray::tests::bernstein_controls_reject_inside_endpoints_with_outside_interiors ... ok\ntest float64::dualray::tests::basis_seeds_and_root_limits_match_independent_geometry ... ok\ntest float64::dualray::tests::endpoints_gray_and_extreme_hues_follow_boundary_policy ... ok\ntest float64::dualray::tests::first_exit_keeps_the_first_crossing ... ok\ntest float32::tests::dualray_fold_window_edges_cover_every_neighbouring_f32_hue ... ok\ntest float64::dualray::tests::fold_tangent_regressions_use_native_conditioning ... ok\ntest float64::dualray::tests::boundary_neighbours_and_mixed_chroma_match_independent_oracle ... ok\ntest float64::dualray::tests::upper_face_handoffs_and_gate_neighbours_match_oracle ... ok\ntest float64::dualray_fast::tests::out_of_range_hues_keep_canonical_in_gamut_colors ... ok\ntest float64::dualray_fast::tests::unrolled_fits_preserve_result_bits ... ok\ntest float64::dualray::tests::fold_exits_snap_the_selected_face_but_interior_inputs_do_not ... ok\ntest float32::rgb_solvers::tests::fold_sweeps_require_feasible_geometric_intersections ... ok\ntest float64::edge_seeker::edge_seeker_tests::arc_endpoints_and_small_curvatures_match_oracle ... ok\ntest float64::edge_seeker::edge_seeker_tests::near_cusp_yellow_keeps_its_hue_in_both_mappers_and_modes ... ok\ntest float64::edge_seeker::edge_seeker_tests::sharp_residuals_use_the_actual_native_table_knots ... ok\ntest float64::gamut::tests::pinned_p3_coefficients_agree_with_xyz_definitions ... ok\ntest float64::rgb_solvers::tests::a_face_contact_exits_only_in_the_outward_direction ... ok\ntest float64::rgb_solvers::tests::achromatic_raytrace_uses_the_canonical_conversion ... ok\ntest float64::bottosson::tests::all_gamut_mapping_matches_independent_policy_and_preserves_canonical ... ok\ntest float64::rgb_solvers::tests::dark_fold_search_keeps_the_same_normalized_outer_boundary ... ok\ntest float64::rgb_solvers::tests::direct_cubic_polish_keeps_the_limiting_face_near_a_double_root ... ok\ntest float32::rgb_solvers::tests::solver_boundaries_match_their_independent_policies ... ok\ntest float64::rgb_solvers::tests::iterative_fold_gap_reduces_chroma_and_preserves_the_authored_line ... ok\ntest float64::rgb_solvers::tests::iterative_solvers_retain_the_vivid_branch_in_stable_blue_folds ... ok\ntest float64::rgb_solvers::tests::matrix_solvers_keep_endpoints_and_extreme_hues_finite ... ok\ntest float64::rgb_solvers::tests::near_white_cubics_match_geometric_boundary ... ok\ntest float64::rgb_solvers::tests::raytrace_and_reference_retain_a_converged_near_white_hit ... ok\ntest float64::rgb_solvers::tests::raytrace_keeps_tiny_near_white_directions_in_both_precisions ... ok\ntest float32::edge_seeker::edge_seeker_tests::all_gamut_approximation_quality_against_geometric_boundary ... ok\ntest float64::rgb_solvers::tests::zero_root_face_direction_is_explicit ... ok\ntest float64::rgb_tests::all_gamuts_retain_css_endpoint_and_hue_policy ... ok\ntest float32::bottosson::tests::approximation_quality_against_geometric_first_exit ... ok\ntest float64::rgb_tests::conversions_match_independent_xyz_reference ... ok\ntest float64::rgb_tests::in_gamut_conversion_bits_survive_faces_and_neighbours ... ok\ntest float64::rgb_tests::transfer_endpoints_breakpoints_and_rec2020_dark_values ... ok\ntest float32::edge_seeker::edge_seeker_tests::all_gamut_cusp_and_white_neighbours_match_oracle ... ok\ntest test_oracle::multi_gamut_oracle_handles_reentry_tangency_and_degeneracy ... ok\ntest test_oracle::multi_gamut_oracle_exits_all_six_faces ... ok\ntest float64::rgb_tests::css_minde_matches_independent_spec_in_every_gamut ... ok\ntest float64::bottosson::tests::approximation_quality_against_geometric_first_exit ... ok\ntest validation::tests::dualray_keeps_the_historical_p3_encoded_gate ... ok\ntest validation::tests::fold_window_endpoints_agree_across_precisions ... ok\ntest validation::tests::metrics_reject_regressions_away_from_zero ... ok\ntest float32::edge_seeker::edge_seeker_tests::all_gamut_mapping_matches_independent_table_policy_and_preserves_canonical ... ok\ntest validation::tests::cross_method_checks_cover_all_gamuts ... ok\ntest validation::tests::non_finite_outputs_and_metrics_are_rejected ... ok\ntest validation::tests::perceptual_gate_rejects_a_dark_regression_inside_the_linear_budget ... ok\ntest validation::tests::rejected_prechecks_must_match_plain_mapping ... ok\ntest validation::tests::srgb_blue_primary_review_reproducer_passes_startup_validation ... ok\ntest float64::edge_seeker::edge_seeker_tests::all_gamut_approximation_quality_against_geometric_boundary ... ok\ntest float64::edge_seeker::edge_seeker_tests::all_gamut_cusp_and_white_neighbours_match_oracle ... ok\ntest float32::bottosson::tests::every_f32_hue_near_blue_primary_meets_policy_limits ... ok\ntest float64::rgb_solvers::tests::fold_sweeps_require_feasible_geometric_intersections ... ok\ntest float64::rgb_solvers::tests::solver_boundaries_match_their_independent_policies ... ok\ntest validation::tests::core_methods_accept_faces_and_neighbours_in_every_gamut ... ok\ntest float64::bottosson::tests::every_f32_hue_near_blue_primary_meets_policy_limits ... ok\ntest float64::edge_seeker::edge_seeker_tests::all_gamut_mapping_matches_independent_table_policy_and_preserves_canonical ... ok\ntest validation::tests::mixed_chroma_and_in_gamut_workloads ... ok\ntest float32::dualray::tests::all_targets_match_independent_first_exit ... ok\ntest validation::tests::all_methods_match_on_benchmark_workloads ... ok\ntest float64::dualray::tests::all_targets_match_independent_first_exit ... ok\ntest validation::tests::new_gamuts_match_on_benchmark_workloads ... ok\ntest float32::rgb_solvers::tests::all_matrix_solvers_match_independent_mapping_policies_and_preserve_canonical ... ok\ntest float64::rgb_solvers::tests::all_matrix_solvers_match_independent_mapping_policies_and_preserve_canonical ... ok\n\ntest result: ok. 119 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.34s\n\n"
+    },
+    "reuse-trig": {
+      "node": "✔ tests/dualray-fast.test.js (1929.630187ms)\n✔ tests/dualray-targets.test.js (1381.997663ms)\nℹ tests 2\nℹ suites 0\nℹ pass 2\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 1935.082273\n",
+      "nativeRust": "   Compiling gma-bench v0.1.0 (/tmp/gma-dualray-experiments-20261002/reuse-trig/rust)\n    Finished `release` profile [optimized] target(s) in 31.23s\n     Running unittests src/main.rs (rust/target/release/deps/gma_bench-c76b479dc8f85496)\n\nrunning 119 tests\ntest cli::tests::gamut_requires_a_value_in_both_forms ... ok\ntest cli::tests::supported_modes_and_strict_unknown_arguments ... ok\ntest float32::checksum_tests::accumulate_after_widening_each_channel ... ok\ntest float32::checksum_tests::every_channel_and_every_sample_contribute ... ok\ntest float32::css_minde::tests::endpoints_achromatic_and_extreme_hues ... ok\ntest float32::compensated::tests::split_and_fused_product_residuals_agree_on_solver_operands ... ok\ntest float32::css_minde::tests::matches_independent_spec_vectors_in_both_modes ... ok\ntest float32::dualray::tests::bernstein_controls_reject_inside_endpoints_with_outside_interiors ... ok\ntest float32::dualray::tests::endpoints_gray_and_extreme_hues_follow_boundary_policy ... ok\ntest float32::css_minde::tests::in_gamut_inputs_preserve_canonical_conversion_bits ... ok\ntest float32::dualray::tests::fold_tangent_regressions_use_native_conditioning ... ok\ntest float32::dualray::tests::first_exit_keeps_the_first_crossing ... ok\ntest float32::edge_seeker::edge_seeker_tests::arc_endpoints_and_small_curvatures_match_oracle ... ok\ntest float32::edge_seeker::edge_seeker_tests::near_cusp_yellow_keeps_its_hue_in_both_mappers_and_modes ... ok\ntest float32::edge_seeker::edge_seeker_tests::sharp_residuals_use_the_actual_native_table_knots ... ok\ntest float32::gamut::tests::pinned_p3_coefficients_agree_with_xyz_definitions ... ok\ntest float32::rgb_solvers::tests::a_face_contact_exits_only_in_the_outward_direction ... ok\ntest float32::rgb_solvers::tests::achromatic_raytrace_uses_the_canonical_conversion ... ok\ntest float32::rgb_solvers::tests::dark_fold_search_keeps_the_same_normalized_outer_boundary ... ok\ntest float32::rgb_solvers::tests::direct_cubic_polish_keeps_the_limiting_face_near_a_double_root ... ok\ntest float32::dualray_fast::tests::out_of_range_hues_keep_canonical_in_gamut_colors ... ok\ntest float32::rgb_solvers::tests::iterative_fold_gap_reduces_chroma_and_preserves_the_authored_line ... ok\ntest float32::rgb_solvers::tests::iterative_solvers_retain_the_vivid_branch_in_stable_blue_folds ... ok\ntest float32::dualray_fast::tests::unrolled_fits_preserve_result_bits ... ok\ntest float32::rgb_solvers::tests::matrix_solvers_keep_endpoints_and_extreme_hues_finite ... ok\ntest float32::rgb_solvers::tests::raytrace_and_reference_retain_a_converged_near_white_hit ... ok\ntest float32::rgb_solvers::tests::raytrace_keeps_tiny_near_white_directions_in_both_precisions ... ok\ntest float32::rgb_solvers::tests::near_white_cubics_match_geometric_boundary ... ok\ntest float32::rgb_solvers::tests::zero_root_face_direction_is_explicit ... ok\ntest float32::rgb_tests::all_gamuts_retain_css_endpoint_and_hue_policy ... ok\ntest float32::dualray::tests::upper_face_handoffs_and_gate_neighbours_match_oracle ... ok\ntest float32::rgb_tests::conversions_match_independent_xyz_reference ... ok\ntest float32::rgb_tests::in_gamut_conversion_bits_survive_faces_and_neighbours ... ok\ntest float32::rgb_tests::transfer_endpoints_breakpoints_and_rec2020_dark_values ... ok\ntest float32::bottosson::tests::generated_sectors_and_cusps_match_independent_geometry ... ok\ntest float32::dualray::tests::basis_seeds_and_root_limits_match_independent_geometry ... ok\ntest float32::tests::edge_seeker_arc_is_stable_near_zero_curvature ... ok\ntest float32::tests::endpoints_and_extreme_hues_stay_finite ... ok\ntest float32::dualray::tests::boundary_neighbours_and_mixed_chroma_match_independent_oracle ... ok\ntest float32::dualray::tests::fold_exits_snap_the_selected_face_but_interior_inputs_do_not ... ok\ntest float32::tests::lut_and_caches_store_f32 ... ok\ntest float32::tests::raytrace_rounding_regressions ... ok\ntest float32::tests::rec2020_minde_jnd_neighbour_has_bounded_perceptual_error ... ok\ntest float32::tests::indexed_and_uncached_variants_agree ... ok\ntest float32::rgb_tests::css_minde_matches_independent_spec_in_every_gamut ... ok\ntest float32::tests::cached_cubics_match_oracle_at_their_bucket_hue ... ok\ntest float32::tests::exact_hue_methods_match_independent_boundary_oracle ... ok\ntest float64::checksum_tests::accumulate_after_widening_each_channel ... ok\ntest float64::checksum_tests::every_channel_and_every_sample_contribute ... ok\ntest float64::compensated::tests::split_and_fused_product_residuals_agree_on_solver_operands ... ok\ntest float64::css_minde::tests::endpoints_achromatic_and_extreme_hues ... ok\ntest float64::css_minde::tests::in_gamut_inputs_preserve_canonical_conversion_bits ... ok\ntest float64::css_minde::tests::matches_independent_spec_vectors_in_both_modes ... ok\ntest float64::bottosson::tests::generated_sectors_and_cusps_match_independent_geometry ... ok\ntest float64::dualray::tests::basis_seeds_and_root_limits_match_independent_geometry ... ok\ntest float64::dualray::tests::bernstein_controls_reject_inside_endpoints_with_outside_interiors ... ok\ntest float32::bottosson::tests::all_gamut_mapping_matches_independent_policy_and_preserves_canonical ... ok\ntest float64::dualray::tests::endpoints_gray_and_extreme_hues_follow_boundary_policy ... ok\ntest float64::dualray::tests::first_exit_keeps_the_first_crossing ... ok\ntest float32::tests::dualray_fold_window_edges_cover_every_neighbouring_f32_hue ... ok\ntest float64::dualray::tests::fold_tangent_regressions_use_native_conditioning ... ok\ntest float64::dualray::tests::boundary_neighbours_and_mixed_chroma_match_independent_oracle ... ok\ntest float64::dualray_fast::tests::out_of_range_hues_keep_canonical_in_gamut_colors ... ok\ntest float64::dualray_fast::tests::unrolled_fits_preserve_result_bits ... ok\ntest float64::bottosson::tests::all_gamut_mapping_matches_independent_policy_and_preserves_canonical ... ok\ntest float64::dualray::tests::fold_exits_snap_the_selected_face_but_interior_inputs_do_not ... ok\ntest float64::dualray::tests::upper_face_handoffs_and_gate_neighbours_match_oracle ... ok\ntest float64::edge_seeker::edge_seeker_tests::arc_endpoints_and_small_curvatures_match_oracle ... ok\ntest float64::edge_seeker::edge_seeker_tests::near_cusp_yellow_keeps_its_hue_in_both_mappers_and_modes ... ok\ntest float64::edge_seeker::edge_seeker_tests::sharp_residuals_use_the_actual_native_table_knots ... ok\ntest float64::gamut::tests::pinned_p3_coefficients_agree_with_xyz_definitions ... ok\ntest float64::rgb_solvers::tests::a_face_contact_exits_only_in_the_outward_direction ... ok\ntest float64::rgb_solvers::tests::achromatic_raytrace_uses_the_canonical_conversion ... ok\ntest float32::rgb_solvers::tests::fold_sweeps_require_feasible_geometric_intersections ... ok\ntest float64::rgb_solvers::tests::dark_fold_search_keeps_the_same_normalized_outer_boundary ... ok\ntest float64::rgb_solvers::tests::direct_cubic_polish_keeps_the_limiting_face_near_a_double_root ... ok\ntest float32::rgb_solvers::tests::solver_boundaries_match_their_independent_policies ... ok\ntest float64::rgb_solvers::tests::iterative_fold_gap_reduces_chroma_and_preserves_the_authored_line ... ok\ntest float64::rgb_solvers::tests::iterative_solvers_retain_the_vivid_branch_in_stable_blue_folds ... ok\ntest float64::rgb_solvers::tests::matrix_solvers_keep_endpoints_and_extreme_hues_finite ... ok\ntest float32::edge_seeker::edge_seeker_tests::all_gamut_approximation_quality_against_geometric_boundary ... ok\ntest float64::rgb_solvers::tests::raytrace_and_reference_retain_a_converged_near_white_hit ... ok\ntest float64::rgb_solvers::tests::raytrace_keeps_tiny_near_white_directions_in_both_precisions ... ok\ntest float64::rgb_solvers::tests::near_white_cubics_match_geometric_boundary ... ok\ntest float64::rgb_solvers::tests::zero_root_face_direction_is_explicit ... ok\ntest float64::rgb_tests::all_gamuts_retain_css_endpoint_and_hue_policy ... ok\ntest float64::rgb_tests::conversions_match_independent_xyz_reference ... ok\ntest float32::bottosson::tests::approximation_quality_against_geometric_first_exit ... ok\ntest float32::edge_seeker::edge_seeker_tests::all_gamut_cusp_and_white_neighbours_match_oracle ... ok\ntest float64::rgb_tests::transfer_endpoints_breakpoints_and_rec2020_dark_values ... ok\ntest float64::rgb_tests::in_gamut_conversion_bits_survive_faces_and_neighbours ... ok\ntest test_oracle::multi_gamut_oracle_handles_reentry_tangency_and_degeneracy ... ok\ntest test_oracle::multi_gamut_oracle_exits_all_six_faces ... ok\ntest float64::rgb_tests::css_minde_matches_independent_spec_in_every_gamut ... ok\ntest float64::bottosson::tests::approximation_quality_against_geometric_first_exit ... ok\ntest validation::tests::dualray_keeps_the_historical_p3_encoded_gate ... ok\ntest validation::tests::fold_window_endpoints_agree_across_precisions ... ok\ntest validation::tests::metrics_reject_regressions_away_from_zero ... ok\ntest float32::edge_seeker::edge_seeker_tests::all_gamut_mapping_matches_independent_table_policy_and_preserves_canonical ... ok\ntest validation::tests::cross_method_checks_cover_all_gamuts ... ok\ntest validation::tests::non_finite_outputs_and_metrics_are_rejected ... ok\ntest validation::tests::perceptual_gate_rejects_a_dark_regression_inside_the_linear_budget ... ok\ntest validation::tests::rejected_prechecks_must_match_plain_mapping ... ok\ntest validation::tests::srgb_blue_primary_review_reproducer_passes_startup_validation ... ok\ntest float64::edge_seeker::edge_seeker_tests::all_gamut_approximation_quality_against_geometric_boundary ... ok\ntest float64::edge_seeker::edge_seeker_tests::all_gamut_cusp_and_white_neighbours_match_oracle ... ok\ntest float64::rgb_solvers::tests::fold_sweeps_require_feasible_geometric_intersections ... ok\ntest float32::bottosson::tests::every_f32_hue_near_blue_primary_meets_policy_limits ... ok\ntest float64::rgb_solvers::tests::solver_boundaries_match_their_independent_policies ... ok\ntest validation::tests::core_methods_accept_faces_and_neighbours_in_every_gamut ... ok\ntest float64::bottosson::tests::every_f32_hue_near_blue_primary_meets_policy_limits ... ok\ntest float64::edge_seeker::edge_seeker_tests::all_gamut_mapping_matches_independent_table_policy_and_preserves_canonical ... ok\ntest validation::tests::mixed_chroma_and_in_gamut_workloads ... ok\ntest float32::dualray::tests::all_targets_match_independent_first_exit ... ok\ntest validation::tests::all_methods_match_on_benchmark_workloads ... ok\ntest float64::dualray::tests::all_targets_match_independent_first_exit ... ok\ntest validation::tests::new_gamuts_match_on_benchmark_workloads ... ok\ntest float32::rgb_solvers::tests::all_matrix_solvers_match_independent_mapping_policies_and_preserve_canonical ... ok\ntest float64::rgb_solvers::tests::all_matrix_solvers_match_independent_mapping_policies_and_preserve_canonical ... ok\n\ntest result: ok. 119 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.40s\n\n"
+    }
+  },
+  "exactReuse": {
+    "scope": "f64 reuse only when canonical and solver angle expressions agree; f32 original path retained.",
+    "bitComparisons": [
+      {
+        "mode": "portable",
+        "gamut": "srgb",
+        "count": 142344,
+        "identical": true,
+        "baselineSha256": "495d4b71f017dc3a9aa863636852f7e3dd9f6f9f18908d1282a24cd3b791c92e",
+        "candidateSha256": "495d4b71f017dc3a9aa863636852f7e3dd9f6f9f18908d1282a24cd3b791c92e"
+      },
+      {
+        "mode": "portable",
+        "gamut": "display-p3",
+        "count": 103822,
+        "identical": true,
+        "baselineSha256": "ecf78e883f2c8010ed63ae9c70b3014e59a26ab1f75a72ccbf421162feea9225",
+        "candidateSha256": "ecf78e883f2c8010ed63ae9c70b3014e59a26ab1f75a72ccbf421162feea9225"
+      },
+      {
+        "mode": "portable",
+        "gamut": "rec2020",
+        "count": 142344,
+        "identical": true,
+        "baselineSha256": "2cbcdc2a5ef38f0f1f2eea0c48e3957ced426389b81f8bae5f0ad9e78b9d1a00",
+        "candidateSha256": "2cbcdc2a5ef38f0f1f2eea0c48e3957ced426389b81f8bae5f0ad9e78b9d1a00"
+      },
+      {
+        "mode": "native",
+        "gamut": "srgb",
+        "count": 142344,
+        "identical": true,
+        "baselineSha256": "e9a53d57fde1fe28079ed6ae1b30541c2e627c3cc334275aebe3bc9821bf78fb",
+        "candidateSha256": "e9a53d57fde1fe28079ed6ae1b30541c2e627c3cc334275aebe3bc9821bf78fb"
+      },
+      {
+        "mode": "native",
+        "gamut": "display-p3",
+        "count": 103822,
+        "identical": true,
+        "baselineSha256": "d7a1fc8661e5d085b576be9bfe2c34a532260492176dd5daa9710ad703f88ff9",
+        "candidateSha256": "d7a1fc8661e5d085b576be9bfe2c34a532260492176dd5daa9710ad703f88ff9"
+      },
+      {
+        "mode": "native",
+        "gamut": "rec2020",
+        "count": 142344,
+        "identical": true,
+        "baselineSha256": "f6bb0a2f0709968c60c8a9eca7c2aadffab0025ab3e0f072fe489e1fdd4549da",
+        "candidateSha256": "f6bb0a2f0709968c60c8a9eca7c2aadffab0025ab3e0f072fe489e1fdd4549da"
+      }
+    ],
+    "nativeRust": "   Compiling gma-bench v0.1.0 (/tmp/gma-dualray-experiments-20261002/exact-reuse/rust)\n    Finished `release` profile [optimized] target(s) in 30.56s\n     Running unittests src/main.rs (/tmp/gma-dualray-experiments-20261002/exact-reuse/rust/target/release/deps/gma_bench-c76b479dc8f85496)\n\nrunning 119 tests\ntest cli::tests::gamut_requires_a_value_in_both_forms ... ok\ntest cli::tests::supported_modes_and_strict_unknown_arguments ... ok\ntest float32::checksum_tests::accumulate_after_widening_each_channel ... ok\ntest float32::checksum_tests::every_channel_and_every_sample_contribute ... ok\ntest float32::compensated::tests::split_and_fused_product_residuals_agree_on_solver_operands ... ok\ntest float32::css_minde::tests::endpoints_achromatic_and_extreme_hues ... ok\ntest float32::css_minde::tests::matches_independent_spec_vectors_in_both_modes ... ok\ntest float32::dualray::tests::bernstein_controls_reject_inside_endpoints_with_outside_interiors ... ok\ntest float32::dualray::tests::endpoints_gray_and_extreme_hues_follow_boundary_policy ... ok\ntest float32::dualray::tests::first_exit_keeps_the_first_crossing ... ok\ntest float32::css_minde::tests::in_gamut_inputs_preserve_canonical_conversion_bits ... ok\ntest float32::dualray::tests::fold_tangent_regressions_use_native_conditioning ... ok\ntest float32::edge_seeker::edge_seeker_tests::arc_endpoints_and_small_curvatures_match_oracle ... ok\ntest float32::edge_seeker::edge_seeker_tests::near_cusp_yellow_keeps_its_hue_in_both_mappers_and_modes ... ok\ntest float32::edge_seeker::edge_seeker_tests::sharp_residuals_use_the_actual_native_table_knots ... ok\ntest float32::gamut::tests::pinned_p3_coefficients_agree_with_xyz_definitions ... ok\ntest float32::rgb_solvers::tests::a_face_contact_exits_only_in_the_outward_direction ... ok\ntest float32::rgb_solvers::tests::achromatic_raytrace_uses_the_canonical_conversion ... ok\ntest float32::dualray_fast::tests::out_of_range_hues_keep_canonical_in_gamut_colors ... ok\ntest float32::dualray_fast::tests::unrolled_fits_preserve_result_bits ... ok\ntest float32::rgb_solvers::tests::dark_fold_search_keeps_the_same_normalized_outer_boundary ... ok\ntest float32::rgb_solvers::tests::direct_cubic_polish_keeps_the_limiting_face_near_a_double_root ... ok\ntest float32::rgb_solvers::tests::iterative_solvers_retain_the_vivid_branch_in_stable_blue_folds ... ok\ntest float32::rgb_solvers::tests::matrix_solvers_keep_endpoints_and_extreme_hues_finite ... ok\ntest float32::rgb_solvers::tests::iterative_fold_gap_reduces_chroma_and_preserves_the_authored_line ... ok\ntest float32::rgb_solvers::tests::raytrace_and_reference_retain_a_converged_near_white_hit ... ok\ntest float32::rgb_solvers::tests::raytrace_keeps_tiny_near_white_directions_in_both_precisions ... ok\ntest float32::rgb_solvers::tests::near_white_cubics_match_geometric_boundary ... ok\ntest float32::rgb_solvers::tests::zero_root_face_direction_is_explicit ... ok\ntest float32::rgb_tests::all_gamuts_retain_css_endpoint_and_hue_policy ... ok\ntest float32::dualray::tests::upper_face_handoffs_and_gate_neighbours_match_oracle ... ok\ntest float32::rgb_tests::conversions_match_independent_xyz_reference ... ok\ntest float32::rgb_tests::in_gamut_conversion_bits_survive_faces_and_neighbours ... ok\ntest float32::rgb_tests::transfer_endpoints_breakpoints_and_rec2020_dark_values ... ok\ntest float32::bottosson::tests::generated_sectors_and_cusps_match_independent_geometry ... ok\ntest float32::dualray::tests::basis_seeds_and_root_limits_match_independent_geometry ... ok\ntest float32::tests::edge_seeker_arc_is_stable_near_zero_curvature ... ok\ntest float32::dualray::tests::boundary_neighbours_and_mixed_chroma_match_independent_oracle ... ok\ntest float32::tests::endpoints_and_extreme_hues_stay_finite ... ok\ntest float32::dualray::tests::fold_exits_snap_the_selected_face_but_interior_inputs_do_not ... ok\ntest float32::tests::lut_and_caches_store_f32 ... ok\ntest float32::tests::raytrace_rounding_regressions ... ok\ntest float32::tests::rec2020_minde_jnd_neighbour_has_bounded_perceptual_error ... ok\ntest float32::tests::indexed_and_uncached_variants_agree ... ok\ntest float32::rgb_tests::css_minde_matches_independent_spec_in_every_gamut ... ok\ntest float32::tests::cached_cubics_match_oracle_at_their_bucket_hue ... ok\ntest float32::tests::exact_hue_methods_match_independent_boundary_oracle ... ok\ntest float64::checksum_tests::accumulate_after_widening_each_channel ... ok\ntest float64::checksum_tests::every_channel_and_every_sample_contribute ... ok\ntest float64::compensated::tests::split_and_fused_product_residuals_agree_on_solver_operands ... ok\ntest float64::css_minde::tests::endpoints_achromatic_and_extreme_hues ... ok\ntest float64::css_minde::tests::in_gamut_inputs_preserve_canonical_conversion_bits ... ok\ntest float64::css_minde::tests::matches_independent_spec_vectors_in_both_modes ... ok\ntest float64::bottosson::tests::generated_sectors_and_cusps_match_independent_geometry ... ok\ntest float64::dualray::tests::basis_seeds_and_root_limits_match_independent_geometry ... ok\ntest float64::dualray::tests::bernstein_controls_reject_inside_endpoints_with_outside_interiors ... ok\ntest float32::bottosson::tests::all_gamut_mapping_matches_independent_policy_and_preserves_canonical ... ok\ntest float64::dualray::tests::endpoints_gray_and_extreme_hues_follow_boundary_policy ... ok\ntest float64::dualray::tests::first_exit_keeps_the_first_crossing ... ok\ntest float64::dualray::tests::boundary_neighbours_and_mixed_chroma_match_independent_oracle ... ok\ntest float64::dualray::tests::fold_tangent_regressions_use_native_conditioning ... ok\ntest float32::tests::dualray_fold_window_edges_cover_every_neighbouring_f32_hue ... ok\ntest float64::dualray_fast::tests::out_of_range_hues_keep_canonical_in_gamut_colors ... ok\ntest float64::dualray_fast::tests::unrolled_fits_preserve_result_bits ... ok\ntest float64::dualray::tests::upper_face_handoffs_and_gate_neighbours_match_oracle ... ok\ntest float64::dualray::tests::fold_exits_snap_the_selected_face_but_interior_inputs_do_not ... ok\ntest float64::bottosson::tests::all_gamut_mapping_matches_independent_policy_and_preserves_canonical ... ok\ntest float64::edge_seeker::edge_seeker_tests::arc_endpoints_and_small_curvatures_match_oracle ... ok\ntest float64::edge_seeker::edge_seeker_tests::near_cusp_yellow_keeps_its_hue_in_both_mappers_and_modes ... ok\ntest float64::edge_seeker::edge_seeker_tests::sharp_residuals_use_the_actual_native_table_knots ... ok\ntest float64::gamut::tests::pinned_p3_coefficients_agree_with_xyz_definitions ... ok\ntest float64::rgb_solvers::tests::a_face_contact_exits_only_in_the_outward_direction ... ok\ntest float64::rgb_solvers::tests::achromatic_raytrace_uses_the_canonical_conversion ... ok\ntest float32::rgb_solvers::tests::fold_sweeps_require_feasible_geometric_intersections ... ok\ntest float64::rgb_solvers::tests::dark_fold_search_keeps_the_same_normalized_outer_boundary ... ok\ntest float64::rgb_solvers::tests::direct_cubic_polish_keeps_the_limiting_face_near_a_double_root ... ok\ntest float32::edge_seeker::edge_seeker_tests::all_gamut_approximation_quality_against_geometric_boundary ... ok\ntest float64::rgb_solvers::tests::iterative_fold_gap_reduces_chroma_and_preserves_the_authored_line ... ok\ntest float64::rgb_solvers::tests::iterative_solvers_retain_the_vivid_branch_in_stable_blue_folds ... ok\ntest float64::rgb_solvers::tests::matrix_solvers_keep_endpoints_and_extreme_hues_finite ... ok\ntest float32::rgb_solvers::tests::solver_boundaries_match_their_independent_policies ... ok\ntest float64::rgb_solvers::tests::raytrace_and_reference_retain_a_converged_near_white_hit ... ok\ntest float64::rgb_solvers::tests::raytrace_keeps_tiny_near_white_directions_in_both_precisions ... ok\ntest float64::rgb_solvers::tests::near_white_cubics_match_geometric_boundary ... ok\ntest float64::rgb_solvers::tests::zero_root_face_direction_is_explicit ... ok\ntest float64::rgb_tests::all_gamuts_retain_css_endpoint_and_hue_policy ... ok\ntest float64::rgb_tests::conversions_match_independent_xyz_reference ... ok\ntest float32::bottosson::tests::approximation_quality_against_geometric_first_exit ... ok\ntest float32::edge_seeker::edge_seeker_tests::all_gamut_cusp_and_white_neighbours_match_oracle ... ok\ntest float64::rgb_tests::transfer_endpoints_breakpoints_and_rec2020_dark_values ... ok\ntest float64::rgb_tests::in_gamut_conversion_bits_survive_faces_and_neighbours ... ok\ntest test_oracle::multi_gamut_oracle_handles_reentry_tangency_and_degeneracy ... ok\ntest test_oracle::multi_gamut_oracle_exits_all_six_faces ... ok\ntest float64::rgb_tests::css_minde_matches_independent_spec_in_every_gamut ... ok\ntest float64::bottosson::tests::approximation_quality_against_geometric_first_exit ... ok\ntest validation::tests::dualray_keeps_the_historical_p3_encoded_gate ... ok\ntest validation::tests::fold_window_endpoints_agree_across_precisions ... ok\ntest validation::tests::metrics_reject_regressions_away_from_zero ... ok\ntest float32::edge_seeker::edge_seeker_tests::all_gamut_mapping_matches_independent_table_policy_and_preserves_canonical ... ok\ntest float64::edge_seeker::edge_seeker_tests::all_gamut_approximation_quality_against_geometric_boundary ... ok\ntest validation::tests::non_finite_outputs_and_metrics_are_rejected ... ok\ntest validation::tests::perceptual_gate_rejects_a_dark_regression_inside_the_linear_budget ... ok\ntest validation::tests::rejected_prechecks_must_match_plain_mapping ... ok\ntest validation::tests::srgb_blue_primary_review_reproducer_passes_startup_validation ... ok\ntest validation::tests::cross_method_checks_cover_all_gamuts ... ok\ntest float64::edge_seeker::edge_seeker_tests::all_gamut_cusp_and_white_neighbours_match_oracle ... ok\ntest float32::bottosson::tests::every_f32_hue_near_blue_primary_meets_policy_limits ... ok\ntest float64::rgb_solvers::tests::fold_sweeps_require_feasible_geometric_intersections ... ok\ntest float64::rgb_solvers::tests::solver_boundaries_match_their_independent_policies ... ok\ntest validation::tests::core_methods_accept_faces_and_neighbours_in_every_gamut ... ok\ntest float64::bottosson::tests::every_f32_hue_near_blue_primary_meets_policy_limits ... ok\ntest float64::edge_seeker::edge_seeker_tests::all_gamut_mapping_matches_independent_table_policy_and_preserves_canonical ... ok\ntest validation::tests::mixed_chroma_and_in_gamut_workloads ... ok\ntest float32::dualray::tests::all_targets_match_independent_first_exit ... ok\ntest validation::tests::all_methods_match_on_benchmark_workloads ... ok\ntest float64::dualray::tests::all_targets_match_independent_first_exit ... ok\ntest validation::tests::new_gamuts_match_on_benchmark_workloads ... ok\ntest float32::rgb_solvers::tests::all_matrix_solvers_match_independent_mapping_policies_and_preserve_canonical ... ok\ntest float64::rgb_solvers::tests::all_matrix_solvers_match_independent_mapping_policies_and_preserve_canonical ... ok\n\ntest result: ok. 119 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.53s\n\n",
+    "sourceSha256": "e16821b278c757ff0400aa07d7d26c3a4d08d671f8fd9c39622c341522e4042c",
+    "portableRust": "   Compiling gma-bench v0.1.0 (/home/lloydk/work/gma-benchmark/rust)\n    Finished `release` profile [optimized] target(s) in 29.50s\n     Running unittests src/main.rs (rust/target/release/deps/gma_bench-335131b0d37c7094)\n\nrunning 119 tests\ntest cli::tests::gamut_requires_a_value_in_both_forms ... ok\ntest cli::tests::supported_modes_and_strict_unknown_arguments ... ok\ntest float32::checksum_tests::accumulate_after_widening_each_channel ... ok\ntest float32::checksum_tests::every_channel_and_every_sample_contribute ... ok\ntest float32::css_minde::tests::endpoints_achromatic_and_extreme_hues ... ok\ntest float32::css_minde::tests::matches_independent_spec_vectors_in_both_modes ... ok\ntest float32::dualray::tests::bernstein_controls_reject_inside_endpoints_with_outside_interiors ... ok\ntest float32::compensated::tests::split_and_fused_product_residuals_agree_on_solver_operands ... ok\ntest float32::dualray::tests::endpoints_gray_and_extreme_hues_follow_boundary_policy ... ok\ntest float32::dualray::tests::first_exit_keeps_the_first_crossing ... ok\ntest float32::css_minde::tests::in_gamut_inputs_preserve_canonical_conversion_bits ... ok\ntest float32::dualray_fast::tests::out_of_range_hues_keep_canonical_in_gamut_colors ... ok\ntest float32::dualray_fast::tests::unrolled_fits_preserve_result_bits ... ok\ntest float32::edge_seeker::edge_seeker_tests::arc_endpoints_and_small_curvatures_match_oracle ... ok\ntest float32::edge_seeker::edge_seeker_tests::near_cusp_yellow_keeps_its_hue_in_both_mappers_and_modes ... ok\ntest float32::edge_seeker::edge_seeker_tests::sharp_residuals_use_the_actual_native_table_knots ... ok\ntest float32::gamut::tests::pinned_p3_coefficients_agree_with_xyz_definitions ... ok\ntest float32::dualray::tests::fold_tangent_regressions_use_native_conditioning ... ok\ntest float32::rgb_solvers::tests::a_face_contact_exits_only_in_the_outward_direction ... ok\ntest float32::rgb_solvers::tests::achromatic_raytrace_uses_the_canonical_conversion ... ok\ntest float32::rgb_solvers::tests::dark_fold_search_keeps_the_same_normalized_outer_boundary ... ok\ntest float32::rgb_solvers::tests::direct_cubic_polish_keeps_the_limiting_face_near_a_double_root ... ok\ntest float32::rgb_solvers::tests::iterative_fold_gap_reduces_chroma_and_preserves_the_authored_line ... ok\ntest float32::rgb_solvers::tests::iterative_solvers_retain_the_vivid_branch_in_stable_blue_folds ... ok\ntest float32::rgb_solvers::tests::matrix_solvers_keep_endpoints_and_extreme_hues_finite ... ok\ntest float32::rgb_solvers::tests::raytrace_and_reference_retain_a_converged_near_white_hit ... ok\ntest float32::rgb_solvers::tests::raytrace_keeps_tiny_near_white_directions_in_both_precisions ... ok\ntest float32::rgb_solvers::tests::near_white_cubics_match_geometric_boundary ... ok\ntest float32::rgb_solvers::tests::zero_root_face_direction_is_explicit ... ok\ntest float32::rgb_tests::all_gamuts_retain_css_endpoint_and_hue_policy ... ok\ntest float32::rgb_tests::conversions_match_independent_xyz_reference ... ok\ntest float32::dualray::tests::upper_face_handoffs_and_gate_neighbours_match_oracle ... ok\ntest float32::rgb_tests::in_gamut_conversion_bits_survive_faces_and_neighbours ... ok\ntest float32::rgb_tests::transfer_endpoints_breakpoints_and_rec2020_dark_values ... ok\ntest float32::bottosson::tests::generated_sectors_and_cusps_match_independent_geometry ... ok\ntest float32::dualray::tests::boundary_neighbours_and_mixed_chroma_match_independent_oracle ... ok\ntest float32::tests::edge_seeker_arc_is_stable_near_zero_curvature ... ok\ntest float32::tests::endpoints_and_extreme_hues_stay_finite ... ok\ntest float32::dualray::tests::fold_exits_snap_the_selected_face_but_interior_inputs_do_not ... ok\ntest float32::tests::cached_cubics_match_oracle_at_their_bucket_hue ... ok\ntest float32::tests::lut_and_caches_store_f32 ... ok\ntest float32::tests::raytrace_rounding_regressions ... ok\ntest float32::tests::rec2020_minde_jnd_neighbour_has_bounded_perceptual_error ... ok\ntest float32::rgb_tests::css_minde_matches_independent_spec_in_every_gamut ... ok\ntest float32::dualray::tests::basis_seeds_and_root_limits_match_independent_geometry ... ok\ntest float32::tests::indexed_and_uncached_variants_agree ... ok\ntest float32::tests::exact_hue_methods_match_independent_boundary_oracle ... ok\ntest float64::checksum_tests::accumulate_after_widening_each_channel ... ok\ntest float64::checksum_tests::every_channel_and_every_sample_contribute ... ok\ntest float64::compensated::tests::split_and_fused_product_residuals_agree_on_solver_operands ... ok\ntest float64::css_minde::tests::endpoints_achromatic_and_extreme_hues ... ok\ntest float64::css_minde::tests::in_gamut_inputs_preserve_canonical_conversion_bits ... ok\ntest float64::css_minde::tests::matches_independent_spec_vectors_in_both_modes ... ok\ntest float64::bottosson::tests::generated_sectors_and_cusps_match_independent_geometry ... ok\ntest float64::dualray::tests::basis_seeds_and_root_limits_match_independent_geometry ... ok\ntest float64::dualray::tests::bernstein_controls_reject_inside_endpoints_with_outside_interiors ... ok\ntest float32::bottosson::tests::all_gamut_mapping_matches_independent_policy_and_preserves_canonical ... ok\ntest float64::dualray::tests::endpoints_gray_and_extreme_hues_follow_boundary_policy ... ok\ntest float64::dualray::tests::first_exit_keeps_the_first_crossing ... ok\ntest float64::dualray::tests::boundary_neighbours_and_mixed_chroma_match_independent_oracle ... ok\ntest float64::dualray::tests::fold_tangent_regressions_use_native_conditioning ... ok\ntest float32::tests::dualray_fold_window_edges_cover_every_neighbouring_f32_hue ... ok\ntest float64::dualray_fast::tests::out_of_range_hues_keep_canonical_in_gamut_colors ... ok\ntest float64::dualray_fast::tests::unrolled_fits_preserve_result_bits ... ok\ntest float64::dualray::tests::fold_exits_snap_the_selected_face_but_interior_inputs_do_not ... ok\ntest float64::bottosson::tests::all_gamut_mapping_matches_independent_policy_and_preserves_canonical ... ok\ntest float64::dualray::tests::upper_face_handoffs_and_gate_neighbours_match_oracle ... ok\ntest float64::edge_seeker::edge_seeker_tests::arc_endpoints_and_small_curvatures_match_oracle ... ok\ntest float64::edge_seeker::edge_seeker_tests::near_cusp_yellow_keeps_its_hue_in_both_mappers_and_modes ... ok\ntest float64::edge_seeker::edge_seeker_tests::sharp_residuals_use_the_actual_native_table_knots ... ok\ntest float64::gamut::tests::pinned_p3_coefficients_agree_with_xyz_definitions ... ok\ntest float64::rgb_solvers::tests::a_face_contact_exits_only_in_the_outward_direction ... ok\ntest float64::rgb_solvers::tests::achromatic_raytrace_uses_the_canonical_conversion ... ok\ntest float32::rgb_solvers::tests::fold_sweeps_require_feasible_geometric_intersections ... ok\ntest float64::rgb_solvers::tests::dark_fold_search_keeps_the_same_normalized_outer_boundary ... ok\ntest float64::rgb_solvers::tests::direct_cubic_polish_keeps_the_limiting_face_near_a_double_root ... ok\ntest float32::bottosson::tests::approximation_quality_against_geometric_first_exit ... ok\ntest float32::edge_seeker::edge_seeker_tests::all_gamut_cusp_and_white_neighbours_match_oracle ... ok\ntest float64::rgb_solvers::tests::iterative_solvers_retain_the_vivid_branch_in_stable_blue_folds ... ok\ntest float64::rgb_solvers::tests::matrix_solvers_keep_endpoints_and_extreme_hues_finite ... ok\ntest float64::rgb_solvers::tests::iterative_fold_gap_reduces_chroma_and_preserves_the_authored_line ... ok\ntest float64::rgb_solvers::tests::raytrace_and_reference_retain_a_converged_near_white_hit ... ok\ntest float64::rgb_solvers::tests::raytrace_keeps_tiny_near_white_directions_in_both_precisions ... ok\ntest float64::rgb_solvers::tests::near_white_cubics_match_geometric_boundary ... ok\ntest float64::rgb_solvers::tests::zero_root_face_direction_is_explicit ... ok\ntest float64::rgb_tests::all_gamuts_retain_css_endpoint_and_hue_policy ... ok\ntest float32::rgb_solvers::tests::solver_boundaries_match_their_independent_policies ... ok\ntest float64::rgb_tests::conversions_match_independent_xyz_reference ... ok\ntest float64::rgb_tests::in_gamut_conversion_bits_survive_faces_and_neighbours ... ok\ntest float64::rgb_tests::transfer_endpoints_breakpoints_and_rec2020_dark_values ... ok\ntest float64::bottosson::tests::approximation_quality_against_geometric_first_exit ... ok\ntest test_oracle::multi_gamut_oracle_handles_reentry_tangency_and_degeneracy ... ok\ntest float32::edge_seeker::edge_seeker_tests::all_gamut_approximation_quality_against_geometric_boundary ... ok\ntest test_oracle::multi_gamut_oracle_exits_all_six_faces ... ok\ntest float64::rgb_tests::css_minde_matches_independent_spec_in_every_gamut ... ok\ntest validation::tests::dualray_keeps_the_historical_p3_encoded_gate ... ok\ntest validation::tests::fold_window_endpoints_agree_across_precisions ... ok\ntest validation::tests::metrics_reject_regressions_away_from_zero ... ok\ntest float64::edge_seeker::edge_seeker_tests::all_gamut_cusp_and_white_neighbours_match_oracle ... ok\ntest float32::edge_seeker::edge_seeker_tests::all_gamut_mapping_matches_independent_table_policy_and_preserves_canonical ... ok\ntest validation::tests::non_finite_outputs_and_metrics_are_rejected ... ok\ntest validation::tests::perceptual_gate_rejects_a_dark_regression_inside_the_linear_budget ... ok\ntest validation::tests::rejected_prechecks_must_match_plain_mapping ... ok\ntest validation::tests::srgb_blue_primary_review_reproducer_passes_startup_validation ... ok\ntest validation::tests::cross_method_checks_cover_all_gamuts ... ok\ntest float64::edge_seeker::edge_seeker_tests::all_gamut_approximation_quality_against_geometric_boundary ... ok\ntest float32::bottosson::tests::every_f32_hue_near_blue_primary_meets_policy_limits ... ok\ntest float64::rgb_solvers::tests::fold_sweeps_require_feasible_geometric_intersections ... ok\ntest float64::rgb_solvers::tests::solver_boundaries_match_their_independent_policies ... ok\ntest float64::bottosson::tests::every_f32_hue_near_blue_primary_meets_policy_limits ... ok\ntest validation::tests::core_methods_accept_faces_and_neighbours_in_every_gamut ... ok\ntest float64::edge_seeker::edge_seeker_tests::all_gamut_mapping_matches_independent_table_policy_and_preserves_canonical ... ok\ntest float32::dualray::tests::all_targets_match_independent_first_exit ... ok\ntest validation::tests::mixed_chroma_and_in_gamut_workloads ... ok\ntest validation::tests::all_methods_match_on_benchmark_workloads ... ok\ntest float64::dualray::tests::all_targets_match_independent_first_exit ... ok\ntest validation::tests::new_gamuts_match_on_benchmark_workloads ... ok\ntest float32::rgb_solvers::tests::all_matrix_solvers_match_independent_mapping_policies_and_preserve_canonical ... ok\ntest float64::rgb_solvers::tests::all_matrix_solvers_match_independent_mapping_policies_and_preserve_canonical ... ok\n\ntest result: ok. 119 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.21s\n\n"
+  },
+  "generatorChecks": {
+    "dualray": "srgb: sector 264.05202261636987, fold 264.2078038606511, minimum window margin 0.022023837072993047\nsrgb: fold depth fit maximum error 1.0729264698916552e-14\nChecked srgb: 262148 held-out directions, root error 8.881784197001252e-16, residual 6.661338147750939e-16\nsrgb: max basis difference 5.329070518200751e-15, sampled lower-root maximum 0.6918184741904974\ndisplay-p3: max basis difference 6.217248937900877e-15, sampled lower-root maximum 0.6929204126619526\nrec2020: sector 245.0667522688908, fold 245.28439149027957, minimum window margin 0.025606068314175445\nrec2020: fold depth fit maximum error 2.383943736861127e-15\nChecked rec2020: 262148 held-out directions, root error 1.4432899320127035e-15, residual 2.9976021664879227e-15\nrec2020: max basis difference 4.440892098500626e-15, sampled lower-root maximum 0.9011865263960266\n    Blocking waiting for file lock on build directory\n    Finished `release` profile [optimized] target(s) in 24.02s\n     Running unittests src/main.rs (rust/target/release/deps/gma_bench-335131b0d37c7094)\nsrgb f32 Dualray window edges: 212382 mappings, errors [6.2095168673614864e-6, 1.2636266369671138e-6]\nrec2020 f32 Dualray window edges: 424926 mappings, errors [5.030282886120396e-6, 1.1621790699235779e-6]\n\nrunning 1 test\ntest float32::tests::dualray_fold_window_edges_cover_every_neighbouring_f32_hue ... ok\n\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 118 filtered out; finished in 0.42s\n\n",
+    "fast": "srgb zero=B 29.2339..142.4953: u deg 5 1.46e-3 margin 2.91e-3; g deg 8 ΔEOK 9.23e-5\nsrgb zero=R 142.4953..264.0300: u deg 8 1.71e-3 margin 2.46e-3; g deg 10 ΔEOK 2.98e-5\nsrgb zero=G 264.2078..389.2339: u deg 4 1.30e-3 margin 2.16e-3; g deg 9 ΔEOK 4.56e-5\ndisplay-p3 zero=B 28.9581..145.6450: u deg 5 1.94e-3 margin 3.37e-3; g deg 9 ΔEOK 3.59e-5\ndisplay-p3 zero=R 145.6450..264.0520: u deg 8 1.52e-3 margin 2.24e-3; g deg 11 ΔEOK 7.70e-5\ndisplay-p3 zero=G 264.0520..388.9581: u deg 4 1.08e-3 margin 2.01e-3; g deg 8 ΔEOK 7.08e-5\nrec2020 zero=B 24.1861..152.5951: u deg 6 1.78e-3 margin 2.68e-3; g deg 10 ΔEOK 5.12e-5\nrec2020 zero=R 152.5951..245.0400: u deg 7 1.09e-3 margin 1.64e-3; g deg 10 ΔEOK 6.23e-5\nrec2020 zero=G 245.2844..384.1861: u deg 4 1.14e-3 margin 2.02e-3; g deg 11 ΔEOK 6.60e-5\n"
+  }
+}
