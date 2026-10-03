@@ -318,8 +318,34 @@ impl<G: DualrayFastData, const FAST_ENCODE: bool> DualrayFast<G, FAST_ENCODE> {
             Err(decline) => decline,
         };
         // Above the cusp beyond the lower boundary is always out of gamut.
-        if in_range && !matches!(decline, Decline::AboveCusp { .. }) && Self::inside(l, c, h, out) {
-            return Path::Inside;
+        let mut direction = None;
+        if in_range && !matches!(decline, Decline::AboveCusp { .. }) {
+            if SINGLE {
+                // Keep the established native f32 path.
+                if Self::inside(l, c, h, out) {
+                    return Path::Inside;
+                }
+            } else {
+                // Preserve the canonical conversion's operation order. Only
+                // reuse its unit direction when the solver's angle is equal:
+                // h * PI / 180 and h * (PI / 180) can round differently.
+                let radians = super::hue_radians(h);
+                let a = radians.cos();
+                let b = radians.sin();
+                let rgb = super::color::Oklab {
+                    l,
+                    a: c * a,
+                    b: c * b,
+                }
+                .to_linear_rgb::<G>();
+                if rgb.in_gamut() {
+                    *out = rgb.encode_clamped().channels;
+                    return Path::Inside;
+                }
+                if radians == hue * (PI / 180.0) {
+                    direction = Some((a, b));
+                }
+            }
         }
         let (sector, root, g) = match decline {
             Decline::Uncovered => return Self::search(l, c, hue, out),
@@ -344,7 +370,10 @@ impl<G: DualrayFastData, const FAST_ENCODE: bool> DualrayFast<G, FAST_ENCODE> {
         // lower channel's crossing, refined by Dualray's upper solve.
         let brighter = (g[1] > g[0]) as usize;
         let face = NONZERO[sector][brighter];
-        let (b, a) = (hue * (PI / 180.0)).sin_cos();
+        let (a, b) = direction.unwrap_or_else(|| {
+            let (b, a) = (hue * (PI / 180.0)).sin_cos();
+            (a, b)
+        });
         let inv_l = 1.0 / l;
         let target = inv_l * inv_l * inv_l;
         let seed = root * (target - 1.0) / (g[brighter] - 1.0);
