@@ -1,5 +1,8 @@
 # Milestone four: JavaScript target factories
 
+The JSON artifacts cited here were removed from the working tree to keep the
+repository small. Restore one with `git restore --source=696f4c2 -- <path>`.
+
 Step one adds sRGB and Rec.2020 conversions, Clip and CSS MINDE.
 [Step two](#step-two-matrix-solvers) adds the six matrix solvers. All thirteen
 existing P3 methods retain their exports. [Step three](#step-three-bottosson)
@@ -100,7 +103,7 @@ P3 policies; later solver ports will need their own geometry and policy tests.
 
 ## Performance
 
-See [the measurement report](milestone-4-step-1.json) for source hashes,
+See the measurement report (`reports/milestone-4-step-1.json`) for source hashes,
 input hashes, runtime/machine details, validation maxima and raw timing rows.
 The baseline is commit `7d6c9e0`. Before/after/after/before measurements use frozen
 source copies, one executable/script pathname, CPU 2, fresh processes and no
@@ -282,7 +285,7 @@ is the P3 `[1 - 2**-42, 0.4, 150]` case: approximately `[0,1,0.2492]` becomes
 ### Step-two performance
 
 Measurements and source hashes are recorded in
-[the step-two report](milestone-4-step-2.json). The baseline is the
+the step-two report (`reports/milestone-4-step-2.json`). The baseline is the
 uncommitted, completed step-one snapshot, **not** `7d6c9e0` directly.
 The report includes a patch from that commit to reproduce the baseline runtime.
 
@@ -403,7 +406,7 @@ plain Horner, unbounded fold mapping, wrong timed callback, and missing child
 gamut forwarding. Every mutation was rejected by its corresponding check.
 
 Follow-up measurements and test evidence are recorded separately in
-[the review report](milestone-4-step-2-review.json); the original
+the review report (`reports/milestone-4-step-2-review.json`); the original
 step-one and step-two reports above retain their historical source hashes.
 
 The follow-up passes **44 tests in each JS runtime** and **117 Rust tests**
@@ -558,7 +561,7 @@ changes remain below `1.84e-13`. The largest negative-chroma change remains
 
 ### Performance results
 
-[The Bottosson report](milestone-4-bottosson.json) records source and
+The Bottosson report (`reports/milestone-4-bottosson.json`) records source and
 input hashes, validation maxima, raw timings and reproduction scripts. The
 baseline is commit `c0a5715`. Balanced before/after/after/before runs use the
 Ryzen 7 9800X3D under WSL2, Node 26.10.0 and Bun 1.4.2, CPU 2, fresh processes
@@ -701,7 +704,7 @@ keeps the runtime table identical to Rust's generated binary64 data.
 
 ### Performance results
 
-[The Edge Seeker report](milestone-4-edge-seeker.json) records hashes,
+The Edge Seeker report (`reports/milestone-4-edge-seeker.json`) records hashes,
 raw measurements, validation evidence, reproduction scripts and a baseline
 patch. The baseline is the completed **uncommitted Bottosson snapshot**, not
 commit `c0a5715` directly; its patch from that commit is included.
@@ -781,7 +784,7 @@ script allows `2e-10` linear / `5e-11` DeltaEOK only inside the existing blue-fo
 windows, retaining `3e-12` elsewhere. This is separate from same-runtime lookup
 accuracy and from the much larger geometric approximation envelopes.
 
-[The runtime-generation report](milestone-4-edge-seeker-runtime.json)
+The runtime-generation report (`reports/milestone-4-edge-seeker-runtime.json`)
 records the preceding uncommitted generated-table baseline, source hashes,
 measurement script, all raw passes, and parity results. This is a new comparison,
 not a replacement for the earlier port report. Ryzen 7 9800X3D / WSL2,
@@ -881,7 +884,7 @@ selected target. Legacy modules retain default P3 instances and re-export the
 factories. Their import-time P3 behavior is intentional compatibility behavior;
 the repeated P3-special-case registry branches have been removed from both ports.
 
-[The review evidence report](milestone-4-review.json) records expanded Node/Bun compatibility and parity
+The review evidence report (`reports/milestone-4-review.json`) records expanded Node/Bun compatibility and parity
 results, source hashes, and the three planted mutations. No finite-input mapping
 formula changed in this follow-up; production changes are setup validation,
 descriptor checks and module organization.
@@ -1020,7 +1023,7 @@ Node and 2.43 → 2.68 ms in Bun. New sRGB/Rec.2020 setup is 2.50/2.07 ms in
 Node and 2.41/2.38 ms in Bun. All three seed functions are imported; only the
 selected target's mapper is created. No runtime table or cache is allocated.
 
-[The Dualray report](milestone-4-dualray.json) contains raw passes,
+The Dualray report (`reports/milestone-4-dualray.json`) contains raw passes,
 full-harness logs, setup measurements, the rejected seed-split experiment,
 reproduction scripts and validation evidence. This completes the JavaScript
 ports for milestone four: all thirteen methods support all three gamuts.
@@ -1110,7 +1113,7 @@ before/after checksums match exactly.
 
 These focused measurements do not supersede the initial full-harness comparison
 or establish that its P3 slowdown has been eliminated. Rust f32 is unchanged
-and was not re-benchmarked. [The follow-up report](milestone-4-dualray-review.json)
+and was not re-benchmarked. The follow-up report (`reports/milestone-4-dualray-review.json`)
 records all passes, source hashes, validation logs, parity, compatibility,
 planted mutations and reproduction scripts.
 
@@ -1209,7 +1212,7 @@ three generated kernels into one module: it reduced Node setup but increased
 Bun setup, so that layout was not adopted. Import-time samples vary; these
 numbers do not include process startup, network loading or bundled execution.
 
-[The inline-seed report](milestone-4-dualray-inline.json) records every
+The inline-seed report (`reports/milestone-4-dualray-inline.json`) records every
 pass, setup sample, bundle measurement, source hash, compatibility/parity result,
 validation log and reproduction script. This production layout is measured
 separately from the earlier P3-only scratch experiment; its gains should not be

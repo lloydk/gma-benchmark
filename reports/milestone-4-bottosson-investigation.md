@@ -1,5 +1,8 @@
 # Bottosson P3 slowdown investigation
 
+The JSON artifacts cited here were removed from the working tree to keep the
+repository small. Restore one with `git restore --source=696f4c2 -- <path>`.
+
 This records the investigation at `be03abd`. The subsequent
 [integration report](milestone-4-bottosson-optimization.md) covers the integrated
 source layout, fresh before/after measurements and full verification.
@@ -186,7 +189,7 @@ screen; that screen is used for selection, not the final performance claim.
 
 Raw results, all process passes, full harness logs, output comparisons, variant
 source, V8 traces/disassembly, source hashes, and construction/reproduction
-scripts are in [the evidence JSON](milestone-4-bottosson-investigation.json).
+scripts are in the evidence JSON (`reports/milestone-4-bottosson-investigation.json`).
 The earlier [original-P3 comparison](milestone-4-p3-baseline-comparison.md)
 remains the direct pre-port comparison. Do not subtract absolute times across
 the two experiments to attribute individual instruction costs.

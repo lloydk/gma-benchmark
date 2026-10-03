@@ -1,5 +1,8 @@
 # Dualray optimization experiments
 
+The JSON artifacts cited here were removed from the working tree to keep the
+repository small. Restore one with `git restore --source=696f4c2 -- <path>`.
+
 Retained one change: Rust f64 Dualray Fast reuses the canonical precheck's
 sine/cosine only when its angle equals the solver's angle. Both expressions
 remain unchanged. On this Ryzen 9800X3D, confirmation with a second input seed
@@ -42,7 +45,7 @@ medians, individual passes, and checksums.
 
 ## Results
 
-The [screening artifact](dualray-optimization-2026-10-02-screen.json) contains
+The screening artifact (`reports/dualray-optimization-2026-10-02-screen.json`) contains
 384 cells and 1,152 timing processes. Values below are percentage changes in
 elapsed time for Fast, using geometric means of ratios across the three
 gamuts and four equally weighted distributions. Positive means slower.
@@ -70,7 +73,7 @@ results did not establish a consistent improvement.
 
 ### Confirmation with a second seed
 
-The [confirmation artifact](dualray-optimization-2026-10-02-confirmation.json)
+The confirmation artifact (`reports/dualray-optimization-2026-10-02-confirmation.json`)
 uses seed `0x13198a2e`, five fresh processes per cell, and 480 timing processes.
 Initial timing used `0x243f6a88`; oracle validation uses `0x6d2b79f5`.
 
@@ -122,9 +125,9 @@ changed, and the original fixed-`C=0.4` timing dataset was not used for selectio
 - Final JS oracle replay passed 777,020 checks, and both generated-data
   freshness checks passed. No JS production source was changed.
 
-[Validation results and logs](dualray-optimization-2026-10-02-validation.json)
+Validation results and logs (`reports/dualray-optimization-2026-10-02-validation.json`)
 include initial accuracy maxima, native/Node logs, and portable/native output
-hashes. [Final JS replay](dualray-optimization-2026-10-02-final-js-validation.json)
+hashes. Final JS replay (`reports/dualray-optimization-2026-10-02-final-js-validation.json`)
 records reference and source hashes.
 
 ### Replay

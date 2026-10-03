@@ -1,5 +1,8 @@
 # Bottosson optimization integration
 
+The JSON artifacts cited here were removed from the working tree to keep the
+repository small. Restore one with `git restore --source=696f4c2 -- <path>`.
+
 The benchmark still defaults to unchecked mapping. Bottosson may move an already in-gamut color in that mode; `--in-gamut-check` opts into the original-coordinate membership check. This integration changes execution cost, not those policies. The earlier [investigation](milestone-4-bottosson-investigation.md) explains the archive comparison and the candidate selection.
 
 ## Implementation
@@ -51,6 +54,6 @@ Bun's minified browser bundle of `src/bottosson-lightness.js` (all exported fact
 
 ## Evidence and reproduction
 
-[The evidence JSON](milestone-4-bottosson-optimization.json) contains raw runs, setup samples, source hashes, before/after changed sources, generator/templates, test logs, parity and compatibility results, and the exact measurement scripts. To reproduce, archive its `baselineCommit` into `before` and `after` directories beneath a new temporary root, link each `node_modules` to this repository's installed dependencies, and overwrite the two `after` files from `sources.after`. Extract `reproduction.measure.py` and `reproduction.compat.mjs` into that root. The compatibility runner uses the archived baseline workloads and probe helpers.
+The evidence JSON (`reports/milestone-4-bottosson-optimization.json`) contains raw runs, setup samples, source hashes, before/after changed sources, generator/templates, test logs, parity and compatibility results, and the exact measurement scripts. To reproduce, archive its `baselineCommit` into `before` and `after` directories beneath a new temporary root, link each `node_modules` to this repository's installed dependencies, and overwrite the two `after` files from `sources.after`. Extract `reproduction.measure.py` and `reproduction.compat.mjs` into that root. The compatibility runner uses the archived baseline workloads and probe helpers.
 
 Run the compatibility script with `after` in Node and Bun and save its JSON as `checks/compat-node.json` and `checks/compat-bun.json`; copy the recorded parity objects to `checks/parity-node-final.json` and `checks/parity-bun-final.json` (or rerun parity on the reconstructed candidate). Run `python3 <root>/measure.py` from this repository. The runner requires Linux taskset with CPU 2 available, Node, Bun, Python 3.12+, and no concurrent benchmark/build load. Source snapshots and the full benchmark loops are otherwise untouched. Repeated measurements will vary.

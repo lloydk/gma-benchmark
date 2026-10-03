@@ -1,14 +1,17 @@
 # Dualray review follow-up — 2026-09-30
 
+The JSON artifacts cited here were removed from the working tree to keep the
+repository small. Restore one with `git restore --source=696f4c2 -- <path>`.
+
 The f32 fold solver now sets its selected exit channel to exactly zero or one.
 On the benchmark validation workloads, Rec.2020's maximum f32/f64 encoded
 difference falls from `4.869e-4` to `1.162e-5`. The first-exit policy and all
 existing accuracy budgets are retained. Interior inputs do not snap to a face.
 
-The [machine-readable report](dualray-review-fixes.json) records source and
+The machine-readable report (`rust/reports/dualray-review-fixes.json`) records source and
 binary hashes, checks, input manifests, assembly audits and every timing row.
 The baseline is the uncommitted Dualray port **with the cached-cubic borrow fix
-already applied**, as recorded in `cached-cubic-borrow-fix.json`.
+already applied**, as recorded in `rust/reports/cached-cubic-borrow-fix.json`.
 
 ## Changes
 

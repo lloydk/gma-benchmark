@@ -1,5 +1,8 @@
 # Milestone three: target-specific Rust algorithms
 
+The JSON artifacts cited here were removed from the working tree to keep the
+repository small. Restore one with `git restore --source=696f4c2 -- <path>`.
+
 Milestone two is committed as `9fcb2d3`. This milestone finishes the remaining
 Rust ports before JavaScript gains multi-gamut support in milestone four.
 Keep conversion definitions, algorithm data and numerical policy separate;
@@ -100,7 +103,7 @@ claim exact boundary solving or a universal perceptual bound. The tests keep
 explicit per-target regression envelopes for this corpus. Improving the
 approximation would be a separate algorithm change.
 
-The [Edge Seeker report](reports/multi-gamut-milestone-3-edge-seeker.json)
+The Edge Seeker report (`rust/reports/multi-gamut-milestone-3-edge-seeker.json`)
 records source hashes, environment, measurements, compatibility and timing.
 
 ## Performance checkpoint
@@ -228,7 +231,7 @@ cusp tests. Its two-coordinate cusp error reaches `0.00960`. These are measured
 limitations of the incumbent approximation, distinct from porting roundoff.
 Refitting P3 or changing the projection policy would be a separate change.
 
-The [Bottosson report](reports/multi-gamut-milestone-3-bottosson.json) records
+The Bottosson report (`rust/reports/multi-gamut-milestone-3-bottosson.json`) records
 source/binary hashes, accuracy, compatibility and timing. The Edge Seeker report
 above remains the historical checkpoint before this family was ported.
 
@@ -355,7 +358,7 @@ Only the two f32 Bottosson variants change sampled bits, by at most `1.789e-6`
 in an encoded channel. Native assembly probes, including outlined local
 callees, contain no double arithmetic or widening.
 
-The [review-fix report](reports/milestone-3-review-fixes.json) records the
+The review-fix report (`rust/reports/milestone-3-review-fixes.json`) records the
 reproducer, dense sweep, source/binary hashes, compatibility and updated timing.
 The two earlier milestone-three reports remain historical checkpoints.
 
@@ -498,7 +501,7 @@ claim that the stationary-touch repair is incapable of changing another input.
 
 ### Final milestone timing
 
-The [Dualray and final comparison report](reports/multi-gamut-milestone-3-dualray.json)
+The Dualray and final comparison report (`rust/reports/multi-gamut-milestone-3-dualray.json`)
 contains all 312 target/method/precision/workload/mode rows, 104 P3 comparisons
 against both `9fcb2d3` and `c2f99ba`, and the additional checked-mode follow-up.
 All three binaries were rebuilt with identical native release/LTO flags on
@@ -547,7 +550,7 @@ static-data addresses. Cached cubic now returns a reference to the hue entry,
 removing the intermediate warm-path copy. No caller padding or global alignment
 flag is needed. The original report remains a snapshot of the pre-fix build.
 
-The [borrowed-entry follow-up](reports/cached-cubic-borrow-fix.json) records
+The borrowed-entry follow-up (`rust/reports/cached-cubic-borrow-fix.json`) records
 the applied fix and all-target timings. P3 f64 checked grid improves from
 72.37 to 61.42 ns/call (-15.1%), and checked random from 95.60 to 86.32 ns
 (-9.7%). At that borrowed-entry checkpoint, all 102 tests passed in native

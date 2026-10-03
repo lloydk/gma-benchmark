@@ -1,5 +1,8 @@
 # P3 comparison against the pre-port implementation
 
+The JSON artifacts cited here were removed from the working tree to keep the
+repository small. Restore one with `git restore --source=696f4c2 -- <path>`.
+
 Direct comparison of **`7d6c9e0` → `be03abd`** on the Ryzen 7 9800X3D under
 WSL2, Node 26.10.0 and Bun 1.4.2. `7d6c9e0` is the last committed snapshot
 before the JavaScript multi-gamut work; every method is compared with that
@@ -7,7 +10,7 @@ same snapshot. Its Dualray body is byte-identical to `1c06277`, immediately
 before the Dualray port. Earlier ports changed the surrounding conversion
 module layout, so this comparison deliberately uses the original whole tree.
 
-The raw [measurement report](milestone-4-p3-baseline-comparison.json) contains
+The raw measurement report (`reports/milestone-4-p3-baseline-comparison.json`) contains
 all process logs, individual timings, output comparisons, source/dependency
 hashes, runtime versions, commands, and the exact runner sources.
 

@@ -1,15 +1,18 @@
 # Second Dualray review follow-up — 2026-09-30
 
+The JSON artifacts cited here were removed from the working tree to keep the
+repository small. Restore one with `git restore --source=696f4c2 -- <path>`.
+
 The fold regression now checks the oracle's selected face and uses an input
 inside the narrowed window. Compensated arithmetic is shared by Dualray,
 Bottosson and the iterative fold solver: FMA-enabled builds use hardware FMA,
 while portable builds use native two-product/two-sum arithmetic. No accuracy
 budget changed.
 
-The [machine-readable report](dualray-review-followup.json) includes source and
+The machine-readable report (`rust/reports/dualray-review-followup.json`) includes source and
 binary hashes, validation, the assembly audit and every timing row. The baseline
 is the first review's fixes, with the cached-cubic borrow change already applied.
-Its binary hash matches the final binary in `dualray-review-fixes.json`.
+Its binary hash matches the final binary in `rust/reports/dualray-review-fixes.json`.
 
 ## Changes
 

@@ -2,6 +2,14 @@
 
 ## 2026-10-02
 
+- Added sRGB and Rec.2020 targets to every method in Node, Bun, and Rust
+  f64/f32. Select one with `--gamut srgb` or `--gamut rec2020`, or all three
+  with `--gamut all`; Display-P3 remains the default. Rec.2020 uses the CSS
+  Color 4 display-referred gamma 2.4 transfer. Edge Seeker, Bottosson, and
+  Dualray use generated per-gamut tables, fits, and seeds. The README
+  describes how the solvers handle the blue hues where the sRGB and Rec.2020
+  boundaries fold. Added independent-reference tests for each target and
+  JS/Rust parity checks.
 - Added `dualray fast` to Node, Bun, and Rust f64/f32 benchmarks for sRGB,
   Display-P3, and Rec.2020. Uses fitted lower-face hue polynomials to bypass
   trigonometry and root solving, with Dualray's upper solve and exact-search

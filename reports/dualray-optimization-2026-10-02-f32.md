@@ -1,5 +1,8 @@
 # Dualray Rust optimization follow-up: f32 priority
 
+The JSON artifacts cited here were removed from the working tree to keep the
+repository small. Restore one with `git restore --source=696f4c2 -- <path>`.
+
 No additional mapper change was retained. The Rust priority is an improvement
 in f32, either alone or alongside f64. Specializing Fast's polynomial evaluation
 by hue sector helped f64 but did not establish an f32 benefit on confirmation.
@@ -58,9 +61,9 @@ candidates. No fit, tolerance, classification threshold or workload was tuned.
 Raw results include source/input/binary hashes, changed candidate source files,
 all process timings and environment details:
 
-- [Screening](dualray-optimization-2026-10-02-f32-screen.json)
-- [Confirmation](dualray-optimization-2026-10-02-f32-confirmation.json)
-- [Validation evidence](dualray-optimization-2026-10-02-f32-validation.json)
+- Screening (`reports/dualray-optimization-2026-10-02-f32-screen.json`)
+- Confirmation (`reports/dualray-optimization-2026-10-02-f32-confirmation.json`)
+- Validation evidence (`reports/dualray-optimization-2026-10-02-f32-validation.json`)
 
 The source reconstruction procedure in the [earlier report](dualray-optimization-2026-10-02.md#replay)
 also applies: reconstruct the named candidate from `trees[].changedSources`,

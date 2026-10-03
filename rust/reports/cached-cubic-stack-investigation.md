@@ -1,8 +1,11 @@
 # Cached f64 cubic: stack-alignment investigation
 
+The JSON artifacts cited here were removed from the working tree to keep the
+repository small. Restore one with `git restore --source=696f4c2 -- <path>`.
+
 2026-09-30. Follow-up to the checked-mode Display-P3 regression in
-[the milestone-three comparison](multi-gamut-milestone-3-dualray.json).
-[Measurements, hashes and prototype diff](cached-cubic-stack-investigation.json)
+the milestone-three comparison (`rust/reports/multi-gamut-milestone-3-dualray.json`).
+Measurements, hashes and prototype diff (`rust/reports/cached-cubic-stack-investigation.json`)
 accompany this report. The investigation initially left the solver unchanged;
 the borrowed-entry fix has since been applied in `rust/src/rgb_solvers.rs`.
 
@@ -139,7 +142,7 @@ copying pattern predates the multi-gamut refactor. The archived JavaScript
 its caller reads the coefficients directly. The Rust fix follows that
 direct-access approach without changing the hue buckets or mapping policy.
 
-The [implementation follow-up report](cached-cubic-borrow-fix.json) records the
+The implementation follow-up report (`rust/reports/cached-cubic-borrow-fix.json`) records the
 applied fix, current source and binary hashes, archive comparison, and full
 before/after timings. All 102 tests pass in native release, portable x86-64
 release and debug builds; all-target `--validate-only` passes. A fresh snapshot

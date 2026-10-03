@@ -268,12 +268,14 @@ behavior deliberately seeks vivid blue outer intersections. The near-black
 Halley discrepancy remains: at `L=1e-6, h=270.25` in P3 its relative chroma error
 is large, but its final output difference is only about `1.4e-7` DeltaEOK.
 
-The [milestone-two report](reports/multi-gamut-milestone-2.json) records milestone-two
+The milestone-two report (`rust/reports/multi-gamut-milestone-2.json`) records milestone-two
 source hashes, numerical measurements and a balanced before/after review-fix
 comparison. The earlier milestone-one/blanket-guard comparison is retained as
 historical evidence; its pre-review validation claims have been superseded.
-The [milestone-one report](reports/multi-gamut-milestone-1.json) and
-[review-fix report](reports/multi-gamut-review-fixes.json) are historical snapshots.
+The milestone-one report (`rust/reports/multi-gamut-milestone-1.json`) and
+review-fix report (`rust/reports/multi-gamut-review-fixes.json`) are historical snapshots.
+These JSON reports were removed from the working tree; restore one with
+`git restore --source=696f4c2 -- <path>`.
 
 | P3 f64 grid, ns/call | Before review fixes | After review fixes |
 | --- | ---: | ---: |

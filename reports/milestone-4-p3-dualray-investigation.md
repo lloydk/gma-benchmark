@@ -1,5 +1,8 @@
 # P3 Dualray slowdown investigation
 
+The JSON artifacts cited here were removed from the working tree to keep the
+repository small. Restore one with `git restore --source=696f4c2 -- <path>`.
+
 The strongest identified cause is the out-of-line seed evaluator introduced by
 the JS port. V8 declines to inline it, adds a JS call on about 88% of these
 workloads, and boxes the two floating-point arguments and returned seed. A
@@ -24,7 +27,7 @@ uses six process medians per variant/runtime, in mirrored order.
 Tracing, assembly capture, path counters and compatibility checks ran separately
 from timing. Raw passes, input hashes, source hashes, runtime versions, complete
 logs, assembly and reproduction scripts are in
-[the evidence report](milestone-4-p3-dualray-investigation.json).
+the evidence report (`reports/milestone-4-p3-dualray-investigation.json`).
 
 ## The regression remains on the committed port
 
