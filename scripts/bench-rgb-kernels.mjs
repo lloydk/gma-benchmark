@@ -3,9 +3,14 @@ import { buildWorkloads } from "../benchmark-workloads.js";
 // One target/method per process keeps JIT call sites monomorphic.
 import { parseArgs } from "node:util";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 const { values } = parseArgs({ options: {
 	gamut: { type: "string", default: "display-p3" },
 	method: { type: "string", default: "clip" },
+	input: { type: "string" },
+	workload: { type: "string", default: "external" },
+	"in-gamut-check": { type: "boolean", default: false },
+	"validate-only": { type: "boolean", default: false },
 } });
 const names = {
  "dualray": ["dualray", "createDualray"],
@@ -43,10 +48,25 @@ if (values.gamut === "display-p3" && module[name]) map = module[name];
 else {
  map = module[factory](space);
 }
-const { samples, randomSamples } = buildWorkloads();
-
-const workloads = [["grid",samples],["random",randomSamples]];
-if(values.method.startsWith("dualray") && values.gamut !== "display-p3") {
+if (values["in-gamut-check"] && !["clip", "css-minde", "dualray", "dualray-fast"].includes(values.method)) {
+ const unchecked = map;
+ map = (input, out) => unchecked(input, out, true);
+}
+let workloads;
+let binaryInputSha256;
+if (values.input) {
+ const bytes = readFileSync(values.input);
+ if (!bytes.length || bytes.length % 24) throw new Error("Expected nonempty little-endian f64 triples");
+ const inputs = Array.from({ length: bytes.length / 24 }, (_, i) =>
+  Array.from({ length: 3 }, (_, j) => bytes.readDoubleLE(i * 24 + j * 8)));
+ if (!inputs.every(row => row.every(Number.isFinite))) throw new Error("Nonfinite input");
+ binaryInputSha256 = createHash("sha256").update(bytes).digest("hex");
+ workloads = [[values.workload, inputs]];
+} else {
+ const { samples, randomSamples } = buildWorkloads();
+ workloads = [["grid",samples],["random",randomSamples]];
+}
+if(!values.input && values.method.startsWith("dualray") && values.gamut !== "display-p3") {
  const {blueFoldWindow}=await import("../src/matrix-solver-policy.js");
  const [lo,hi]=blueFoldWindow(space);
  for(const fold of [false,true])for(const interior of [true,false]) {
@@ -61,6 +81,14 @@ const rows = [];
 for (const [workload, inputs] of workloads) {
 	const out = [0, 0, 0];
 	let sink = 0;
+	if (values["validate-only"]) {
+		for (const input of inputs) {
+			if (map(input, out) !== out || !out.every(x => Number.isFinite(x) && x >= 0 && x <= 1)) throw new Error(`Invalid output at ${input}`);
+			sink += out[0] + out[1] + out[2];
+		}
+		rows.push({ workload, count: inputs.length, checksum: sink });
+		continue;
+	}
 	function batch () {
 		let sum = 0;
 		for (let i = 0; i < inputs.length; i++) {
@@ -80,4 +108,5 @@ for (const [workload, inputs] of workloads) {
 	const sorted = [...passes].sort((a,b) => a-b);
 	rows.push({ workload, count: inputs.length, inputSha256: createHash("sha256").update(JSON.stringify(inputs)).digest("hex"), ns: sorted[12], passes, checksum: sink });
 }
-console.log(JSON.stringify({ runtime: process.versions, gamut: values.gamut, method: values.method, warmup: 50, measured: 25, rows }));
+console.log(JSON.stringify({ runtime: process.versions, gamut: values.gamut, method: values.method,
+ checked: values["in-gamut-check"], binaryInputSha256, warmup: 50, measured: 25, rows }));

@@ -2,3 +2,4 @@ node_modules/
 /rust/target/
 /.codex/
 /.agents/
+/reports/performance-*.json.inputs/

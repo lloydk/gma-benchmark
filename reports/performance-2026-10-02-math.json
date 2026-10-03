@@ -1,0 +1,2055 @@
+{
+  "schema": "gma-performance-math-v1",
+  "created": "2026-10-02T22:06:22.675Z",
+  "runtime": "v26.10.0",
+  "sourceCommit": "ee5b48843570a2ed90df7cbd28d55e2d1029a087",
+  "timingArtifactSha256": "582eed043d3d674b1d90b955a02c92f914989ed8ed2da1b21b1bf1ecc2276b8d",
+  "profilerSha256": "7a40c5d0dfbbb7060b767e39a6a72dff83cb35fd381a738e989e7ee271f35207",
+  "scope": "Untimed Node/P3 Math calls after cache warmup plus instrumented Fast path entries. Fast instrumentation matches production output per channel. No power or hardware-branch counters.",
+  "rows": [
+    {
+      "workload": "display-p3-grid",
+      "method": "clip",
+      "count": 35640,
+      "checksum": 38579.66991043251,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-grid",
+      "method": "css-minde",
+      "count": 35640,
+      "checksum": 39532.12295922887,
+      "counts": {
+        "cbrt": 1168185,
+        "sqrt": 389395,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 32.7773569023569,
+        "sqrt": 10.925785634118968,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-grid",
+      "method": "oklch-cubic",
+      "count": 35640,
+      "checksum": 39942.022267467226,
+      "counts": {
+        "cbrt": 19812,
+        "sqrt": 10574,
+        "sin": 0,
+        "cos": 1995,
+        "acos": 665
+      },
+      "perColor": {
+        "cbrt": 0.5558922558922559,
+        "sqrt": 0.29668911335578,
+        "sin": 0,
+        "cos": 0.05597643097643098,
+        "acos": 0.01865881032547699
+      }
+    },
+    {
+      "workload": "display-p3-grid",
+      "method": "oklch-cubic-no-cache",
+      "count": 35640,
+      "checksum": 39942.022267467226,
+      "counts": {
+        "cbrt": 179796,
+        "sqrt": 178280,
+        "sin": 35640,
+        "cos": 118419,
+        "acos": 27593
+      },
+      "perColor": {
+        "cbrt": 5.044781144781145,
+        "sqrt": 5.002244668911335,
+        "sin": 1,
+        "cos": 3.322643097643098,
+        "acos": 0.7742143658810325
+      }
+    },
+    {
+      "workload": "display-p3-grid",
+      "method": "oklch-cubic-direct",
+      "count": 35640,
+      "checksum": 39942.02226724175,
+      "counts": {
+        "cbrt": 123208,
+        "sqrt": 124848,
+        "sin": 35640,
+        "cos": 100506,
+        "acos": 21622
+      },
+      "perColor": {
+        "cbrt": 3.4570145903479235,
+        "sqrt": 3.503030303030303,
+        "sin": 1,
+        "cos": 2.82003367003367,
+        "acos": 0.6066778900112233
+      }
+    },
+    {
+      "workload": "display-p3-grid",
+      "method": "oklch-halley",
+      "count": 35640,
+      "checksum": 39942.022285762716,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-grid",
+      "method": "oklch-ostrowski",
+      "count": 35640,
+      "checksum": 39942.02227123234,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-grid",
+      "method": "dualray",
+      "count": 35640,
+      "checksum": 39942.02226724176,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 5502,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.1543771043771044,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-grid",
+      "method": "dualray-fast",
+      "count": 35640,
+      "checksum": 39942.025891032004,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 11781,
+        "sin": 12112,
+        "cos": 12112,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.33055555555555555,
+        "sin": 0.3398428731762065,
+        "cos": 0.3398428731762065,
+        "acos": 0
+      },
+      "paths": {
+        "lower": 26536,
+        "upper": 9104,
+        "exact": 0,
+        "precheck": 3008
+      },
+      "pathsPerColor": {
+        "lower": 0.7445566778900112,
+        "upper": 0.25544332210998877,
+        "exact": 0,
+        "precheck": 0.08439955106621773
+      }
+    },
+    {
+      "workload": "display-p3-grid",
+      "method": "bottosson-lightness",
+      "count": 35640,
+      "checksum": 39945.39137829207,
+      "counts": {
+        "cbrt": 35640,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 1,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-grid",
+      "method": "bottosson-lightness-cached",
+      "count": 35640,
+      "checksum": 39945.391378292064,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 0,
+        "cos": 0,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 0,
+        "cos": 0,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-grid",
+      "method": "edge-seeker",
+      "count": 35640,
+      "checksum": 39942.021494862835,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 18208,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.5108866442199775,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-grid",
+      "method": "edge-seeker-indexed",
+      "count": 35640,
+      "checksum": 39942.021494862835,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 18208,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.5108866442199775,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-grid",
+      "method": "raytrace",
+      "count": 35640,
+      "checksum": 39946.82213257263,
+      "counts": {
+        "cbrt": 320760,
+        "sqrt": 106920,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 9,
+        "sqrt": 3,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-random",
+      "method": "clip",
+      "count": 35640,
+      "checksum": 38533.21242097671,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-random",
+      "method": "css-minde",
+      "count": 35640,
+      "checksum": 39419.26972868928,
+      "counts": {
+        "cbrt": 1169484,
+        "sqrt": 389828,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 32.813804713804714,
+        "sqrt": 10.93793490460157,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-random",
+      "method": "oklch-cubic",
+      "count": 35640,
+      "checksum": 39811.71027667532,
+      "counts": {
+        "cbrt": 20030,
+        "sqrt": 10686,
+        "sin": 0,
+        "cos": 2010,
+        "acos": 670
+      },
+      "perColor": {
+        "cbrt": 0.5620089786756454,
+        "sqrt": 0.29983164983164984,
+        "sin": 0,
+        "cos": 0.0563973063973064,
+        "acos": 0.018799102132435467
+      }
+    },
+    {
+      "workload": "display-p3-random",
+      "method": "oklch-cubic-no-cache",
+      "count": 35640,
+      "checksum": 39811.71027667532,
+      "counts": {
+        "cbrt": 179772,
+        "sqrt": 178569,
+        "sin": 35640,
+        "cos": 118797,
+        "acos": 27719
+      },
+      "perColor": {
+        "cbrt": 5.044107744107744,
+        "sqrt": 5.010353535353535,
+        "sin": 1,
+        "cos": 3.333249158249158,
+        "acos": 0.777749719416386
+      }
+    },
+    {
+      "workload": "display-p3-random",
+      "method": "oklch-cubic-direct",
+      "count": 35640,
+      "checksum": 39811.816197778186,
+      "counts": {
+        "cbrt": 123266,
+        "sqrt": 125246,
+        "sin": 35640,
+        "cos": 100728,
+        "acos": 21696
+      },
+      "perColor": {
+        "cbrt": 3.458641975308642,
+        "sqrt": 3.5141975308641977,
+        "sin": 1,
+        "cos": 2.8262626262626265,
+        "acos": 0.6087542087542087
+      }
+    },
+    {
+      "workload": "display-p3-random",
+      "method": "oklch-halley",
+      "count": 35640,
+      "checksum": 39811.81621618713,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-random",
+      "method": "oklch-ostrowski",
+      "count": 35640,
+      "checksum": 39811.81620114924,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-random",
+      "method": "dualray",
+      "count": 35640,
+      "checksum": 39811.816197778186,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 5387,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.15115039281705947,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-random",
+      "method": "dualray-fast",
+      "count": 35640,
+      "checksum": 39811.81723357895,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 11722,
+        "sin": 12037,
+        "cos": 12037,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.32890011223344556,
+        "sin": 0.33773849607182943,
+        "cos": 0.33773849607182943,
+        "acos": 0
+      },
+      "paths": {
+        "lower": 26612,
+        "upper": 9028,
+        "exact": 0,
+        "precheck": 3009
+      },
+      "pathsPerColor": {
+        "lower": 0.74668911335578,
+        "upper": 0.25331088664421997,
+        "exact": 0,
+        "precheck": 0.08442760942760942
+      }
+    },
+    {
+      "workload": "display-p3-random",
+      "method": "bottosson-lightness",
+      "count": 35640,
+      "checksum": 39814.62480872627,
+      "counts": {
+        "cbrt": 35640,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 1,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-random",
+      "method": "bottosson-lightness-cached",
+      "count": 35640,
+      "checksum": 39814.51878756415,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 0,
+        "cos": 0,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 0,
+        "cos": 0,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-random",
+      "method": "edge-seeker",
+      "count": 35640,
+      "checksum": 39811.78544263963,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 18056,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.5066217732884399,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-random",
+      "method": "edge-seeker-indexed",
+      "count": 35640,
+      "checksum": 39811.78544263963,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 18056,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.5066217732884399,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-random",
+      "method": "raytrace",
+      "count": 35640,
+      "checksum": 39816.61381470184,
+      "counts": {
+        "cbrt": 320760,
+        "sqrt": 106920,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 9,
+        "sqrt": 3,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-below-cusp",
+      "method": "clip",
+      "count": 35640,
+      "checksum": 30257.19175186276,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-below-cusp",
+      "method": "css-minde",
+      "count": 35640,
+      "checksum": 24212.27733899916,
+      "counts": {
+        "cbrt": 1174254,
+        "sqrt": 391418,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 32.947643097643095,
+        "sqrt": 10.982547699214367,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-below-cusp",
+      "method": "oklch-cubic",
+      "count": 35640,
+      "checksum": 23740.858857538577,
+      "counts": {
+        "cbrt": 13614,
+        "sqrt": 6813,
+        "sin": 0,
+        "cos": 18,
+        "acos": 6
+      },
+      "perColor": {
+        "cbrt": 0.381986531986532,
+        "sqrt": 0.19116161616161617,
+        "sin": 0,
+        "cos": 0.000505050505050505,
+        "acos": 0.00016835016835016836
+      }
+    },
+    {
+      "workload": "display-p3-below-cusp",
+      "method": "oklch-cubic-no-cache",
+      "count": 35640,
+      "checksum": 23740.858857538577,
+      "counts": {
+        "cbrt": 173356,
+        "sqrt": 174696,
+        "sin": 35640,
+        "cos": 116805,
+        "acos": 27055
+      },
+      "perColor": {
+        "cbrt": 4.86408529741863,
+        "sqrt": 4.901683501683502,
+        "sin": 1,
+        "cos": 3.2773569023569022,
+        "acos": 0.7591189674523008
+      }
+    },
+    {
+      "workload": "display-p3-below-cusp",
+      "method": "oklch-cubic-direct",
+      "count": 35640,
+      "checksum": 23740.84997756982,
+      "counts": {
+        "cbrt": 130010,
+        "sqrt": 132221,
+        "sin": 35640,
+        "cos": 104274,
+        "acos": 22878
+      },
+      "perColor": {
+        "cbrt": 3.647867564534231,
+        "sqrt": 3.7099046015712682,
+        "sin": 1,
+        "cos": 2.925757575757576,
+        "acos": 0.6419191919191919
+      }
+    },
+    {
+      "workload": "display-p3-below-cusp",
+      "method": "oklch-halley",
+      "count": 35640,
+      "checksum": 23740.850000119382,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-below-cusp",
+      "method": "oklch-ostrowski",
+      "count": 35640,
+      "checksum": 23740.84998270009,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-below-cusp",
+      "method": "dualray",
+      "count": 35640,
+      "checksum": 23740.849977569804,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 1386,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.03888888888888889,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-below-cusp",
+      "method": "dualray-fast",
+      "count": 35640,
+      "checksum": 23740.849749513232,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 11722,
+        "sin": 0,
+        "cos": 0,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.32890011223344556,
+        "sin": 0,
+        "cos": 0,
+        "acos": 0
+      },
+      "paths": {
+        "lower": 35640,
+        "upper": 0,
+        "exact": 0,
+        "precheck": 0
+      },
+      "pathsPerColor": {
+        "lower": 1,
+        "upper": 0,
+        "exact": 0,
+        "precheck": 0
+      }
+    },
+    {
+      "workload": "display-p3-below-cusp",
+      "method": "bottosson-lightness",
+      "count": 35640,
+      "checksum": 23744.7757531055,
+      "counts": {
+        "cbrt": 35640,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 1,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-below-cusp",
+      "method": "bottosson-lightness-cached",
+      "count": 35640,
+      "checksum": 23744.773145444808,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 0,
+        "cos": 0,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 0,
+        "cos": 0,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-below-cusp",
+      "method": "edge-seeker",
+      "count": 35640,
+      "checksum": 23740.866778935713,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-below-cusp",
+      "method": "edge-seeker-indexed",
+      "count": 35640,
+      "checksum": 23740.866778935713,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-below-cusp",
+      "method": "raytrace",
+      "count": 35640,
+      "checksum": 23750.082004910386,
+      "counts": {
+        "cbrt": 320760,
+        "sqrt": 106920,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 9,
+        "sqrt": 3,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-above-cusp",
+      "method": "clip",
+      "count": 35640,
+      "checksum": 63348.65720011498,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-above-cusp",
+      "method": "css-minde",
+      "count": 35640,
+      "checksum": 83250.8673628748,
+      "counts": {
+        "cbrt": 1140693,
+        "sqrt": 380231,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 32.00597643097643,
+        "sqrt": 10.668658810325477,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-above-cusp",
+      "method": "oklch-cubic",
+      "count": 35640,
+      "checksum": 87650.37830151342,
+      "counts": {
+        "cbrt": 29642,
+        "sqrt": 17937,
+        "sin": 0,
+        "cos": 9330,
+        "acos": 3110
+      },
+      "perColor": {
+        "cbrt": 0.831705948372615,
+        "sqrt": 0.5032828282828283,
+        "sin": 0,
+        "cos": 0.2617845117845118,
+        "acos": 0.0872615039281706
+      }
+    },
+    {
+      "workload": "display-p3-above-cusp",
+      "method": "oklch-cubic-no-cache",
+      "count": 35640,
+      "checksum": 87650.37830151342,
+      "counts": {
+        "cbrt": 189384,
+        "sqrt": 185820,
+        "sin": 35640,
+        "cos": 126117,
+        "acos": 30159
+      },
+      "perColor": {
+        "cbrt": 5.313804713804714,
+        "sqrt": 5.213804713804714,
+        "sin": 1,
+        "cos": 3.5386363636363636,
+        "acos": 0.8462121212121212
+      }
+    },
+    {
+      "workload": "display-p3-above-cusp",
+      "method": "oklch-cubic-direct",
+      "count": 35640,
+      "checksum": 87650.40982521357,
+      "counts": {
+        "cbrt": 93736,
+        "sqrt": 87628,
+        "sin": 35640,
+        "cos": 86655,
+        "acos": 17005
+      },
+      "perColor": {
+        "cbrt": 2.630078563411897,
+        "sqrt": 2.458698092031425,
+        "sin": 1,
+        "cos": 2.4313973063973062,
+        "acos": 0.4771324354657688
+      }
+    },
+    {
+      "workload": "display-p3-above-cusp",
+      "method": "oklch-halley",
+      "count": 35640,
+      "checksum": 87650.40982455418,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-above-cusp",
+      "method": "oklch-ostrowski",
+      "count": 35640,
+      "checksum": 87650.4098217258,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-above-cusp",
+      "method": "dualray",
+      "count": 35640,
+      "checksum": 87650.40982521392,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 20656,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.5795735129068462,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-above-cusp",
+      "method": "dualray-fast",
+      "count": 35640,
+      "checksum": 87650.40982521362,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 11722,
+        "sin": 43377,
+        "cos": 43377,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.32890011223344556,
+        "sin": 1.217087542087542,
+        "cos": 1.217087542087542,
+        "acos": 0
+      },
+      "paths": {
+        "lower": 0,
+        "upper": 35640,
+        "exact": 0,
+        "precheck": 7737
+      },
+      "pathsPerColor": {
+        "lower": 0,
+        "upper": 1,
+        "exact": 0,
+        "precheck": 0.21708754208754208
+      }
+    },
+    {
+      "workload": "display-p3-above-cusp",
+      "method": "bottosson-lightness",
+      "count": 35640,
+      "checksum": 87650.12474453062,
+      "counts": {
+        "cbrt": 35640,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 1,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-above-cusp",
+      "method": "bottosson-lightness-cached",
+      "count": 35640,
+      "checksum": 87650.09747907432,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 0,
+        "cos": 0,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 0,
+        "cos": 0,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-above-cusp",
+      "method": "edge-seeker",
+      "count": 35640,
+      "checksum": 87656.49212390163,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 71280,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 2,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-above-cusp",
+      "method": "edge-seeker-indexed",
+      "count": 35640,
+      "checksum": 87656.49212390163,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 71280,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 2,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-above-cusp",
+      "method": "raytrace",
+      "count": 35640,
+      "checksum": 87644.90685651597,
+      "counts": {
+        "cbrt": 320760,
+        "sqrt": 106920,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 9,
+        "sqrt": 3,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-random-checked",
+      "method": "clip",
+      "count": 35640,
+      "checksum": 38533.21242097671,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-random-checked",
+      "method": "css-minde",
+      "count": 35640,
+      "checksum": 39419.26972868928,
+      "counts": {
+        "cbrt": 1169484,
+        "sqrt": 389828,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 32.813804713804714,
+        "sqrt": 10.93793490460157,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-random-checked",
+      "method": "oklch-cubic",
+      "count": 35640,
+      "checksum": 39811.71027667532,
+      "counts": {
+        "cbrt": 20030,
+        "sqrt": 10686,
+        "sin": 35640,
+        "cos": 37650,
+        "acos": 670
+      },
+      "perColor": {
+        "cbrt": 0.5620089786756454,
+        "sqrt": 0.29983164983164984,
+        "sin": 1,
+        "cos": 1.0563973063973064,
+        "acos": 0.018799102132435467
+      }
+    },
+    {
+      "workload": "display-p3-random-checked",
+      "method": "oklch-cubic-no-cache",
+      "count": 35640,
+      "checksum": 39811.71027667532,
+      "counts": {
+        "cbrt": 179772,
+        "sqrt": 178569,
+        "sin": 71280,
+        "cos": 154437,
+        "acos": 27719
+      },
+      "perColor": {
+        "cbrt": 5.044107744107744,
+        "sqrt": 5.010353535353535,
+        "sin": 2,
+        "cos": 4.333249158249158,
+        "acos": 0.777749719416386
+      }
+    },
+    {
+      "workload": "display-p3-random-checked",
+      "method": "oklch-cubic-direct",
+      "count": 35640,
+      "checksum": 39811.816197778186,
+      "counts": {
+        "cbrt": 123266,
+        "sqrt": 125246,
+        "sin": 71280,
+        "cos": 136368,
+        "acos": 21696
+      },
+      "perColor": {
+        "cbrt": 3.458641975308642,
+        "sqrt": 3.5141975308641977,
+        "sin": 2,
+        "cos": 3.8262626262626265,
+        "acos": 0.6087542087542087
+      }
+    },
+    {
+      "workload": "display-p3-random-checked",
+      "method": "oklch-halley",
+      "count": 35640,
+      "checksum": 39811.81621618713,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 71280,
+        "cos": 71280,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 2,
+        "cos": 2,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-random-checked",
+      "method": "oklch-ostrowski",
+      "count": 35640,
+      "checksum": 39811.81620114924,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 71280,
+        "cos": 71280,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 2,
+        "cos": 2,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-random-checked",
+      "method": "dualray",
+      "count": 35640,
+      "checksum": 39811.816197778186,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 5387,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.15115039281705947,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-random-checked",
+      "method": "dualray-fast",
+      "count": 35640,
+      "checksum": 39811.81723357895,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 11722,
+        "sin": 12037,
+        "cos": 12037,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.32890011223344556,
+        "sin": 0.33773849607182943,
+        "cos": 0.33773849607182943,
+        "acos": 0
+      },
+      "paths": {
+        "lower": 26612,
+        "upper": 9028,
+        "exact": 0,
+        "precheck": 3009
+      },
+      "pathsPerColor": {
+        "lower": 0.74668911335578,
+        "upper": 0.25331088664421997,
+        "exact": 0,
+        "precheck": 0.08442760942760942
+      }
+    },
+    {
+      "workload": "display-p3-random-checked",
+      "method": "bottosson-lightness",
+      "count": 35640,
+      "checksum": 39814.62480872627,
+      "counts": {
+        "cbrt": 35640,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 1,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-random-checked",
+      "method": "bottosson-lightness-cached",
+      "count": 35640,
+      "checksum": 39814.51878756415,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-random-checked",
+      "method": "edge-seeker",
+      "count": 35640,
+      "checksum": 39811.78544263963,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 18056,
+        "sin": 71280,
+        "cos": 71280,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.5066217732884399,
+        "sin": 2,
+        "cos": 2,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-random-checked",
+      "method": "edge-seeker-indexed",
+      "count": 35640,
+      "checksum": 39811.78544263963,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 18056,
+        "sin": 71280,
+        "cos": 71280,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.5066217732884399,
+        "sin": 2,
+        "cos": 2,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-random-checked",
+      "method": "raytrace",
+      "count": 35640,
+      "checksum": 39816.61381470184,
+      "counts": {
+        "cbrt": 320760,
+        "sqrt": 106920,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 9,
+        "sqrt": 3,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-mixed-checked",
+      "method": "clip",
+      "count": 35640,
+      "checksum": 41538.93171234433,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-mixed-checked",
+      "method": "css-minde",
+      "count": 35640,
+      "checksum": 41932.961207659355,
+      "counts": {
+        "cbrt": 584415,
+        "sqrt": 194805,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 16.397727272727273,
+        "sqrt": 5.465909090909091,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-mixed-checked",
+      "method": "oklch-cubic",
+      "count": 35640,
+      "checksum": 42127.095052728284,
+      "counts": {
+        "cbrt": 10200,
+        "sqrt": 5430,
+        "sin": 35640,
+        "cos": 36630,
+        "acos": 330
+      },
+      "perColor": {
+        "cbrt": 0.28619528619528617,
+        "sqrt": 0.15235690235690236,
+        "sin": 1,
+        "cos": 1.0277777777777777,
+        "acos": 0.009259259259259259
+      }
+    },
+    {
+      "workload": "display-p3-mixed-checked",
+      "method": "oklch-cubic-no-cache",
+      "count": 35640,
+      "checksum": 42127.095052728284,
+      "counts": {
+        "cbrt": 89978,
+        "sqrt": 89606,
+        "sin": 53460,
+        "cos": 95163,
+        "acos": 13901
+      },
+      "perColor": {
+        "cbrt": 2.5246352413019078,
+        "sqrt": 2.5141975308641977,
+        "sin": 1.5,
+        "cos": 2.6701178451178453,
+        "acos": 0.39003928170594837
+      }
+    },
+    {
+      "workload": "display-p3-mixed-checked",
+      "method": "oklch-cubic-direct",
+      "count": 35640,
+      "checksum": 42127.193097719675,
+      "counts": {
+        "cbrt": 61788,
+        "sqrt": 62903,
+        "sin": 53460,
+        "cos": 86274,
+        "acos": 10938
+      },
+      "perColor": {
+        "cbrt": 1.7336700336700337,
+        "sqrt": 1.7649551066217732,
+        "sin": 1.5,
+        "cos": 2.4207070707070706,
+        "acos": 0.3069023569023569
+      }
+    },
+    {
+      "workload": "display-p3-mixed-checked",
+      "method": "oklch-halley",
+      "count": 35640,
+      "checksum": 42127.19310691429,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 53460,
+        "cos": 53460,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1.5,
+        "cos": 1.5,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-mixed-checked",
+      "method": "oklch-ostrowski",
+      "count": 35640,
+      "checksum": 42127.193099337914,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 53460,
+        "cos": 53460,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1.5,
+        "cos": 1.5,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-mixed-checked",
+      "method": "dualray",
+      "count": 35640,
+      "checksum": 42127.19309771968,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 5387,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.15115039281705947,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-mixed-checked",
+      "method": "dualray-fast",
+      "count": 35640,
+      "checksum": 42127.19685647381,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 11722,
+        "sin": 23816,
+        "cos": 23816,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.32890011223344556,
+        "sin": 0.6682379349046016,
+        "cos": 0.6682379349046016,
+        "acos": 0
+      },
+      "paths": {
+        "lower": 13334,
+        "upper": 4486,
+        "exact": 0,
+        "precheck": 19330
+      },
+      "pathsPerColor": {
+        "lower": 0.37413019079685744,
+        "upper": 0.12586980920314253,
+        "exact": 0,
+        "precheck": 0.542368125701459
+      }
+    },
+    {
+      "workload": "display-p3-mixed-checked",
+      "method": "bottosson-lightness",
+      "count": 35640,
+      "checksum": 42128.53928230279,
+      "counts": {
+        "cbrt": 17820,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0.5,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-mixed-checked",
+      "method": "bottosson-lightness-cached",
+      "count": 35640,
+      "checksum": 42128.4445888444,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-mixed-checked",
+      "method": "edge-seeker",
+      "count": 35640,
+      "checksum": 42127.194264296464,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 8972,
+        "sin": 53460,
+        "cos": 53460,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.25173961840628506,
+        "sin": 1.5,
+        "cos": 1.5,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-mixed-checked",
+      "method": "edge-seeker-indexed",
+      "count": 35640,
+      "checksum": 42127.194264296464,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 8972,
+        "sin": 53460,
+        "cos": 53460,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.25173961840628506,
+        "sin": 1.5,
+        "cos": 1.5,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-mixed-checked",
+      "method": "raytrace",
+      "count": 35640,
+      "checksum": 42129.682977457705,
+      "counts": {
+        "cbrt": 160380,
+        "sqrt": 53460,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 4.5,
+        "sqrt": 1.5,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-inside-checked",
+      "method": "clip",
+      "count": 35640,
+      "checksum": 44433.14712776064,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-inside-checked",
+      "method": "css-minde",
+      "count": 35640,
+      "checksum": 44433.14712776064,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-inside-checked",
+      "method": "oklch-cubic",
+      "count": 35640,
+      "checksum": 44433.14712776064,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-inside-checked",
+      "method": "oklch-cubic-no-cache",
+      "count": 35640,
+      "checksum": 44433.14712776064,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-inside-checked",
+      "method": "oklch-cubic-direct",
+      "count": 35640,
+      "checksum": 44433.14712776064,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-inside-checked",
+      "method": "oklch-halley",
+      "count": 35640,
+      "checksum": 44433.14712776064,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-inside-checked",
+      "method": "oklch-ostrowski",
+      "count": 35640,
+      "checksum": 44433.14712776064,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-inside-checked",
+      "method": "dualray",
+      "count": 35640,
+      "checksum": 44433.14712776064,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 5387,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.15115039281705947,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-inside-checked",
+      "method": "dualray-fast",
+      "count": 35640,
+      "checksum": 44433.14712776064,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 11722,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0.32890011223344556,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      },
+      "paths": {
+        "lower": 0,
+        "upper": 0,
+        "exact": 0,
+        "precheck": 35640
+      },
+      "pathsPerColor": {
+        "lower": 0,
+        "upper": 0,
+        "exact": 0,
+        "precheck": 1
+      }
+    },
+    {
+      "workload": "display-p3-inside-checked",
+      "method": "bottosson-lightness",
+      "count": 35640,
+      "checksum": 44433.14712776064,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-inside-checked",
+      "method": "bottosson-lightness-cached",
+      "count": 35640,
+      "checksum": 44433.14712776064,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-inside-checked",
+      "method": "edge-seeker",
+      "count": 35640,
+      "checksum": 44433.14712776064,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-inside-checked",
+      "method": "edge-seeker-indexed",
+      "count": 35640,
+      "checksum": 44433.14712776064,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    },
+    {
+      "workload": "display-p3-inside-checked",
+      "method": "raytrace",
+      "count": 35640,
+      "checksum": 44433.14712776064,
+      "counts": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 35640,
+        "cos": 35640,
+        "acos": 0
+      },
+      "perColor": {
+        "cbrt": 0,
+        "sqrt": 0,
+        "sin": 1,
+        "cos": 1,
+        "acos": 0
+      }
+    }
+  ]
+}
